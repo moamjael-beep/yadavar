@@ -242,8 +242,28 @@ body { padding-bottom: 30px; }
 .item.caution .item-remaining { background: rgba(0,0,0,0.15); }
 .item.warning { background: linear-gradient(135deg, #FB8C00, #E65100); }
 .item.urgent { background: linear-gradient(135deg, #E53935, #B71C1C); }
-.item.overdue { background: linear-gradient(135deg, #616161, #212121); }
-.item.overdue .item-text { text-decoration: line-through; opacity: 0.85; }
+
+/* Overdue: blinking orange <-> red, 5s cycle, stays at top until user acts */
+@keyframes overdueBlink {
+    0%, 100% {
+        background: linear-gradient(135deg, #FB8C00, #E65100);
+        box-shadow: 0 2px 12px rgba(251, 140, 0, 0.45);
+    }
+    50% {
+        background: linear-gradient(135deg, #E53935, #B71C1C);
+        box-shadow: 0 2px 16px rgba(229, 57, 53, 0.55);
+    }
+}
+.item.overdue {
+    animation: overdueBlink 5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .item.overdue {
+        animation: none;
+        background: linear-gradient(135deg, #E53935, #B71C1C);
+    }
+}
+
 .item.done { background: linear-gradient(135deg, #9E9E9E, #616161); opacity: 0.85; }
 .item.done .item-text { text-decoration: line-through; }
 
