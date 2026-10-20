@@ -1,0 +1,2166 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1976D2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="یادآور">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="یادآور صوتی">
+<title>یادآور صوتی</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" media="all" onerror="this.remove()">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root {
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --primary: #1976D2;
+    --primary-dark: #0D47A1;
+    --text: #1a1a1a;
+    --text-light: #666;
+    --green: #4CAF50;
+    --yellow: #FFC107;
+    --orange: #FF9800;
+    --red: #f44336;
+    --dark-red: #b71c1c;
+    --gray: #9E9E9E;
+}
+html, body {
+    font-family: 'Vazirmatn', 'Tahoma', 'IRANSans', sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    direction: rtl;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+body { padding-bottom: 30px; }
+
+.header {
+    position: sticky;
+    top: 0;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    padding: 14px 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.header h1 { font-size: 17px; font-weight: 700; }
+.header-date { font-size: 12px; opacity: 0.9; }
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.icon-btn {
+    background: white;
+    color: var(--primary);
+    border: none;
+    border-radius: 50%;
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.3s;
+    line-height: 1;
+    font-family: inherit;
+}
+.icon-btn:active { transform: scale(0.9); }
+.icon-btn.share-btn {
+    background: rgba(255,255,255,0.18);
+    color: white;
+    backdrop-filter: blur(4px);
+    width: 40px;
+    height: 40px;
+    font-size: 17px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    position: relative;
+}
+.icon-btn.share-btn:active { transform: scale(0.92); }
+.icon-btn.share-btn.active {
+    background: rgba(76, 175, 80, 0.35);
+    border: 1px solid rgba(255,255,255,0.5);
+}
+.notif-badge {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 10px;
+    height: 10px;
+    background: #FFEB3B;
+    border: 2px solid var(--primary-dark);
+    border-radius: 50%;
+    display: none;
+}
+.icon-btn.share-btn.active .notif-badge { display: block; }
+.header-actions { gap: 6px; }
+.add-btn.recording {
+    background: var(--red);
+    color: white;
+    animation: pulse 1.2s infinite;
+}
+@keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+    50% { transform: scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+}
+
+.container {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.empty {
+    text-align: center;
+    color: var(--text-light);
+    padding: 80px 20px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.item {
+    border-radius: 10px;
+    color: white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    transition: order 0.5s, transform 0.3s, opacity 0.3s;
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+}
+.item:active { transform: scale(0.99); }
+
+.item-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    min-height: 42px;
+}
+.item-text {
+    flex: 1;
+    font-size: 13.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.6;
+}
+.item-remaining {
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(255,255,255,0.22);
+    padding: 3px 8px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.item-done-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.item-details {
+    display: none;
+    padding: 10px 0 12px 0;
+    border-top: 1px dashed rgba(255,255,255,0.3);
+    margin-top: 8px;
+    font-size: 11.5px;
+    line-height: 1.9;
+}
+.item.expanded .item-details { display: block; }
+.item.expanded .item-text {
+    white-space: normal;
+    overflow: visible;
+}
+
+.detail-row { display: flex; justify-content: space-between; gap: 10px; }
+.detail-label { opacity: 0.85; }
+.detail-value { font-weight: 600; }
+
+.item-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.action-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: inherit;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.action-btn.danger { background: rgba(0,0,0,0.3); }
+
+/* urgency colors */
+.item.normal { background: linear-gradient(135deg, #43A047, #2E7D32); }
+.item.caution { background: linear-gradient(135deg, #FBC02D, #F57F17); color: #1a1a1a; }
+.item.caution .item-remaining { background: rgba(0,0,0,0.15); }
+.item.warning { background: linear-gradient(135deg, #FB8C00, #E65100); }
+.item.urgent { background: linear-gradient(135deg, #E53935, #B71C1C); }
+
+/* Overdue: blinking orange <-> red, 5s cycle, stays at top until user acts */
+@keyframes overdueBlink {
+    0%, 100% {
+        background-color: #E65100;
+        box-shadow: 0 2px 14px rgba(251, 140, 0, 0.5);
+    }
+    50% {
+        background-color: #B71C1C;
+        box-shadow: 0 2px 18px rgba(229, 57, 53, 0.7);
+    }
+}
+.item.overdue {
+    background-color: #B71C1C; /* fallback (red) when animation unsupported */
+    animation: overdueBlink 5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .item.overdue {
+        animation: none;
+        background-color: #B71C1C;
+    }
+}
+
+.item.done { background: linear-gradient(135deg, #9E9E9E, #616161); opacity: 0.85; }
+.item.done .item-text { text-decoration: line-through; }
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(2px);
+}
+.modal-overlay.active { display: flex; }
+.modal {
+    background: white;
+    border-radius: 16px;
+    padding: 22px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 92vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s;
+}
+@keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+.modal h2 {
+    font-size: 17px;
+    margin-bottom: 16px;
+    text-align: center;
+    font-weight: 700;
+}
+.recording-section {
+    text-align: center;
+    padding: 30px 10px;
+}
+.recording-indicator {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    background: var(--red);
+    border-radius: 50%;
+    margin-left: 8px;
+    animation: blink 1s infinite;
+    vertical-align: middle;
+}
+@keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(1.3); }
+}
+.recording-text {
+    color: var(--red);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.recording-hint {
+    font-size: 12px;
+    color: var(--text-light);
+    margin-top: 12px;
+}
+.recording-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.modal-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-light);
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.modal-textarea, .modal-input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 14px;
+    direction: rtl;
+    background: #fafafa;
+}
+.modal-textarea {
+    min-height: 76px;
+    resize: vertical;
+    line-height: 1.6;
+}
+.modal-textarea:focus, .modal-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: white;
+}
+.quick-deadline {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.quick-btn {
+    background: #e3f2fd;
+    color: var(--primary);
+    border: 1px solid #bbdefb;
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    flex: 1;
+    min-width: 60px;
+}
+.quick-btn:active { background: #bbdefb; }
+
+.modal-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-secondary { background: #e0e0e0; color: var(--text); }
+.btn-danger { background: var(--red); color: white; }
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,20,0.92);
+    color: white;
+    padding: 11px 22px;
+    border-radius: 24px;
+    font-size: 13px;
+    z-index: 2000;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    max-width: 90%;
+    text-align: center;
+}
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* small screens */
+@media (max-width: 480px) {
+    .header { padding: 11px 14px; }
+    .header h1 { font-size: 15px; }
+    .header-date { font-size: 11px; }
+    .add-btn { width: 42px; height: 42px; font-size: 24px; }
+    .container { padding: 8px; gap: 5px; }
+    .item { padding: 0 12px; }
+    .item-text { font-size: 13px; }
+    .item-remaining { font-size: 10px; padding: 3px 7px; }
+    .modal { padding: 18px; }
+    .icon-btn.share-btn { width: 36px; height: 36px; font-size: 15px; }
+    .header-actions { gap: 5px; }
+}
+
+/* ============ Calendar ============ */
+.calendar-modal {
+    max-width: 460px;
+    padding: 16px;
+}
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    gap: 10px;
+}
+.cal-nav-btn {
+    background: #e0e0e0;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #333;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    font-family: inherit;
+}
+.cal-nav-btn:active { background: #bdbdbd; }
+.cal-title {
+    text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+#calMonthYear {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+.cal-today-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.cal-today-btn:active { background: var(--primary-dark); }
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 14px;
+}
+.cal-weekday {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-light);
+    padding: 6px 0;
+}
+.cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    position: relative;
+    font-family: inherit;
+    transition: background 0.2s;
+    padding: 0;
+}
+.cal-day:hover { background: #e3f2fd; }
+.cal-day.other-month { opacity: 0.25; }
+.cal-day.today {
+    background: var(--primary);
+    color: white;
+    font-weight: 700;
+}
+.cal-day.selected {
+    background: var(--primary-dark);
+    color: white;
+    font-weight: 700;
+}
+.cal-day.has-tasks::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    background: #f44336;
+    border-radius: 50%;
+}
+.cal-day.today.has-tasks::after,
+.cal-day.selected.has-tasks::after { background: #FFEB3B; }
+
+.calendar-day-tasks {
+    max-height: 240px;
+    overflow-y: auto;
+    border-top: 1px dashed #e0e0e0;
+    padding-top: 10px;
+    margin-top: 4px;
+}
+.cal-tasks-header {
+    font-size: 12px;
+    color: var(--text-light);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+.cal-task {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    background: #f5f5f5;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.cal-task:hover { background: #e3f2fd; }
+.cal-task-time {
+    font-weight: 700;
+    color: var(--primary);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+.cal-task-type {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.cal-task-types {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.cal-task-type.deadline { background: #ffebee; color: #c62828; }
+.cal-task-type.completed { background: #e8f5e9; color: #2e7d32; }
+.cal-task-type.created { background: #e3f2fd; color: #1565c0; }
+.cal-task-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+}
+.cal-group-header {
+    font-size: 11px;
+    color: var(--text-light);
+    padding: 8px 4px 4px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    font-weight: 700;
+    border-bottom: 1px dashed #e0e0e0;
+}
+.cal-group-header:first-of-type { margin-top: 4px; }
+.cal-group-header.prio-0 { color: #c62828; }  /* urgent red */
+.cal-group-header.prio-1 { color: #2e7d32; }  /* done green */
+.cal-group-header.prio-2 { color: #2e7d32; }  /* completed today green */
+.cal-group-header.prio-3 { color: #1565c0; }  /* created blue */
+.cal-empty {
+    text-align: center;
+    color: var(--text-light);
+    padding: 20px;
+    font-size: 13px;
+}
+
+@media (max-width: 480px) {
+    .calendar-modal { padding: 14px; }
+    .cal-day { font-size: 12px; }
+    .cal-weekday { font-size: 10px; padding: 4px 0; }
+    #calMonthYear { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-info">
+        <h1>یادآور صوتی</h1>
+        <div class="header-date" id="headerDate"></div>
+    </div>
+    <div class="header-actions">
+        <button class="icon-btn share-btn" id="calBtn" onclick="openCalendar()" title="تقویم شمسی">📅</button>
+        <button class="icon-btn share-btn" id="importBtn" onclick="importDatabase()" title="وارد کردن دیتابیس از فایل JSON">📥</button>
+        <button class="icon-btn share-btn" id="notifBtn" onclick="toggleNotifications()" title="فعال‌سازی اعلان‌ها">🔔<span class="notif-badge"></span></button>
+        <button class="icon-btn share-btn" id="shareBtn" onclick="shareViaMessenger()" title="ارسال دیتابیس و فایل برنامه به پیام‌رسان">📤</button>
+        <button class="icon-btn add-btn" id="addBtn" onclick="startAdding()" title="افزودن یادآور">+</button>
+    </div>
+</div>
+
+<div class="container" id="container">
+    <div class="empty">
+        <div class="empty-icon">🎤</div>
+        <div>برای افزودن یادآور،<br>دکمه + را بزنید و صحبت کنید</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <h2 id="modalTitle">یادآور جدید</h2>
+
+        <div id="recordingSection" class="recording-section" style="display:none;">
+            <div class="recording-text">
+                <span class="recording-indicator"></span>
+                در حال ضبط صوت...
+            </div>
+            <div class="recording-hint" id="interimText">صحبت کنید...</div>
+            <div class="recording-buttons">
+                <button class="btn btn-danger" onclick="stopRecording()">توقف ضبط</button>
+            </div>
+        </div>
+
+        <div id="formSection" style="display:none;">
+            <label class="modal-label">متن یادآور <span style="font-weight:400;color:#999;">(می‌توانید ویرایش یا تایپ کنید)</span></label>
+            <textarea class="modal-textarea" id="itemText" placeholder="اگر ضبط صوت کار نکرد، متن را اینجا تایپ کنید..."></textarea>
+
+            <label class="modal-label">حداکثر زمان انجام (سررسید)</label>
+            <input type="datetime-local" class="modal-input" id="itemDeadline">
+
+            <div class="quick-deadline">
+                <button class="quick-btn" onclick="setQuickDeadline(1)">۱ ساعت</button>
+                <button class="quick-btn" onclick="setQuickDeadline(3)">۳ ساعت</button>
+                <button class="quick-btn" onclick="setQuickDeadline(24)">۱ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(72)">۳ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(168)">۱ هفته</button>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="cancelModal()">انصراف</button>
+                <button class="btn btn-secondary" onclick="startRecording()">ضبط دوباره</button>
+                <button class="btn btn-primary" onclick="saveItem()">ذخیره</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Calendar Modal -->
+<div class="modal-overlay" id="calendarOverlay">
+    <div class="modal calendar-modal">
+        <div class="calendar-header">
+            <button class="cal-nav-btn" onclick="changeMonth(-1)" title="ماه قبل">◄</button>
+            <div class="cal-title">
+                <div id="calMonthYear"></div>
+                <button class="cal-today-btn" onclick="goToToday()">امروز</button>
+            </div>
+            <button class="cal-nav-btn" onclick="changeMonth(1)" title="ماه بعد">►</button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="calendar-day-tasks" id="calendarDayTasks">
+            <div class="cal-empty">یک روز را انتخاب کنید</div>
+        </div>
+        <div class="modal-buttons" style="margin-top: 12px;">
+            <button class="btn btn-secondary" onclick="closeCalendar()">بستن</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============ Jalali (Shamsi) Date Conversion ============
+// Uses jalaliToGregorian (verified correct) as the source of truth.
+// Reference: Farvardin 1, 1400 = March 21, 2021 (UTC)
+
+function isJalaliLeap(jy) {
+    // A Jalali year is leap if (year mod 33) is in [1, 5, 9, 13, 17, 22, 26, 30]
+    return [1, 5, 9, 13, 17, 22, 26, 30].indexOf(((jy % 33) + 33) % 33) !== -1;
+}
+
+function getDaysInJalaliMonth(jy, jm) {
+    if (jm <= 6) return 31;            // فروردین تا شهریور
+    if (jm <= 11) return 30;           // مهر تا بهمن
+    return isJalaliLeap(jy) ? 30 : 29; // اسفند
+}
+
+function jalaliToGregorian(jy, jm, jd) {
+    // Reference: Farvardin 1, 1400 = March 21, 2021 (UTC)
+    const refDate = new Date(Date.UTC(2021, 2, 21));
+    const refJalaliYear = 1400;
+
+    let totalDays = 0;
+    if (jy >= refJalaliYear) {
+        for (let y = refJalaliYear; y < jy; y++) {
+            totalDays += isJalaliLeap(y) ? 366 : 365;
+        }
+    } else {
+        for (let y = jy; y < refJalaliYear; y++) {
+            totalDays -= isJalaliLeap(y) ? 366 : 365;
+        }
+    }
+    for (let m = 1; m < jm; m++) {
+        totalDays += getDaysInJalaliMonth(jy, m);
+    }
+    totalDays += (jd - 1);
+
+    const result = new Date(refDate);
+    result.setUTCDate(result.getUTCDate() + totalDays);
+    return result;
+}
+
+function gregorianToJalali(gy, gm, gd) {
+    // Convert input Gregorian date to UTC midnight time
+    const inputTime = Date.UTC(gy, gm - 1, gd);
+    // Approximate Jalali year (Gregorian year - 621 is close to Jalali year)
+    const approxJy = gy - 621;
+
+    // Find correct Jalali year by checking neighbors of the approximation
+    for (let testJy = approxJy - 2; testJy <= approxJy + 2; testJy++) {
+        const f1 = jalaliToGregorian(testJy, 1, 1);
+        const f1Time = Date.UTC(f1.getUTCFullYear(), f1.getUTCMonth(), f1.getUTCDate());
+        const nextF1 = jalaliToGregorian(testJy + 1, 1, 1);
+        const nextF1Time = Date.UTC(nextF1.getUTCFullYear(), nextF1.getUTCMonth(), nextF1.getUTCDate());
+
+        if (inputTime >= f1Time && inputTime < nextF1Time) {
+            // We're in Jalali year testJy
+            const dayOfYear = Math.floor((inputTime - f1Time) / 86400000);
+            // Walk through months to find month and day
+            let month = 1;
+            let remaining = dayOfYear;
+            while (month <= 12) {
+                const dim = getDaysInJalaliMonth(testJy, month);
+                if (remaining < dim) {
+                    return [testJy, month, remaining + 1];
+                }
+                remaining -= dim;
+                month++;
+            }
+            // Fallback (shouldn't reach)
+            return [testJy, 12, getDaysInJalaliMonth(testJy, 12)];
+        }
+    }
+
+    // Fallback (shouldn't reach for any reasonable date)
+    return [approxJy, 1, 1];
+}
+
+const jalaliMonths = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+const jalaliWeekdays = ['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
+
+function toJalaliParts(date) {
+    const d = new Date(date);
+    return gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function toJalaliShort(date) {
+    const d = new Date(date);
+    const [jy, jm, jd] = toJalaliParts(date);
+    return `${pad2(jm)}/${pad2(jd)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function toJalaliLong(date) {
+    const d = new Date(date);
+    const [jy, jm, jd] = toJalaliParts(date);
+    const wd = jalaliWeekdays[d.getDay()];
+    return `${wd} ${jd} ${jalaliMonths[jm-1]} ${jy} - ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function toJalaliFull(date) {
+    const d = new Date(date);
+    const [jy, jm, jd] = toJalaliParts(date);
+    return `${jy}/${pad2(jm)}/${pad2(jd)} - ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function toPersianDigits(str) {
+    const persian = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+    return String(str).replace(/[0-9]/g, d => persian[d]);
+}
+
+// ============ Database (localStorage + IndexedDB mirror for SW) ============
+const DB_KEY = 'persian_voice_reminders_v1';
+const IDB_NAME = 'yadavar_db';
+const IDB_VERSION = 1;
+const STORE_REMINDERS = 'reminders';
+const STORE_NOTIF_LOG = 'notif_log';
+let idbPromise = null;
+
+function idbAvailable() { return 'indexedDB' in window; }
+
+function openIDB() {
+    if (!idbAvailable()) return Promise.reject(new Error('IndexedDB unavailable'));
+    if (idbPromise) return idbPromise;
+    idbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_REMINDERS)) {
+                const store = db.createObjectStore(STORE_REMINDERS, { keyPath: 'id' });
+                store.createIndex('deadline', 'deadline', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(STORE_NOTIF_LOG)) {
+                db.createObjectStore(STORE_NOTIF_LOG, { keyPath: 'key' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    return idbPromise;
+}
+
+async function idbBulkPutReminders(items) {
+    if (!idbAvailable()) return;
+    try {
+        const db = await openIDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_REMINDERS], 'readwrite');
+            const store = tx.objectStore(STORE_REMINDERS);
+            store.clear();
+            items.forEach(item => store.put(item));
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch(e) { console.warn('IDB sync failed', e); }
+}
+
+async function idbGetAllReminders() {
+    if (!idbAvailable()) return [];
+    try {
+        const db = await openIDB();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_REMINDERS], 'readonly');
+            const req = tx.objectStore(STORE_REMINDERS).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { console.warn('IDB read failed', e); return []; }
+}
+
+async function idbPutNotifLog(key) {
+    if (!idbAvailable()) return;
+    try {
+        const db = await openIDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NOTIF_LOG], 'readwrite');
+            tx.objectStore(STORE_NOTIF_LOG).put({ key, ts: Date.now() });
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch(e) { console.warn('IDB notif log failed', e); }
+}
+
+async function idbGetAllNotifLog() {
+    if (!idbAvailable()) return [];
+    try {
+        const db = await openIDB();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NOTIF_LOG], 'readonly');
+            const req = tx.objectStore(STORE_NOTIF_LOG).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return []; }
+}
+
+function getDB() {
+    try { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
+    catch(e) { console.error('DB read error', e); return []; }
+}
+function setDB(items) {
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(items));
+        // Mirror to IndexedDB so Service Worker can read in background
+        idbBulkPutReminders(items);
+    } catch(e) {
+        console.error('DB write error', e);
+        showToast('خطا در ذخیره‌سازی');
+    }
+}
+
+// One-time migration: if localStorage has old sent_notifications, also load them into IDB
+async function migrateLegacyData() {
+    if (!idbAvailable()) return;
+    try {
+        // Migrate sent notifications to IDB
+        const oldNotifs = JSON.parse(localStorage.getItem('sent_notifications_v1') || '[]');
+        if (Array.isArray(oldNotifs) && oldNotifs.length > 0) {
+            for (const key of oldNotifs) {
+                await idbPutNotifLog(key);
+            }
+            console.log(`Migrated ${oldNotifs.length} notification keys to IDB`);
+        }
+    } catch(e) { console.warn('Migration failed', e); }
+}
+
+// ============ Speech Recognition ============
+let recognition = null;
+let isRecording = false;
+let finalText = '';
+let interimText = '';
+
+function isSpeechSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function initRecognition() {
+    if (!isSpeechSupported()) return false;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = 'fa-IR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalText += transcript + ' ';
+            } else {
+                interim += transcript;
+            }
+        }
+        interimText = interim;
+        const display = (finalText + ' ' + interim).trim();
+        document.getElementById('itemText').value = display;
+        const hintEl = document.getElementById('interimText');
+        if (hintEl) {
+            hintEl.textContent = interim || (finalText ? 'در حال پردازش...' : 'صحبت کنید...');
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.error('Recognition error:', event.error, 'protocol:', location.protocol);
+        const errMsg = getSpeechErrorMessage(event.error);
+        if (errMsg) showToast(errMsg);
+        if (isRecording) {
+            isRecording = false;
+            document.getElementById('addBtn').classList.remove('recording');
+            showFormSection(true);
+        }
+    };
+
+    function getSpeechErrorMessage(error) {
+        switch(error) {
+            case 'no-speech':
+                return 'صدایی شنیده نشد. دوباره تلاش کنید یا متن را تایپ کنید.';
+            case 'not-allowed':
+            case 'service-not-allowed':
+                if (location.protocol === 'file:') {
+                    return 'برای ضبط صوت باید فایل روی سرور محلی باشد. فعلاً می‌توانید متن را تایپ کنید.';
+                }
+                return 'دسترسی به میکروفون رد شد. در تنظیمات مرورگر اجازه دهید.';
+            case 'network':
+                return 'خطای شبکه. اتصال اینترنت را بررسی کنید یا متن را تایپ کنید.';
+            case 'audio-capture':
+                return 'میکروفون پیدا نشد. یک میکروفون وصل کنید.';
+            case 'language-not-supported':
+                return 'زبان فارسی پشتیبانی نمی‌شود. از Chrome یا Edge استفاده کنید.';
+            case 'aborted':
+                return null;
+            default:
+                return 'خطا در تشخیص صوت: ' + error + '. می‌توانید متن را تایپ کنید.';
+        }
+    }
+
+    recognition.onend = () => {
+        if (isRecording) {
+            // auto-restart if still recording (Android stops more aggressively after silence)
+            // Use a small delay to avoid "InvalidStateError" from rapid restarts
+            setTimeout(() => {
+                if (!isRecording) return;
+                try { recognition.start(); }
+                catch(e) {
+                    console.warn('Restart failed, retrying in 1s...', e);
+                    // Retry once more after 1 second
+                    setTimeout(() => {
+                        if (!isRecording) return;
+                        try { recognition.start(); }
+                        catch(e2) {
+                            console.error('Restart failed twice, giving up', e2);
+                            isRecording = false;
+                            document.getElementById('addBtn')?.classList.remove('recording');
+                            showFormSection(true);
+                            showToast('ضبط قطع شد. می‌توانید متن را تایپ کنید یا دوباره ضبط کنید.');
+                        }
+                    }, 1000);
+                }
+            }, 300);
+        } else {
+            showFormSection();
+        }
+    };
+
+    return true;
+}
+
+function startRecording() {
+    if (!isSpeechSupported()) {
+        showToast('مرورگر شما از تبدیل صوت به متن پشتیبانی نمی‌کند. لطفاً از Chrome یا Edge استفاده کنید.');
+        return;
+    }
+    if (!recognition && !initRecognition()) {
+        showToast('امکان راه‌اندازی تشخیص صوت وجود ندارد');
+        return;
+    }
+    finalText = '';
+    interimText = '';
+    document.getElementById('itemText').value = '';
+    isRecording = true;
+    document.getElementById('recordingSection').style.display = 'block';
+    document.getElementById('formSection').style.display = 'none';
+    document.getElementById('modalTitle').textContent = 'در حال ضبط صوت';
+    document.getElementById('addBtn').classList.add('recording');
+    try {
+        recognition.start();
+    } catch(e) {
+        console.error(e);
+        showToast('خطا در شروع ضبط');
+        isRecording = false;
+        document.getElementById('addBtn').classList.remove('recording');
+        showFormSection();
+    }
+}
+
+function stopRecording() {
+    isRecording = false;
+    document.getElementById('addBtn').classList.remove('recording');
+    if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+    }
+    setTimeout(() => showFormSection(), 200);
+}
+
+// (merged with the version above)
+
+function setQuickDeadline(hours) {
+    const dt = new Date(Date.now() + hours * 60 * 60 * 1000);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('itemDeadline').value = local;
+}
+
+// ============ Add flow ============
+function startAdding() {
+    if (isRecording) {
+        stopRecording();
+        return;
+    }
+    document.getElementById('modalOverlay').classList.add('active');
+    document.getElementById('itemText').value = '';
+    document.getElementById('itemDeadline').value = '';
+    // Check if speech is supported & viable
+    if (!isSpeechSupported()) {
+        // Direct manual mode
+        document.getElementById('recordingSection').style.display = 'none';
+        document.getElementById('formSection').style.display = 'block';
+        document.getElementById('modalTitle').textContent = 'یادآور جدید';
+        setQuickDeadline(1);
+        showToast('مرورگر از ضبط پشتیبانی نمی‌کند. متن را تایپ کنید.');
+        setTimeout(() => document.getElementById('itemText').focus(), 100);
+        return;
+    }
+    // For file:// protocol, warn and offer both modes
+    if (location.protocol === 'file:') {
+        showManualMode('ضبط صوت روی فایل محلی ممکن است کار نکند. می‌توانید متن را تایپ کنید یا ضبط را امتحان کنید.');
+        return;
+    }
+    // small delay for modal to appear
+    setTimeout(startRecording, 250);
+}
+
+function showManualMode(message) {
+    document.getElementById('recordingSection').style.display = 'block';
+    document.getElementById('formSection').style.display = 'none';
+    document.getElementById('modalTitle').textContent = 'یادآور جدید';
+    const recSection = document.getElementById('recordingSection');
+    recSection.innerHTML = `
+        <div style="color:#666;font-size:13px;padding:8px 4px 18px;line-height:1.7;text-align:right;">${message}</div>
+        <div class="recording-buttons" style="flex-direction:column;gap:8px;">
+            <button class="btn btn-primary" onclick="startRecording()">شروع ضبط صوت</button>
+            <button class="btn btn-secondary" onclick="showFormSection()">تایپ دستی متن</button>
+        </div>
+    `;
+}
+
+function showFormSection(forceFocus) {
+    document.getElementById('recordingSection').style.display = 'none';
+    document.getElementById('formSection').style.display = 'block';
+    document.getElementById('modalTitle').textContent = 'یادآور جدید';
+    setQuickDeadline(1);
+    const text = document.getElementById('itemText').value.trim();
+    if (!text || forceFocus) {
+        setTimeout(() => document.getElementById('itemText').focus(), 100);
+    }
+}
+
+function cancelModal() {
+    if (isRecording) {
+        isRecording = false;
+        document.getElementById('addBtn').classList.remove('recording');
+        if (recognition) { try { recognition.stop(); } catch(e) {} }
+    }
+    document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function saveItem() {
+    const text = document.getElementById('itemText').value.trim();
+    const deadlineStr = document.getElementById('itemDeadline').value;
+    if (!text) {
+        showToast('متن یادآور خالی است');
+        return;
+    }
+    if (!deadlineStr) {
+        showToast('زمان سررسید را وارد کنید');
+        return;
+    }
+    const deadline = new Date(deadlineStr);
+    if (isNaN(deadline.getTime())) {
+        showToast('زمان سررسید نامعتبر است');
+        return;
+    }
+    const now = new Date();
+
+    const items = getDB();
+    const newItem = {
+        id: 'r_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        text: text,
+        createdAt: now.toISOString(),
+        deadline: deadline.toISOString(),
+        done: false
+    };
+    items.push(newItem);
+    setDB(items);
+
+    document.getElementById('modalOverlay').classList.remove('active');
+    document.getElementById('itemText').value = '';
+    document.getElementById('itemDeadline').value = '';
+
+    render();
+    showToast('یادآور ذخیره شد ✓');
+}
+
+// ============ Urgency / Color ============
+function getUrgencyLevel(deadline, done) {
+    if (done) return 'done';
+    const remaining = new Date(deadline).getTime() - Date.now();
+    if (remaining < 0) return 'overdue';
+    const hours = remaining / (1000 * 60 * 60);
+    if (hours < 4) return 'urgent';
+    if (hours < 12) return 'warning';
+    if (hours < 24) return 'caution';
+    return 'normal';
+}
+
+function formatRemaining(deadline, done) {
+    if (done) return 'انجام شد';
+    const remaining = new Date(deadline).getTime() - Date.now();
+    if (remaining < 0) {
+        const od = -remaining;
+        const days = Math.floor(od / 86400000);
+        const hours = Math.floor((od % 86400000) / 3600000);
+        const mins = Math.floor((od % 3600000) / 60000);
+        if (days > 0) return `گذشت ${days} روز`;
+        if (hours > 0) return `گذشت ${hours} ساعت`;
+        return `گذشت ${mins} دقیقه`;
+    }
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const mins = Math.floor((remaining % 3600000) / 60000);
+    if (days > 0) return `${days} روز مانده`;
+    if (hours > 0) return `${hours} ساعت مانده`;
+    if (mins > 0) return `${mins} دقیقه مانده`;
+    return '< ۱ دقیقه';
+}
+
+// ============ Render ============
+let expandedId = null;
+
+function render() {
+    const container = document.getElementById('container');
+    const items = getDB();
+
+    // Sort: closest deadline first; overdue at very top; done at bottom
+    items.sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        const aOver = new Date(a.deadline).getTime() < Date.now();
+        const bOver = new Date(b.deadline).getTime() < Date.now();
+        if (aOver && !bOver) return -1;
+        if (!aOver && bOver) return 1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    });
+
+    container.innerHTML = '';
+
+    if (items.length === 0) {
+        container.innerHTML = '<div class="empty"><div class="empty-icon">🎤</div><div>برای افزودن یادآور،<br>دکمه + را بزنید و صحبت کنید</div></div>';
+        return;
+    }
+
+    items.forEach((item) => {
+        const level = getUrgencyLevel(item.deadline, item.done);
+        const div = document.createElement('div');
+        div.className = `item ${level}` + (expandedId === item.id ? ' expanded' : '');
+        div.dataset.id = item.id;
+
+        const row = document.createElement('div');
+        row.className = 'item-row';
+
+        if (item.done) {
+            const mark = document.createElement('div');
+            mark.className = 'item-done-mark';
+            mark.textContent = '✓';
+            row.appendChild(mark);
+        }
+
+        const textEl = document.createElement('div');
+        textEl.className = 'item-text';
+        textEl.textContent = item.text;
+        row.appendChild(textEl);
+
+        const remEl = document.createElement('div');
+        remEl.className = 'item-remaining';
+        remEl.textContent = toPersianDigits(formatRemaining(item.deadline, item.done));
+        row.appendChild(remEl);
+
+        const details = document.createElement('div');
+        details.className = 'item-details';
+        details.innerHTML = `
+            <div class="detail-row">
+                <span class="detail-label">ساخته شد:</span>
+                <span class="detail-value">${toPersianDigits(toJalaliFull(item.createdAt))}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">سررسید:</span>
+                <span class="detail-value">${toPersianDigits(toJalaliFull(item.deadline))}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">روز سررسید:</span>
+                <span class="detail-value">${toJalaliLong(item.deadline)}</span>
+            </div>
+            <div class="item-actions">
+                <button class="action-btn" data-action="toggle">${item.done ? 'بازگردانی' : 'انجام شد'}</button>
+                <button class="action-btn danger" data-action="delete">حذف</button>
+            </div>
+        `;
+
+        div.appendChild(row);
+        div.appendChild(details);
+
+        div.addEventListener('click', (e) => {
+            const action = e.target.dataset.action;
+            if (action === 'toggle') { e.stopPropagation(); toggleDone(item.id); return; }
+            if (action === 'delete') { e.stopPropagation(); deleteItem(item.id); return; }
+            if (e.target.closest('.action-btn')) return;
+            toggleExpand(item.id);
+        });
+
+        container.appendChild(div);
+    });
+}
+
+function toggleExpand(id) {
+    expandedId = (expandedId === id) ? null : id;
+    render();
+}
+
+function toggleDone(id) {
+    const items = getDB();
+    const item = items.find(i => i.id === id);
+    if (item) {
+        item.done = !item.done;
+        if (item.done) item.completedAt = new Date().toISOString();
+        setDB(items);
+        render();
+        showToast(item.done ? 'علامت زده شد ✓' : 'بازگردانی شد');
+    }
+}
+
+function deleteItem(id) {
+    if (!confirm('این یادآور حذف شود؟')) return;
+    let items = getDB();
+    items = items.filter(i => i.id !== id);
+    setDB(items);
+    if (expandedId === id) expandedId = null;
+    render();
+    showToast('حذف شد');
+}
+
+// ============ Share via Messenger ============
+async function shareViaMessenger() {
+    const items = getDB();
+    const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const hasShare = typeof navigator.share === 'function';
+    const hasCanShare = typeof navigator.canShare === 'function';
+
+    showToast('در حال آماده‌سازی فایل‌ها...');
+
+    // 1. Build database JSON file
+    const dbContent = JSON.stringify({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        exportedAtJalali: toJalaliLong(new Date()),
+        count: items.length,
+        items: items
+    }, null, 2);
+    const dbBlob = new Blob([dbContent], { type: 'application/json' });
+    const dbFileName = `yadavar-database-${Date.now()}.json`;
+
+    // 2. Get the HTML program file (try fetch first, fallback to outerHTML)
+    let htmlBlob;
+    let htmlFileName = 'speech-to-text-reminder.html';
+    try {
+        const response = await fetch(location.href, { cache: 'no-store' });
+        if (response.ok) {
+            const html = await response.text();
+            htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        } else {
+            throw new Error('HTTP ' + response.status);
+        }
+    } catch(e) {
+        console.warn('fetch HTML failed, using outerHTML:', e.message);
+        const doctype = '<!DOCTYPE html>';
+        const html = doctype + '\n' + document.documentElement.outerHTML;
+        htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    }
+
+    // 3. Build File objects (needed for Web Share API)
+    let dbFile = null, htmlFile = null;
+    let canShareFiles = false;
+    try {
+        dbFile = new File([dbBlob], dbFileName, { type: 'application/json' });
+        htmlFile = new File([htmlBlob], htmlFileName, { type: 'text/html' });
+        if (hasCanShare) {
+            try { canShareFiles = navigator.canShare({ files: [dbFile, htmlFile] }); }
+            catch(e) { console.warn('canShare check failed:', e); canShareFiles = false; }
+        }
+    } catch(e) {
+        console.warn('File constructor failed:', e);
+    }
+
+    // 4. Decide the strategy
+    const strategy = decideShareStrategy(isSecureContext, hasShare, hasCanShare, canShareFiles, items.length);
+    console.log('[Share] Strategy:', strategy);
+
+    let shared = false;
+    if (strategy === 'webshare-files') {
+        try {
+            await navigator.share({
+                files: [dbFile, htmlFile],
+                title: 'یادآور صوتی - دیتابیس و فایل برنامه',
+                text: `دیتابیس یادآور (${items.length} مورد) و فایل برنامه\nخروجی: ${toJalaliLong(new Date())}`
+            });
+            showToast('ارسال شد ✓');
+            shared = true;
+        } catch(e) {
+            if (e.name === 'AbortError') return; // user cancelled
+            console.warn('Web Share with files failed, falling back:', e);
+        }
+    }
+
+    if (!shared && strategy === 'webshare-text') {
+        // Try sharing just text, then download files separately
+        try {
+            await navigator.share({
+                title: 'یادآور صوتی',
+                text: `دیتابیس یادآور (${items.length} مورد) - فایل‌ها دانلود می‌شوند`
+            });
+        } catch(e) {
+            if (e.name === 'AbortError') return;
+            console.warn('Web Share text failed, falling back to download:', e);
+        }
+    }
+
+    // 5. Always provide downloads as fallback (works everywhere)
+    downloadBlob(dbBlob, dbFileName);
+    setTimeout(() => downloadBlob(htmlBlob, htmlFileName), 600);
+
+    // 6. Show informative message based on what happened
+    let msg;
+    if (shared) {
+        msg = 'ارسال شد ✓ (و فایل‌ها هم دانلود شدند)';
+    } else if (strategy === 'webshare-files' || strategy === 'webshare-text') {
+        msg = 'فایل‌ها دانلود شدند. اگر پنجره اشتراک‌گذاری باز نشد، فایل‌ها را دستی به پیام‌رسان بفرستید';
+    } else if (strategy === 'insecure-context') {
+        msg = 'برای ارسال مستقیم به پیام‌رسان، صفحه را روی https یا localhost باز کنید. فعلاً فایل‌ها دانلود شدند';
+    } else {
+        msg = 'فایل‌ها دانلود شدند ✓ آنها را به پیام‌رسان ارسال کنید';
+    }
+    showToast(msg);
+
+    // 7. Additional option: Copy a small text summary to clipboard (works in messengers that support paste)
+    // For very small databases, we also offer the full JSON via clipboard
+    if (items.length > 0 && items.length <= 50 && navigator.clipboard) {
+        try {
+            await navigator.clipboard.writeText(dbContent);
+            setTimeout(() => showToast('دیتابیس در کلیپ‌بورد هم کپی شد ✓'), 1500);
+        } catch(e) {
+            console.warn('Clipboard copy failed:', e);
+        }
+    }
+}
+
+function decideShareStrategy(isSecureContext, hasShare, hasCanShare, canShareFiles, itemCount) {
+    if (!isSecureContext) {
+        return 'insecure-context'; // file:// - no Web Share API
+    }
+    if (!hasShare) {
+        return 'no-webshare'; // desktop browsers usually
+    }
+    if (canShareFiles && itemCount > 0) {
+        return 'webshare-files'; // best - mobile with files
+    }
+    if (hasShare) {
+        return 'webshare-text'; // mobile without files support
+    }
+    return 'download-only';
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ============ Import Database ============
+function importDatabase() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                let importedItems = [];
+                // Support both { items: [...] } wrapper and raw [...]
+                if (Array.isArray(data)) {
+                    importedItems = data;
+                } else if (data && Array.isArray(data.items)) {
+                    importedItems = data.items;
+                } else {
+                    throw new Error('ساختار فایل نامعتبر است');
+                }
+
+                // Validate items
+                const validItems = importedItems.filter(item =>
+                    item && item.id && item.text && item.createdAt && item.deadline
+                ).map(item => ({
+                    id: String(item.id),
+                    text: String(item.text),
+                    createdAt: String(item.createdAt),
+                    deadline: String(item.deadline),
+                    done: !!item.done,
+                    ...(item.completedAt ? { completedAt: String(item.completedAt) } : {})
+                }));
+
+                if (validItems.length === 0) {
+                    showToast('هیچ یادآور معتبری در فایل یافت نشد');
+                    return;
+                }
+
+                const currentItems = getDB();
+                const existingIds = new Set(currentItems.map(i => i.id));
+                const newItems = validItems.filter(i => !existingIds.has(i.id));
+                const dupCount = validItems.length - newItems.length;
+
+                // Build dialog message
+                const msg = `فایل دارای ${validItems.length} یادآور است.\n` +
+                    `دیتابیس فعلی: ${currentItems.length} مورد\n` +
+                    (dupCount > 0 ? `${dupCount} مورد تکراری (با همان شناسه) شناسایی شد\n` : '') +
+                    `\nبرای «ادغام» (افزودن موارد جدید) = بله\n` +
+                    `برای «جایگزینی کامل» = خیر`;
+
+                if (confirm(msg)) {
+                    // Merge mode
+                    const merged = [...currentItems, ...newItems];
+                    setDB(merged);
+                    render();
+                    showToast(`${newItems.length} یادآور جدید اضافه شد ✓`);
+                } else {
+                    // Replace mode
+                    if (confirm(`دیتابیس فعلی (${currentItems.length} مورد) با ${validItems.length} مورد جدید جایگزین شود؟`)) {
+                        setDB(validItems);
+                        // Clear sent notifications for items no longer present
+                        clearSentNotificationsFor(validItems);
+                        render();
+                        showToast('دیتابیس جایگزین شد ✓');
+                    }
+                }
+            } catch(e) {
+                console.error('Import error:', e);
+                showToast('خطا در خواندن فایل: ' + (e.message || 'نامشخص'));
+            }
+        };
+        reader.onerror = () => showToast('خطا در خواندن فایل');
+        reader.readAsText(file);
+    };
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
+}
+
+// ============ Notifications ============
+const NOTIF_KEY = 'sent_notifications_v1';
+let sentNotifications = new Set();
+
+async function loadSentNotifications() {
+    // Load from IndexedDB (shared with SW)
+    const entries = await idbGetAllNotifLog();
+    if (entries.length > 0) {
+        sentNotifications = new Set(entries.map(e => e.key));
+        // Also merge with legacy localStorage entries (one-time)
+        try {
+            const legacy = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+            legacy.forEach(k => sentNotifications.add(k));
+            if (legacy.length > 0) {
+                localStorage.removeItem(NOTIF_KEY);
+            }
+        } catch(e) {}
+    } else {
+        // Fallback: try localStorage legacy
+        try {
+            const saved = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+            sentNotifications = new Set(saved);
+        } catch(e) { sentNotifications = new Set(); }
+    }
+}
+
+async function saveSentNotifications() {
+    // Save to localStorage as fallback (primary store is IndexedDB, written per-notif via idbPutNotifLog)
+    try {
+        if (sentNotifications.size > 500) {
+            const arr = [...sentNotifications];
+            sentNotifications = new Set(arr.slice(-500));
+        }
+        localStorage.setItem(NOTIF_KEY, JSON.stringify([...sentNotifications]));
+    } catch(e) { console.error('Failed to save notifications', e); }
+}
+
+function clearSentNotificationsFor(items) {
+    const validIds = new Set(items.map(i => i.id));
+    const toRemove = [...sentNotifications].filter(key => {
+        const id = key.split('_')[0];
+        return !validIds.has(id);
+    });
+    toRemove.forEach(k => sentNotifications.delete(k));
+    saveSentNotifications();
+    // Note: IDB entries for deleted items will be cleaned up by SW's periodic cleanup
+}
+
+async function toggleNotifications() {
+    if (!('Notification' in window)) {
+        showToast('مرورگر شما از اعلان‌ها پشتیبانی نمی‌کند');
+        return;
+    }
+    if (Notification.permission === 'granted') {
+        showToast('اعلان‌ها فعال هستند ✓ (برای خاموش کردن به تنظیمات مرورگر بروید)');
+        updateNotifButton();
+        // Run immediate check
+        checkNotifications();
+        return;
+    }
+    if (Notification.permission === 'denied') {
+        showToast('اعلان‌ها مسدود شده‌اند. در تنظیمات مرورگر اجازه دهید');
+        return;
+    }
+    // Default - request permission
+    try {
+        const permission = await Notification.requestPermission();
+        updateNotifButton();
+        if (permission === 'granted') {
+            showToast('اعلان‌ها فعال شد ✓');
+            // Show test notification
+            try {
+                new Notification('یادآور صوتی', {
+                    body: 'اعلان‌ها فعال شدند. هنگام نزدیک شدن سررسید به شما اطلاع می‌دهیم',
+                    tag: 'test-' + Date.now()
+                });
+            } catch(e) { console.error(e); }
+            checkNotifications();
+        } else if (permission === 'denied') {
+            showToast('دسترسی به اعلان‌ها رد شد');
+        } else {
+            showToast('دسترسی به اعلان‌ها داده نشد');
+        }
+    } catch(e) {
+        showToast('خطا در درخواست اعلان: ' + e.message);
+    }
+}
+
+function updateNotifButton() {
+    const btn = document.getElementById('notifBtn');
+    if (!btn) return;
+    if ('Notification' in window && Notification.permission === 'granted') {
+        btn.classList.add('active');
+    } else {
+        btn.classList.remove('active');
+    }
+}
+
+// Notification thresholds: at X minutes remaining, send once
+const NOTIF_THRESHOLDS = [
+    { minutes: 60 * 24, key: 'd1', label: '۱ روز' },     // 1 day before
+    { minutes: 60 * 6,  key: 'h6', label: '۶ ساعت' },     // 6 hours before
+    { minutes: 60,      key: 'h1', label: '۱ ساعت' },     // 1 hour before
+    { minutes: 30,      key: 'm30', label: '۳۰ دقیقه' }, // 30 min before
+    { minutes: 10,      key: 'm10', label: '۱۰ دقیقه' },  // 10 min before
+    { minutes: 0,       key: 'due', label: 'سررسید' },    // at deadline
+];
+
+function checkNotifications() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const items = getDB();
+    const now = Date.now();
+
+    items.forEach(item => {
+        if (item.done) return;
+        const deadlineMs = new Date(item.deadline).getTime();
+        if (isNaN(deadlineMs)) return;
+        const remaining = deadlineMs - now;
+
+        NOTIF_THRESHOLDS.forEach(t => {
+            const triggerMs = t.minutes * 60 * 1000;
+            const notifKey = `${item.id}_${t.key}`;
+            if (sentNotifications.has(notifKey)) return;
+
+            // Send if remaining <= triggerMs AND not too far past (within 60 min window)
+            if (remaining <= triggerMs && remaining > triggerMs - 60 * 60 * 1000) {
+                sendNotification(item, t.label, remaining <= 0);
+                sentNotifications.add(notifKey);
+                saveSentNotifications();
+                // Also write to IndexedDB so SW doesn't duplicate in background
+                idbPutNotifLog(notifKey);
+            }
+        });
+    });
+}
+
+function sendNotification(item, label, isOverdue) {
+    try {
+        const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
+        const title = isOverdue
+            ? `⚠️ سررسید گذشته: ${text}`
+            : `${label} تا سررسید: ${text}`;
+        const body = isOverdue
+            ? `زمان انجام این یادآور گذشته است`
+            : `یادآور شما نزدیک سررسید است`;
+        const n = new Notification(title, {
+            body: body,
+            tag: item.id + '_' + label,
+            dir: 'rtl',
+            lang: 'fa-IR'
+        });
+        n.onclick = () => {
+            window.focus();
+            n.close();
+            expandedId = item.id;
+            render();
+        };
+    } catch(e) {
+        console.error('Notification error:', e);
+    }
+}
+
+// Cleanup old sent notifications (older than 30 days)
+function cleanupOldNotifications() {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const before = sentNotifications.size;
+    // We can't easily tell when each was sent, so just trim if too large
+    if (sentNotifications.size > 200) {
+        const arr = [...sentNotifications];
+        sentNotifications = new Set(arr.slice(-100));
+        saveSentNotifications();
+    }
+}
+
+// ============ Toast ============
+let toastTimer;
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+// ============ Header date ============
+function updateHeaderDate() {
+    const el = document.getElementById('headerDate');
+    if (el) el.textContent = toPersianDigits(toJalaliLong(new Date()));
+}
+
+// ============ Persian (Shamsi) Calendar ============
+// State: currently displayed year/month, and selected day
+let calState = { year: null, month: null, selectedDay: null };
+
+// Persian weekday short names - week starts on Saturday (شنبه)
+const calWeekdayNames = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+
+// Note: isJalaliLeap, getDaysInJalaliMonth, and jalaliToGregorian
+// are already defined above in the Jalali Date Conversion section.
+
+function openCalendar() {
+    const today = new Date();
+    const [jy, jm, jd] = toJalaliParts(today);
+    calState = { year: jy, month: jm, selectedDay: jd };
+    renderCalendar();
+    document.getElementById('calendarOverlay').classList.add('active');
+}
+
+function closeCalendar() {
+    document.getElementById('calendarOverlay').classList.remove('active');
+}
+
+function changeMonth(delta) {
+    let m = calState.month + delta;
+    let y = calState.year;
+    if (m > 12) { m = 1; y++; }
+    if (m < 1) { m = 12; y--; }
+    calState.month = m;
+    calState.year = y;
+    renderCalendar();
+}
+
+function goToToday() {
+    const today = new Date();
+    const [jy, jm, jd] = toJalaliParts(today);
+    calState = { year: jy, month: jm, selectedDay: jd };
+    renderCalendar();
+}
+
+function renderCalendar() {
+    document.getElementById('calMonthYear').textContent =
+        `${jalaliMonths[calState.month - 1]} ${toPersianDigits(calState.year)}`;
+
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+
+    // Weekday header
+    calWeekdayNames.forEach(w => {
+        const el = document.createElement('div');
+        el.className = 'cal-weekday';
+        el.textContent = w;
+        grid.appendChild(el);
+    });
+
+    // Find weekday of day 1 of this Jalali month (Persian week starts Saturday)
+    const firstDayG = jalaliToGregorian(calState.year, calState.month, 1);
+    // getDay() returns 0=Sunday, 6=Saturday. Persian week: Sat=0, Sun=1, ..., Fri=6
+    const jsDay = firstDayG.getUTCDay();
+    const persianOffset = ((jsDay + 1) % 7); // Sat(6)→0, Sun(0)→1, Mon(1)→2, ..., Fri(5)→6
+
+    // Collect tasks per day for this month
+    const items = getDB();
+    const tasksByDay = {};  // { dayNumber: Set of task IDs (unique) }
+
+    function checkAndMark(item, dateStr) {
+        if (!dateStr) return;
+        const d = new Date(dateStr);
+        const [jy, jm, jd] = toJalaliParts(d);
+        if (jy === calState.year && jm === calState.month) {
+            if (!tasksByDay[jd]) tasksByDay[jd] = new Set();
+            tasksByDay[jd].add(item.id);
+        }
+    }
+
+    items.forEach(item => {
+        checkAndMark(item, item.deadline);
+        checkAndMark(item, item.completedAt);
+        checkAndMark(item, item.createdAt);
+    });
+
+    // Empty cells before day 1
+    for (let i = 0; i < persianOffset; i++) {
+        const el = document.createElement('div');
+        el.className = 'cal-day other-month';
+        grid.appendChild(el);
+    }
+
+    // Render days
+    const daysInMonth = getDaysInJalaliMonth(calState.year, calState.month);
+    const today = new Date();
+    const [todayJy, todayJm, todayJd] = toJalaliParts(today);
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const el = document.createElement('button');
+        el.className = 'cal-day';
+        if (day === todayJd && calState.month === todayJm && calState.year === todayJy) {
+            el.classList.add('today');
+        }
+        if (day === calState.selectedDay) {
+            el.classList.add('selected');
+        }
+        if (tasksByDay[day] && tasksByDay[day].size > 0) {
+            el.classList.add('has-tasks');
+        }
+        el.textContent = toPersianDigits(day);
+        el.onclick = () => selectCalendarDay(day);
+        grid.appendChild(el);
+    }
+
+    renderCalendarDayTasks();
+}
+
+function selectCalendarDay(day) {
+    calState.selectedDay = day;
+    renderCalendar();
+}
+
+function getTaskTypeLabel(t) {
+    switch(t) {
+        case 'deadline': return 'سررسید';
+        case 'completed': return 'انجام شد';
+        case 'created': return 'ایجاد شد';
+        default: return '';
+    }
+}
+
+function getTaskPriority(item, types) {
+    const hasDeadlineToday = types.includes('deadline');
+    const hasCompletedToday = types.includes('completed');
+    const isDone = !!item.done;
+
+    if (hasDeadlineToday && !isDone) return 0;  // سررسید امروز، انجام‌نشده (فوراً)
+    if (hasDeadlineToday && isDone) return 1;   // سررسید امروز، انجام‌شده
+    if (hasCompletedToday && !hasDeadlineToday) return 2;  // امروز انجام شده، سررسید روز دیگر
+    if (types.includes('created')) return 3;   // فقط امروز ایجاد شده
+    return 4;
+}
+
+function getPriorityLabel(prio) {
+    switch(prio) {
+        case 0: return '⛔ سررسید امروز - نیازمند توجه';
+        case 1: return '✅ سررسید امروز - انجام شد';
+        case 2: return '✓ امروز انجام شد';
+        case 3: return '📌 امروز ایجاد شد';
+        default: return '';
+    }
+}
+
+function getTaskDisplayTime(item, types) {
+    // Earliest matching event time for sorting/display
+    const times = [];
+    if (types.includes('deadline') && item.deadline) times.push(new Date(item.deadline).getTime());
+    if (types.includes('completed') && item.completedAt) times.push(new Date(item.completedAt).getTime());
+    if (types.includes('created') && item.createdAt) times.push(new Date(item.createdAt).getTime());
+    if (times.length === 0) return new Date();
+    return new Date(Math.min(...times));
+}
+
+function renderCalendarDayTasks() {
+    const container = document.getElementById('calendarDayTasks');
+    if (!calState.selectedDay) {
+        container.innerHTML = '<div class="cal-empty">یک روز را انتخاب کنید</div>';
+        return;
+    }
+
+    const items = getDB();
+    // Each entry: { item, types: ['deadline', 'completed', 'created'] }
+    // A task appears only ONCE per day, with all matching types in one row
+    const tasksForDay = [];
+
+    function jalaliMatches(dateStr) {
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        const [jy, jm, jd] = toJalaliParts(d);
+        return jy === calState.year && jm === calState.month && jd === calState.selectedDay;
+    }
+
+    items.forEach(item => {
+        const types = [];
+        if (jalaliMatches(item.deadline)) types.push('deadline');
+        if (jalaliMatches(item.completedAt)) types.push('completed');
+        if (jalaliMatches(item.createdAt)) types.push('created');
+
+        if (types.length > 0) {
+            tasksForDay.push({ item, types });
+        }
+    });
+
+    if (tasksForDay.length === 0) {
+        container.innerHTML = `<div class="cal-empty">هیچ کاری برای روز ${toPersianDigits(calState.selectedDay)} ${jalaliMonths[calState.month - 1]} ثبت نشده است</div>`;
+        return;
+    }
+
+    // Sort: first by priority (deadline-not-done first, created-only last), then by time
+    tasksForDay.sort((a, b) => {
+        const aPrio = getTaskPriority(a.item, a.types);
+        const bPrio = getTaskPriority(b.item, b.types);
+        if (aPrio !== bPrio) return aPrio - bPrio;
+        // Within same priority, sort by earliest matching time
+        const aTime = getTaskDisplayTime(a.item, a.types).getTime();
+        const bTime = getTaskDisplayTime(b.item, b.types).getTime();
+        return aTime - bTime;
+    });
+
+    container.innerHTML = `<div class="cal-tasks-header">کارهای روز ${toPersianDigits(calState.selectedDay)} ${jalaliMonths[calState.month - 1]} (${toPersianDigits(tasksForDay.length)} مورد)</div>`;
+
+    let lastPriority = -1;
+    tasksForDay.forEach(({ item, types }) => {
+        const prio = getTaskPriority(item, types);
+
+        // Add group header when priority changes
+        if (prio !== lastPriority) {
+            const header = document.createElement('div');
+            header.className = 'cal-group-header prio-' + prio;
+            header.textContent = getPriorityLabel(prio);
+            container.appendChild(header);
+            lastPriority = prio;
+        }
+
+        const time = getTaskDisplayTime(item, types);
+        const timeStr = `${pad2(time.getHours())}:${pad2(time.getMinutes())}`;
+
+        // Build all labels for this task in one row
+        const labels = types.map(t =>
+            `<span class="cal-task-type ${t}">${getTaskTypeLabel(t)}</span>`
+        ).join('');
+
+        const div = document.createElement('div');
+        div.className = 'cal-task';
+        div.innerHTML = `
+            <span class="cal-task-time">${toPersianDigits(timeStr)}</span>
+            <span class="cal-task-types">${labels}</span>
+            <span class="cal-task-text">${item.text}</span>
+        `;
+        div.onclick = () => {
+            expandedId = item.id;
+            closeCalendar();
+            render();
+            setTimeout(() => {
+                const el = document.querySelector(`.item[data-id="${item.id}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 200);
+        };
+        container.appendChild(div);
+    });
+}
+
+// ============ Service Worker Registration ============
+async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+        console.warn('Service Worker not supported');
+        return false;
+    }
+    try {
+        // Service Workers require HTTPS or localhost - check protocol
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            console.warn('SW requires HTTPS or localhost, current:', location.protocol, location.hostname);
+            showToast('برای فعال‌سازی PWA و اعلان پس‌زمینه، فایل را از http://localhost باز کنید');
+            return false;
+        }
+        const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        console.log('[Page] SW registered:', reg.scope);
+
+        // Wait for SW to be active
+        if (reg.active) {
+            await setupPeriodicSync(reg);
+        } else {
+            // Wait for activation
+            const sw = reg.installing || reg.waiting;
+            if (sw) {
+                sw.addEventListener('statechange', () => {
+                    if (sw.state === 'activated') {
+                        setupPeriodicSync(reg);
+                    }
+                });
+            }
+        }
+        return true;
+    } catch(e) {
+        console.error('[Page] SW registration failed:', e);
+        return false;
+    }
+}
+
+async function setupPeriodicSync(registration) {
+    if (!('periodicSync' in registration)) {
+        console.warn('[Page] Periodic Background Sync not supported');
+        return;
+    }
+    try {
+        // Check current permission status
+        const status = await navigator.permissions.query({ name: 'periodic-background-sync' }).catch(() => null);
+        if (status && status.state !== 'granted') {
+            console.warn('[Page] Periodic sync permission not granted:', status.state);
+            return;
+        }
+        // Register periodic sync (minimum interval 1 day in Chrome)
+        await registration.periodicSync.register('check-deadlines', {
+            minInterval: 12 * 60 * 60 * 1000  // 12 hours
+        });
+        console.log('[Page] Periodic sync registered');
+    } catch(e) {
+        console.warn('[Page] Periodic sync registration failed:', e);
+    }
+}
+
+// Listen for messages from SW (e.g., expand a reminder after notification click)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        console.log('[Page] Message from SW:', event.data);
+        if (!event.data) return;
+        if (event.data.type === 'expand-reminder' && event.data.id) {
+            expandedId = event.data.id;
+            render();
+            // Scroll to the item
+            setTimeout(() => {
+                const el = document.querySelector(`.item[data-id="${event.data.id}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 200);
+        }
+    });
+}
+
+// ============ Init ============
+document.addEventListener('DOMContentLoaded', async () => {
+    initRecognition();
+    updateHeaderDate();
+
+    // Migrate legacy localStorage data to IndexedDB
+    await migrateLegacyData();
+    // Initial sync of current reminders to IndexedDB (so SW can see them)
+    idbBulkPutReminders(getDB());
+
+    render();
+
+    // Initialize notifications (async, loads from IDB)
+    loadSentNotifications().then(() => {
+        updateNotifButton();
+        cleanupOldNotifications();
+        checkNotifications();
+    });
+    updateNotifButton();
+
+    // Register service worker (must be after DOMContentLoaded)
+    registerServiceWorker();
+
+    // Re-render every 30 seconds for time-based reordering & color updates
+    setInterval(() => {
+        render();
+        updateHeaderDate();
+        checkNotifications();
+    }, 30000);
+
+    // Also check notifications more frequently (every 60s) to catch deadlines
+    setInterval(checkNotifications, 60000);
+
+    // Run initial check after 2 seconds
+    setTimeout(checkNotifications, 2000);
+
+    // When tab becomes visible again, run immediate check
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            checkNotifications();
+            render();
+            // Ask SW to also check (in case page missed notifications while hidden)
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+            }
+        }
+    });
+
+    // Close modal on overlay click
+    document.getElementById('modalOverlay').addEventListener('click', (e) => {
+        if (e.target.id === 'modalOverlay') cancelModal();
+    });
+
+    // Close calendar on overlay click
+    const calOverlay = document.getElementById('calendarOverlay');
+    if (calOverlay) {
+        calOverlay.addEventListener('click', (e) => {
+            if (e.target.id === 'calendarOverlay') closeCalendar();
+        });
+    }
+
+    // Escape key support
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            cancelModal();
+            closeCalendar();
+        }
+    });
+
+    // Show warning if speech not supported
+    if (!isSpeechSupported()) {
+        setTimeout(() => showToast('نکته: برای تبدیل صوت، از Chrome یا Edge روی Android/PC استفاده کنید'), 800);
+    }
+
+    // Detect PWA installability & status
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        // Could show an install button here
+        console.log('[Page] PWA installable');
+    });
+
+    window.addEventListener('appinstalled', () => {
+        showToast('برنامه نصب شد ✓ اکنون اعلان پس‌زمینه فعال است');
+        console.log('[Page] PWA installed');
+    });
+});
+</script>
+</body>
+</html>
