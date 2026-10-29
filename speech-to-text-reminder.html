@@ -1815,7 +1815,18 @@ console.log('[Yadavar] Safety Layer v1.0 loaded — APP_VERSION ' +
 //         functions wrapped in Yadavar.safeRun with safe fallbacks so any
 //         future bug returns the original spoken text instead of crashing
 //         the recording flow. 8 new regression self-tests added.
-const APP_VERSION = 'v19-2026-10-29-phone-fix';
+//   v20 - PHONE-NUMBER MULTI-DIGIT TOKEN FIX: When the speech engine
+//         returns a phone number as multiple multi-digit Persian/Latin
+//         digit TOKENS separated by spaces (e.g., "۰۹۱۵ ۲۱۵ ۲۵۶۰"),
+//         addNumericAfterWords now MERGES them into a single digit string
+//         with no spaces ("۰۹۱۵۲۱۵۲۵۶۰") via a new first-pass helper
+//         mergeConsecutiveDigitTokens(). Previously such multi-token
+//         inputs had hasNumberWord=false and were passed through unchanged
+//         (preserving the unwanted spaces). The merge pass is conservative:
+//         only consecutive digit-only tokens with no Persian words or
+//         colons between them get merged. 8 new regression self-tests
+//         added (total now 37).
+const APP_VERSION = 'v20-2026-10-29-phone-multitoken';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ============ Jalali (Shamsi) Date Conversion ============
@@ -2168,11 +2179,92 @@ function tryParseNumberSeq(tokens, startIdx) {
     }, function () { return null; });  // fallback: treat as non-number
 }
 
+// ============ v20: Merge Consecutive Digit Tokens ============
+// When the speech engine returns a phone number as multiple multi-digit
+// Persian/Latin digit TOKENS separated by spaces (e.g., "۰۹۱۵ ۲۱۵ ۲۵۶۰"
+// — 3 tokens for a 11-digit phone number), the user expects them merged
+// into a single digit string with no spaces ("۰۹۱۵۲۱۵۲۵۶۰").
+//
+// This function scans the text token-by-token. Whenever it finds a
+// SEQUENCE of 2+ consecutive digit-only tokens (Persian OR Latin digits)
+// — with no Persian word or other text between them — it merges them
+// into a single digit string. Single isolated digit tokens (with a
+// non-digit token on either side) are left alone.
+//
+// Examples:
+//   "۰۹۱۵ ۲۱۵ ۲۵۶۰"              → "۰۹۱۵۲۱۵۲۵۶۰"   (3 consecutive → merge)
+//   "۰۹ ۱۵ ۲ ۱ ۵ ۲ ۵ ۶ ۰"         → "۰۹۱۵۲۱۵۲۵۶۰"   (9 consecutive → merge)
+//   "خرید ۲ کیلو نان و ۳ کیلو"   → unchanged   (۲ and ۳ not consecutive)
+//   "ساعت ۱۰:۳۰"                  → unchanged   ("۱۰:۳۰" is one token, has ":")
+//   "تماس با ۰۹۱۲۳۴۵۶۷۸۹"        → unchanged   (only 1 digit token, no merge)
+function mergeConsecutiveDigitTokens(text) {
+    return Yadavar.safeRun('mergeConsecutiveDigitTokens', function () {
+        if (!text) return text;
+
+        // v20 safety: SKIP if the text contains any Persian number WORDS.
+        // Those inputs should go through the v19 digit-list path in
+        // tryParseNumberSeq, which correctly combines single-digit word
+        // values + digit tokens into a digit list. If we ran the merge
+        // here, we'd convert "1 2 3 4" tokens into "1234" (a multi-digit
+        // number), which would then get SUMMED with adjacent Persian
+        // number words instead of being concatenated as a digit list.
+        // Example that must be skipped: "نُه 1 2 3 4" → "۹۱۲۳۴" (v19 path).
+        var hasNumberWord = false;
+        for (var w in PERSIAN_NUM_WORDS) {
+            if (text.indexOf(w) >= 0) { hasNumberWord = true; break; }
+        }
+        if (hasNumberWord) return text;
+
+        var tokens = text.split(/\s+/);
+        if (tokens.length < 2) return text;  // need at least 2 tokens to merge
+        var digitTokenRe = /^[\d۰-۹]+$/;  // pure digit string (Latin or Persian)
+        var result = [];
+        var i = 0;
+        while (i < tokens.length) {
+            if (digitTokenRe.test(tokens[i])) {
+                // Collect this + any following consecutive digit tokens
+                var group = [tokens[i]];
+                var j = i + 1;
+                while (j < tokens.length && digitTokenRe.test(tokens[j])) {
+                    group.push(tokens[j]);
+                    j++;
+                }
+                if (group.length >= 2) {
+                    // Merge: normalize each to Persian digits, then concatenate
+                    var merged = group.map(function (d) {
+                        // Convert Persian digits to Latin first (so leading
+                        // zeros are preserved when we re-convert), then to Persian
+                        var latin = d.replace(/[۰-۹]/g, function (c) {
+                            return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c));
+                        });
+                        return toPersianDigits(latin);
+                    }).join('');
+                    result.push(merged);
+                } else {
+                    result.push(tokens[i]);
+                }
+                i = j;
+            } else {
+                result.push(tokens[i]);
+                i++;
+            }
+        }
+        return result.join(' ');
+    }, function () { return text; });  // fallback: return original text
+}
+
 function addNumericAfterWords(text) {
     // Wrapped in Yadavar.safeRun (v19): if anything throws, return the
     // original text unchanged (better to show user's spoken text than
     // a broken/scrambled value).
     return Yadavar.safeRun('addNumericAfterWords', function () {
+        // ── v20: FIRST PASS — merge consecutive multi-digit tokens ────
+        // Handles phone numbers dictated as multi-digit groups separated
+        // by spaces (e.g., "۰۹۱۵ ۲۱۵ ۲۵۶۰" → "۰۹۱۵۲۱۵۲۵۶۰"). This runs
+        // BEFORE the hasNumberWord check so it works even when the text
+        // has NO Persian number words (only digit tokens).
+        text = mergeConsecutiveDigitTokens(text);
+
         let hasNumberWord = false;
         for (const w in PERSIAN_NUM_WORDS) { if (text.includes(w)) { hasNumberWord = true; break; } }
         if (!hasNumberWord) return text;
@@ -6710,6 +6802,74 @@ Yadavar._registerCoreTests = function () {
         Yadavar.assert(r !== null, 'should not be null');
         Yadavar.assert(r.isDigitList === true, 'should be digit list');
         Yadavar.assertEqual(r.digitList.join(''), '234', 'digit list should be 234');
+    });
+
+    // ── v20 PHONE-NUMBER MULTI-DIGIT TOKEN TESTS ─────────────────────────
+    // These test the new mergeConsecutiveDigitTokens() pass that handles
+    // phone numbers dictated as multiple multi-digit Persian/Latin digit
+    // tokens (e.g., "۰۹۱۵ ۲۱۵ ۲۵۶۰" → "۰۹۱۵۲۱۵۲۵۶۰").
+
+    // Test 9a: 3 multi-digit Persian digit tokens (the user's exact case)
+    // "۰۹۱۵ ۲۱۵ ۲۵۶۰" → "۰۹۱۵۲۱۵۲۵۶۰"
+    Yadavar.registerTest('phone-multidigit-3-persian-tokens', function () {
+        var out = addNumericAfterWords('۰۹۱۵ ۲۱۵ ۲۵۶۰');
+        Yadavar.assertEqual(out, '۰۹۱۵۲۱۵۲۵۶۰',
+            '3 multi-digit Persian tokens should merge to ۰۹۱۵۲۱۵۲۵۶۰, got: ' + out);
+    });
+
+    // Test 9b: Mixed Latin + Persian digit tokens
+    // "0915 ۲۱۵ 2560" → "۰۹۱۵۲۱۵۲۵۶۰" (normalize to all Persian)
+    Yadavar.registerTest('phone-mixed-latin-persian-tokens', function () {
+        var out = addNumericAfterWords('0915 ۲۱۵ 2560');
+        Yadavar.assertEqual(out, '۰۹۱۵۲۱۵۲۵۶۰',
+            'mixed Latin+Persian digit tokens should merge & normalize, got: ' + out);
+    });
+
+    // Test 9c: Split single-digit Persian tokens (e.g., engine splits "0915" into 4 single-digit tokens)
+    // "۰ ۹ ۱ ۵ ۲ ۱ ۵ ۲ ۵ ۶ ۰" → "۰۹۱۵۲۱۵۲۵۶۰"
+    Yadavar.registerTest('phone-split-single-digit-persian-tokens', function () {
+        var out = addNumericAfterWords('۰ ۹ ۱ ۵ ۲ ۱ ۵ ۲ ۵ ۶ ۰');
+        Yadavar.assertEqual(out, '۰۹۱۵۲۱۵۲۵۶۰',
+            '11 single-digit Persian tokens should merge to ۰۹۱۵۲۱۵۲۵۶۰, got: ' + out);
+    });
+
+    // Test 9d: Phone with leading zero — leading zero must be preserved
+    Yadavar.registerTest('phone-leading-zero-preserved', function () {
+        var out = addNumericAfterWords('۰۹ ۱۵ ۲۱۵ ۲۵۶۰');
+        Yadavar.assertEqual(out, '۰۹۱۵۲۱۵۲۵۶۰',
+            'leading zero must be preserved, got: ' + out);
+    });
+
+    // Test 9e: REGRESSION — isolated single digit token NOT merged with context
+    // "خرید ۲ کیلو نان" — only 1 digit token, not consecutive → unchanged
+    Yadavar.registerTest('regression-isolated-digit-not-merged', function () {
+        var out = addNumericAfterWords('خرید ۲ کیلو نان');
+        Yadavar.assertEqual(out, 'خرید ۲ کیلو نان',
+            'isolated digit should not be touched, got: ' + out);
+    });
+
+    // Test 9f: REGRESSION — non-consecutive digits NOT merged
+    // "از ۲ تا ۳" — ۲ and ۳ separated by "تا" → unchanged
+    Yadavar.registerTest('regression-non-consecutive-digits-not-merged', function () {
+        var out = addNumericAfterWords('از ۲ تا ۳');
+        Yadavar.assertEqual(out, 'از ۲ تا ۳',
+            'non-consecutive digits should not be merged, got: ' + out);
+    });
+
+    // Test 9g: REGRESSION — single phone number token (already merged) unchanged
+    // "تماس با ۰۹۱۲۳۴۵۶۷۸۹" — only 1 digit token, no merge
+    Yadavar.registerTest('regression-single-phone-token-unchanged', function () {
+        var out = addNumericAfterWords('تماس با ۰۹۱۲۳۴۵۶۷۸۹');
+        Yadavar.assertEqual(out, 'تماس با ۰۹۱۲۳۴۵۶۷۸۹',
+            'single phone token should be unchanged, got: ' + out);
+    });
+
+    // Test 9h: Time format with colons NOT merged (token has ":")
+    // "ساعت ۱۰:۳۰" — "۱۰:۳۰" is one token (has colon) → no merge
+    Yadavar.registerTest('regression-time-format-not-merged', function () {
+        var out = addNumericAfterWords('ساعت ۱۰:۳۰ است');
+        Yadavar.assertEqual(out, 'ساعت ۱۰:۳۰ است',
+            'time format with colon should not be merged, got: ' + out);
     });
 
     // Test 9: DB round-trip preserves data
