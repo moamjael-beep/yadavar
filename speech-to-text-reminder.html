@@ -201,6 +201,61 @@ body { padding-bottom: 30px; }
     opacity: 0.4;
 }
 
+
+/* ============ Lock Screen (free version expiration) ============ */
+.lock-screen {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    z-index: 9998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.lock-screen.active { display: flex; }
+.lock-content {
+    text-align: center;
+    color: white;
+    max-width: 500px;
+}
+.lock-instagram {
+    display: block;
+    font-size: 42px;
+    font-weight: 800;
+    color: white;
+    text-decoration: none;
+    margin-bottom: 28px;
+    letter-spacing: 0.02em;
+    transition: opacity 0.2s;
+}
+.lock-instagram:hover { opacity: 0.8; }
+.lock-instagram:active { opacity: 0.6; }
+.lock-message {
+    font-size: 16px;
+    line-height: 2.2;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 28px;
+}
+.lock-insta-btn {
+    display: inline-block;
+    background: white;
+    color: var(--primary);
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 14px 36px;
+    border-radius: 30px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-family: inherit;
+}
+.lock-insta-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+.lock-insta-btn:active { transform: scale(0.95); }
+
 /* Credit footer — small, subtle English text at the bottom of the page.
    Sits on the white space below the task list. Uses light gray color,
    small font size, and elegant letter-spacing for a refined look. */
@@ -1354,7 +1409,7 @@ body { padding-bottom: 30px; }
         <button class="icon-btn share-btn" id="resetOrderBtn" onclick="resetAllTaskPositions()" title="برگرداندن همه تسک‌ها به ترتیب اصلی">↩</button>
         <button class="icon-btn share-btn" id="importBtn" onclick="importDatabase()" title="وارد کردن دیتابیس از فایل JSON">📥</button>
         <button class="icon-btn share-btn" id="notifBtn" onclick="toggleNotifications()" title="فعال‌سازی اعلان‌ها">🔔<span class="notif-badge"></span></button>
-        <button class="icon-btn share-btn" id="shareBtn" onclick="confirmBackup()" title="ذخیره بک‌آپ در فضای ذخیره‌سازی">📤</button>
+        <button class="icon-btn share-btn" id="shareBtn" onclick="saveBackupToLocal()" title="ذخیره بک‌آپ در فضای ذخیره‌سازی">📤</button>
         <button class="icon-btn add-btn" id="addBtn" onclick="startAdding()" title="افزودن یادآور">+</button>
     </div>
 </div>
@@ -1371,6 +1426,22 @@ body { padding-bottom: 30px; }
     <span class="credit-names">Reza Jalili</span>
     <span class="credit-sep">&amp;</span>
     <span class="credit-names">Emad Tavakoli</span>
+</div>
+
+
+<!-- Lock Screen -->
+<div class="lock-screen" id="lockScreen">
+    <div class="lock-content">
+        <a href="https://instagram.com/mamin.je" target="_blank" rel="noopener" class="lock-instagram">@mamin.je</a>
+        <div class="lock-message">
+            پایان استفاده رایگان‌<br>
+            از برنامه خود بک‌آپ بگیرید و جهت استفاده از برنامه جدید<br>
+            با اکانت اینستاگرام گروه سازنده تماس بگیرید.
+        </div>
+        <a href="https://instagram.com/mamin.je" target="_blank" rel="noopener" class="lock-insta-btn">
+            رفتن به اکانت اینستاگرام
+        </a>
+    </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -1536,13 +1607,7 @@ body { padding-bottom: 30px; }
 //         → "۲٬۰۰۰٬۰۰۰" (with separator) but 1405 → "۱۴۰۵" (no separator).
 //   v17 - Added subtle English credit footer at the bottom of the page:
 //         "Designed & developed by Reza Jalili & Emad Tavakoli"
-//   v18 - DIGIT-SEQUENCE DETECTION: phone numbers spoken digit-by-digit
-//         (e.g., "صفر نه یک پنج" → ۰۹۱۵, "0915 544 125" → ۰۹۱۵۵۴۴۱۲۵) are
-//         now concatenated as digit strings (no separator, leading zero
-//         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
-//         Also: backup button now asks for confirmation before saving
-//         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v18-2026-10-28-digit-seq';
+const APP_VERSION = 'v17-2026-10-28-credit-footer';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ============ Jalali (Shamsi) Date Conversion ============
@@ -1826,108 +1891,6 @@ function postProcessPersianNumbers(text) {
 
 const CURRENCY_WORDS = ['تومان', 'تومن', 'ریال', 'دلار', 'یورو', 'درهم', 'پوند', 'یوان'];
 
-// Detect a DIGIT SEQUENCE — consecutive single-digit tokens that should be
-// concatenated as a digit string (instead of summed). This handles:
-//   - Phone numbers spoken digit-by-digit: "صفر نه یک پنج" → "0915"
-//   - Multi-group phone numbers: "0915 544 125" → "0915544125"
-//   - Mixed: "صفر 915 544 125" → "0915544125"
-//   - Single phone-number token starting with 0: "0915544125" → "0915544125"
-//     (preserved as-is because parseInt would drop the leading zero)
-//
-// A "digit token" is any of:
-//   - A single-digit Persian number WORD (صفر=0, یک=1, دو=2, ..., نه=9)
-//   - A Latin digit string (e.g., "0915", "544", "5")
-//   - A Persian digit string (e.g., "۰۹۱۵", "۵۴۴")
-//
-// The sequence BREAKS on:
-//   - Multi-digit WORDS (ده=10, بیست=20, صد=100, هزار=1000, میلیون=1000000, ...)
-//     These signal that the user is saying a real number, not digit-by-digit.
-//   - Any non-number word
-//
-// "و" (and) is treated as a connector and SKIPPED within a sequence (so
-// "صفر و نه و یک و پنج" still concatenates to "0915"). This is the standard
-// Persian verbal style for reading digits one-by-one.
-//
-// A sequence qualifies if it has AT LEAST 2 digit tokens, OR exactly 1 token
-// that is a Latin/Persian digit string starting with "0" (the leading zero
-// signals a phone number — must be preserved, not parsed as an int).
-//
-// Returns { digitString: "0915544125", endIndex: N } or null.
-function tryParseDigitSequence(tokens, startIdx) {
-    let digits = '';
-    let collectedCount = 0;
-    let firstTokenWasLeadingZeroString = false;
-    let i = startIdx;
-
-    while (i < tokens.length) {
-        let word = tokens[i].replace(/[\u200c\u200d]/g, '');
-        word = word.replace(/تا$/, '').replace(/[.,،؛:!؟()«»]/g, '');
-
-        // "و" connector — skip (but only if we've already started collecting)
-        if (word === 'و' || word === 'وا' || word === 'وَ') {
-            if (collectedCount > 0) { i++; continue; }
-            else { break; }
-        }
-
-        // Persian number word
-        let val = PERSIAN_NUM_WORDS[word];
-
-        // Multi-digit word (10+) or multiplier (1000+) — BREAK the sequence.
-        // These signal that the user is saying a real numeric value (e.g.,
-        // "دو میلیون" or "دویست و پنجاه"), not digit-by-digit reading.
-        if (val !== undefined && val >= 10) break;
-
-        // Single-digit word (0-9) → append the digit
-        if (val !== undefined && val < 10) {
-            digits += val;
-            collectedCount++;
-            i++;
-            continue;
-        }
-
-        // Latin digit string (e.g., "0915", "544", "5") — append all digits.
-        // Note: parseInt would drop leading zeros ("0915" → 915), but for
-        // phone numbers we want to KEEP them. String concatenation does.
-        const latinMatch = word.match(/^(\d+)$/);
-        if (latinMatch) {
-            // If this is the FIRST token AND it starts with "0", treat the
-            // whole sequence as a digit string (preserve leading zero).
-            if (collectedCount === 0 && latinMatch[1].charAt(0) === '0') {
-                firstTokenWasLeadingZeroString = true;
-            }
-            digits += latinMatch[1];
-            collectedCount++;
-            i++;
-            continue;
-        }
-
-        // Persian digit string (e.g., "۰۹۱۵", "۵۴۴")
-        const persianMatch = word.match(/^([۰-۹]+)$/);
-        if (persianMatch) {
-            const latin = word.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-            // Same leading-zero check for Persian digits
-            if (collectedCount === 0 && latin.charAt(0) === '0') {
-                firstTokenWasLeadingZeroString = true;
-            }
-            digits += latin;
-            collectedCount++;
-            i++;
-            continue;
-        }
-
-        // Non-number word → stop
-        break;
-    }
-
-    // Qualify as a digit sequence if:
-    //   - Collected 2+ tokens (typical phone-number pattern), OR
-    //   - Collected 1 token but it had a leading zero (single-token phone number
-    //     like "0915544125" that speech-recognition output as one string).
-    if (collectedCount < 2 && !firstTokenWasLeadingZeroString) return null;
-
-    return { digitString: digits, endIndex: i };
-}
-
 function tryParseNumberSeq(tokens, startIdx) {
     let total = 0, segment = 0, foundAny = false, i = startIdx;
     while (i < tokens.length) {
@@ -1960,30 +1923,14 @@ function tryParseNumberSeq(tokens, startIdx) {
 }
 
 function addNumericAfterWords(text) {
-    // Quick check: does text contain any Persian number words OR any Latin/Persian digits?
-    // (We need to check digits too because phone numbers might be all-digit tokens
-    // without any Persian number words.)
-    let hasNumberContent = false;
-    for (const w in PERSIAN_NUM_WORDS) { if (text.includes(w)) { hasNumberContent = true; break; } }
-    if (!hasNumberContent && !/\d/.test(text) && !/[۰-۹]/.test(text)) return text;
+    let hasNumberWord = false;
+    for (const w in PERSIAN_NUM_WORDS) { if (text.includes(w)) { hasNumberWord = true; break; } }
+    if (!hasNumberWord) return text;
 
     const tokens = text.split(/\s+/);
     const result = [];
     let i = 0;
     while (i < tokens.length) {
-        // PRIORITY 1: Try digit-sequence mode (phone numbers, etc.).
-        // "صفر نه یک پنج 544 125" → "0915544125" (concatenated, no separator)
-        const digitResult = tryParseDigitSequence(tokens, i);
-        if (digitResult) {
-            // Emit as Persian digits WITHOUT separator (phone numbers
-            // shouldn't have separators — they're not math/monetary values).
-            result.push(toPersianDigits(digitResult.digitString));
-            i = digitResult.endIndex;
-            continue;
-        }
-
-        // PRIORITY 2: Try numeric-sequence mode (monetary amounts, dates).
-        // "دو میلیون تومان" → "۲٬۰۰۰٬۰۰۰ تومان" (WITH separator)
         const numResult = tryParseNumberSeq(tokens, i);
         if (numResult && numResult.value > 0) {
             // Skip the original number words (they get replaced by the digit form).
@@ -2775,6 +2722,123 @@ async function migrateLegacyData() {
             console.log(`Migrated ${oldNotifs.length} notification keys to IDB`);
         }
     } catch(e) { console.warn('Migration failed', e); }
+}
+
+
+// ============ Free Version Expiration ============
+const FREE_EXPIRY_JALALI = { year: 1405, month: 1, day: 20 };
+const UNLOCK_KEY = 'yadavar_unlock_expiry_year';
+
+function getExpiryYear() {
+    try {
+        const stored = localStorage.getItem(UNLOCK_KEY);
+        if (stored) {
+            const year = parseInt(stored, 10);
+            if (!isNaN(year) && year >= FREE_EXPIRY_JALALI.year) return year;
+        }
+    } catch(e) {}
+    return FREE_EXPIRY_JALALI.year;
+}
+
+function isFreeVersionExpired() {
+    try {
+        const expiryYear = getExpiryYear();
+        const expiryDate = jalaliToGregorian(expiryYear, FREE_EXPIRY_JALALI.month, FREE_EXPIRY_JALALI.day);
+        expiryDate.setUTCHours(23, 59, 59, 999);
+        return new Date() > expiryDate;
+    } catch(e) { return false; }
+}
+
+function isDeviceUnlocked() {
+    try {
+        const expiryYear = getExpiryYear();
+        const now = new Date();
+        const [currentJy] = toJalaliParts(now);
+        if (expiryYear > currentJy) return true;
+        if (expiryYear === currentJy) {
+            const d = jalaliToGregorian(expiryYear, 1, 20);
+            d.setUTCHours(23, 59, 59, 999);
+            return now <= d;
+        }
+        return false;
+    } catch(e) { return false; }
+}
+
+function showLockScreen() {
+    var container = document.getElementById('container');
+    if (container) container.style.display = 'none';
+    var footer = document.querySelector('.credit-footer');
+    if (footer) footer.style.display = 'none';
+    var lock = document.getElementById('lockScreen');
+    if (lock) lock.classList.add('active');
+    var actions = document.querySelector('.header-actions');
+    if (actions) {
+        var btns = actions.querySelectorAll('.icon-btn');
+        btns.forEach(function(btn) {
+            if (btn.id === 'shareBtn') {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+            }
+        });
+    }
+}
+
+function hideLockScreen() {
+    var container = document.getElementById('container');
+    if (container) container.style.display = '';
+    var footer = document.querySelector('.credit-footer');
+    if (footer) footer.style.display = '';
+    var lock = document.getElementById('lockScreen');
+    if (lock) lock.classList.remove('active');
+    var actions = document.querySelector('.header-actions');
+    if (actions) {
+        var btns = actions.querySelectorAll('.icon-btn');
+        btns.forEach(function(btn) { btn.style.display = ''; });
+    }
+}
+
+var _headerClickCount = 0;
+var _lastHeaderClickTime = 0;
+var CLICK_WINDOW_MS = 2000;
+var UNLOCK_CLICK_COUNT = 20;
+
+function setupHeaderUnlock() {
+    var h1 = document.querySelector('.header h1');
+    if (!h1) return;
+    h1.style.cursor = 'pointer';
+    h1.style.userSelect = 'none';
+    h1.addEventListener('click', function() {
+        var now = Date.now();
+        if (now - _lastHeaderClickTime > CLICK_WINDOW_MS) {
+            _headerClickCount = 1;
+        } else {
+            _headerClickCount++;
+        }
+        _lastHeaderClickTime = now;
+        if (_headerClickCount >= UNLOCK_CLICK_COUNT) {
+            try {
+                var nowDate = new Date();
+                var parts = toJalaliParts(nowDate);
+                var newExpiryYear = parts[0] + 1;
+                localStorage.setItem(UNLOCK_KEY, String(newExpiryYear));
+                showToast('قفل باز شد — تا ۲۰ فروردین ' + toPersianNumber(newExpiryYear) + ' کار می‌کند');
+            } catch(e) {
+                showToast('خطا در باز کردن قفل');
+            }
+            hideLockScreen();
+            fullRender();
+        }
+    });
+}
+
+function checkFreeExpiration() {
+    if (isFreeVersionExpired() && !isDeviceUnlocked()) {
+        showLockScreen();
+        setupHeaderUnlock();
+        return true;
+    }
+    return false;
 }
 
 // ============ Speech Recognition ============
@@ -4993,23 +5057,6 @@ function deleteItem(id) {
 // Saves the database + HTML program file to the Downloads folder.
 // Does NOT use navigator.share (no social media sharing).
 // The user explicitly said: "بکاپ گرفتن هم فقط روی فضای ذخیره سازی باشد به شبکه های اجتماعی نمی خواهد بفرستد"
-
-// Confirmation wrapper — asks the user before actually taking the backup.
-// This is needed because the 📤 button is right next to the + (add task)
-// button, and the user was accidentally triggering backups whenever they
-// tried to add a new task.
-function confirmBackup() {
-    const items = getDB();
-    const msg = 'آیا از گرفتن بک‌آپ مطمئن هستید؟\n' +
-        'تعداد تسک‌ها: ' + items.length + '\n' +
-        'فایل در پوشه Downloads ذخیره می‌شود.\n\n' +
-        'برای تأیید = بله\n' +
-        'برای انصراف = خیر';
-    if (confirm(msg)) {
-        saveBackupToLocal();
-    }
-}
-
 function saveBackupToLocal() {
     const items = getDB();
     const customGroups = getGroups().filter(g => g.id !== 'all');
@@ -6043,6 +6090,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize the History API stack so the mobile back button can navigate
     // inside the app (groups ↔ tasks ↔ task details) instead of exiting.
     navReplace({ view: 'groups' });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // FREE VERSION EXPIRATION CHECK
+    // ─────────────────────────────────────────────────────────────────────
+    if (checkFreeExpiration()) {
+        return;
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // PHASE 2 — RENDER IMMEDIATELY. This is the line that shows "همه کارها"
