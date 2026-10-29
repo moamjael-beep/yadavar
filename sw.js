@@ -1,7 +1,7 @@
 // Service Worker for یادآور صوتی PWA
 // Provides: offline caching, push notifications, periodic background sync for deadline checking
 
-const CACHE_NAME = 'yadavar-cache-v17';
+const CACHE_NAME = 'yadavar-cache-v18';
 const IDB_NAME = 'yadavar_db';
 const IDB_VERSION = 2;  // MUST match the page's IDB_VERSION
 const STORE_REMINDERS = 'reminders';
