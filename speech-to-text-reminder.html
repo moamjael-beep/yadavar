@@ -3139,7 +3139,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v50-2026-10-31-fix-number-parsing-sad';
+const APP_VERSION = 'v51-2026-10-31-fix-contact-date-picker-and-commission-default';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5597,6 +5597,14 @@ function openDatetimePicker() {
 }
 
 function closeDatetimePicker() {
+    // 🔧 اگر تقویم برای فیلدِ تاریخِ شخص باز شده بود و حالا بسته می‌شود
+    // (تأیید یا انصراف)، فلگ را تنظیم کن تا popstate فرم شخص را نبندد
+    // و حالت تقویمِ شخص را ریست کن.
+    if (_contactDatePickerTarget) {
+        _contactDatePickerTarget = null;
+        document.getElementById('datetimePickerOverlay').classList.remove('contact-date-picker');
+        _skipContactOverlayCloseOnPopstate = true;
+    }
     // Visually close the picker + remove from the modal stack.
     closeModalByType('datetimePicker');
     // CRITICAL: Reset the repeat-end-date flag. If the user opened the
@@ -7346,9 +7354,10 @@ window.addEventListener('popstate', (e) => {
     // ===== Modal handling =====
     // If ANY modal is open, close ONLY the topmost one. This handles:
     //   1. Single modal open + back pressed → modal closes, underlying view stays.
-    //   2. Nested modals (datetime picker inside task form) + back pressed →
-    //      only the topmost (datetime picker) closes; the parent (task form)
-    //      stays open. Pressing back again closes the parent.
+    //   2. Nested modals (datetime picker inside task form, or datetime picker
+    //      inside contact form) + back pressed → only the topmost (datetime
+    //      picker) closes; the parent (task form / contact form) stays open.
+    //      Pressing back again closes the parent.
     //   3. Modal closed via a BUTTON (e.g., user clicked "تأیید" on the
     //      datetime picker): the close function already removed the modal
     //      from _modalStack AND called navBack(). When popstate fires, the
@@ -7356,6 +7365,62 @@ window.addEventListener('popstate', (e) => {
     //      parent — it's still open and should stay open.
     //      Detection: state.view === 'modal' AND state.type === topType
     //      (the parent marker matches the modal still on top of _modalStack).
+
+    // 🔧 اگر این popstate نتیجهٔ تأیید/انصراف تاریخ در فرم شخص است (فلگ
+    // تنظیم شده)، صفحات/فرم‌های شخص نبسته شوند. فقط فلگ را ریست کن و
+    // از منطق بستن صفحهٔ شخص صرف‌نظر کن.
+    if (_skipContactOverlayCloseOnPopstate) {
+        _skipContactOverlayCloseOnPopstate = false;
+        // هنوز ممکن است مودال‌های دیگر (مثل تقویم) روی استک باشند؛
+        // اگر استک مودال خالی است و state مربوط به شخص است، فقط برگرد.
+        if (_modalStack.length > 0) {
+            const topType = _modalStack[_modalStack.length - 1];
+            if (state.view === 'modal' && state.type === topType) {
+                return;
+            }
+            closeModalByType(topType);
+            if (state.view === 'modal') return;
+        }
+        // صفحات شخص همچنان باز هستند؛ نیازی به fullRender نیست.
+        return;
+    }
+
+    // 🔧 ابتدا استک مودال‌ها را بررسی کن — اگر مودالی (مثل تقویم) روی
+    // صفحهٔ شخص باز است، با زدن back فقط همان مودال بسته شود، نه صفحهٔ شخص.
+    // این ترتیب مهم است: مودال‌های روی استک قبل از صفحات شخص بررسی می‌شوند.
+    if (_modalStack.length > 0) {
+        const topType = _modalStack[_modalStack.length - 1];
+
+        // CRITICAL FIX: if the new state is a modal marker whose type matches
+        // the topmost open modal, it means the modal that was on top of
+        // history was already closed manually (and removed from _modalStack)
+        // — we just popped back to the parent marker. The parent modal
+        // should stay open. Do NOT close anything.
+        if (state.view === 'modal' && state.type === topType) {
+            return;
+        }
+
+        // Otherwise, close the topmost modal — it was popped from history
+        // (e.g., user pressed the hardware back button without first
+        // manually closing it).
+        closeModalByType(topType);
+
+        // If the new state is a modal marker (parent modal), stay in modal
+        // mode — don't navigate underneath, don't re-render.
+        if (state.view === 'modal') {
+            return;
+        }
+
+        // اگر state مربوط به صفحهٔ شخص است (یعنی مودال روی صفحهٔ شخص
+        // باز بوده)، پس از بستن مودال، صفحهٔ شخص باید باز بماند.
+        if (state.view === 'contacts' || state.view === 'contactForm') {
+            return;
+        }
+
+        // Otherwise, the new state is the underlying view (groups/tasks).
+        // Fall through to the normal navigation below.
+    }
+
     // 🔧 بررسی صفحات اشخاص — اگر باز هستند، یکی را ببند
     // صفحات اشخاص از navPush استفاده نمی‌کنند، پس باید جداگانه مدیریت شوند
     // ترتیب بستن: از بالا به پایین (نتایج → جستجو/گزارش → فرم → لیست)
@@ -7393,33 +7458,6 @@ window.addEventListener('popstate', (e) => {
         document.getElementById('contactsOverlay').classList.contains('active')) {
         closeContacts();
         return;
-    }
-
-    if (_modalStack.length > 0) {
-        const topType = _modalStack[_modalStack.length - 1];
-
-        // CRITICAL FIX: if the new state is a modal marker whose type matches
-        // the topmost open modal, it means the modal that was on top of
-        // history was already closed manually (and removed from _modalStack)
-        // — we just popped back to the parent marker. The parent modal
-        // should stay open. Do NOT close anything.
-        if (state.view === 'modal' && state.type === topType) {
-            return;
-        }
-
-        // Otherwise, close the topmost modal — it was popped from history
-        // (e.g., user pressed the hardware back button without first
-        // manually closing it).
-        closeModalByType(topType);
-
-        // If the new state is a modal marker (parent modal), stay in modal
-        // mode — don't navigate underneath, don't re-render.
-        if (state.view === 'modal') {
-            return;
-        }
-
-        // Otherwise, the new state is the underlying view (groups/tasks).
-        // Fall through to the normal navigation below.
     }
 
     // ===== Normal navigation =====
@@ -8478,7 +8516,8 @@ function openContactForm(id) {
         document.getElementById('contactBirthDate').value = c.birthDate || '';
         document.getElementById('contactCommissionAsked').value = c.commissionAsked || '';
         document.getElementById('contactCommissionPaid').value = c.commissionPaid || '';
-        document.getElementById('contactCommissionPercent').value = c.commissionPercent || '';
+        // 🔧 اگر درصد کارپردازی خالی است، ۰ نمایش داده شود (پیش‌فرض)
+        document.getElementById('contactCommissionPercent').value = c.commissionPercent || '0';
         renderDynamicList('contactPhonesList', c.phones || [], 'تلفن', c.primaryPhone);
         renderDynamicList('contactAddressesList', c.addresses || [], 'آدرس');
         renderDynamicList('contactNotesList', c.notes || [], 'توضیح');
@@ -8490,7 +8529,8 @@ function openContactForm(id) {
         document.getElementById('contactBirthDate').value = '';
         document.getElementById('contactCommissionAsked').value = '';
         document.getElementById('contactCommissionPaid').value = '';
-        document.getElementById('contactCommissionPercent').value = '';
+        // 🔧 پیش‌فرض ۰ برای درصد کارپردازی (طبق درخواست کاربر)
+        document.getElementById('contactCommissionPercent').value = '0';
         renderDynamicList('contactPhonesList', [''], 'تلفن');
         renderDynamicList('contactAddressesList', [''], 'آدرس');
         renderDynamicList('contactNotesList', [''], 'توضیح');
@@ -8987,6 +9027,10 @@ function printContactReport() {
 // ─── انتخاب تاریخ شمسی برای فیلدهای شخص ───
 
 let _contactDatePickerTarget = null;
+// 🔧 فلگ یک‌بار‌مصرف: وقتی تقویمِ تاریخِ شخص تأیید می‌شود، این فلگ
+// تنظیم می‌شود تا هندلر popstate بداند که نباید فرم/صفحهٔ شخص را ببندد.
+// بدون این فلگ، پس از انتخاب تاریخ، فرم شخص ناگهان بسته می‌شد.
+let _skipContactOverlayCloseOnPopstate = false;
 
 // ════════════════════════════════════════════════════════════════════
 // 📞 منوی انتخاب عملیات تلفن
@@ -9267,6 +9311,8 @@ confirmDatetimePicker = function() {
         _contactDatePickerTarget = null;
         // 🔧 حذف کلاس contact-date-picker
         document.getElementById('datetimePickerOverlay').classList.remove('contact-date-picker');
+        // 🔧 فلگ را تنظیم کن تا popstate فرم/صفحهٔ شخص را نبندد
+        _skipContactOverlayCloseOnPopstate = true;
         // بستن picker
         closeModalByType('datetimePicker');
         window._pickingRepeatEndDate = false;
