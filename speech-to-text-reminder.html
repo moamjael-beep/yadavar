@@ -2016,18 +2016,23 @@ body.locked .header-actions button {
 .group-reset-btn:active { transform: scale(0.92); }
 
 /* وقتی هدر گروه تصویر پس‌زمینه دارد */
+/* 🔧 هدر گروه با عکس پس‌زمینه — sticky حفظ می‌شود (position: relative حذف شد) */
 .group-tasks-header.has-bg-image {
     background-size: cover;
     background-position: center;
-    position: relative;
+    /* position: relative حذف شد — sticky از کلاس والد به ارث می‌رسد */
+    z-index: 100;  /* همان z-index هدر عادی — روی تسک‌ها قرار بگیرد */
 }
+/* لایهٔ تیره روی عکس برای خوانایی متن */
 .group-tasks-header.has-bg-image::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.4);
     border-radius: 10px;
+    z-index: 0;  /* زیر محتوا */
 }
+/* محتوای هدر (دکمه‌ها، عنوان) روی لایهٔ تیره */
 .group-tasks-header.has-bg-image > * {
     position: relative;
     z-index: 1;
@@ -2597,6 +2602,15 @@ body.locked .header-actions button {
     <div class="modal">
         <h2 id="modalTitle">یادآور جدید</h2>
 
+        <!-- 🔧 دکمه‌های انصراف / ضبط دوباره / ذخیره — در بالای فرم (همیشه قابل مشاهده)
+             در حالت ضبط: فقط انصراف نمایش داده می‌شود
+             در حالت فرم: هر سه دکمه نمایش داده می‌شود -->
+        <div class="modal-buttons" id="formButtons" style="margin-bottom:14px;">
+            <button class="btn btn-secondary" onclick="cancelModal()">انصراف</button>
+            <button class="btn btn-secondary" id="reRecordBtn" onclick="startRecording()" style="display:none;">ضبط دوباره</button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveItem()" style="display:none;">ذخیره</button>
+        </div>
+
         <div id="recordingSection" class="recording-section" style="display:none;">
             <div class="recording-text">
                 <span class="recording-indicator"></span>
@@ -2618,7 +2632,18 @@ body.locked .header-actions button {
                 <input type="hidden" id="itemDeadline">
                 <button type="button" class="datetime-picker-btn" onclick="openDatetimePicker()" title="باز کردن تقویم شمسی">📅</button>
             </div>
-            <!-- 🔧 کلیدهای پیشنهادی (۱ ساعت تا ۱ هفته) حذف شدند — فقط تقویم شمسی -->
+            <!-- 🔧 کلیدهای میانبر سررسید -->
+            <div class="quick-deadline">
+                <button class="quick-btn" onclick="setQuickDeadline(1)">۱ ساعت</button>
+                <button class="quick-btn" onclick="setQuickDeadline(3)">۳ ساعت</button>
+                <button class="quick-btn" onclick="setQuickDeadline(24)">۱ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(72)">۳ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(168)">۱ هفته</button>
+                <button class="quick-btn" onclick="setQuickDeadline(240)">۱۰ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(336)">۲ هفته</button>
+                <button class="quick-btn" onclick="setQuickDeadline(360)">۱۵ روز</button>
+                <button class="quick-btn" onclick="setQuickDeadline(720)">۱ ماه</button>
+            </div>
 
             <!-- Repeat options: repeat the task at regular intervals until an end date -->
             <div class="repeat-section" id="repeatSection">
@@ -2639,12 +2664,6 @@ body.locked .header-actions button {
                     <input type="text" id="repeatEndDateDisplay" class="modal-input datetime-display" readonly placeholder="انتخاب تاریخ پایان تکرار..." onclick="openRepeatEndDatePicker()">
                     <input type="hidden" id="repeatEndDate">
                 </div>
-            </div>
-
-            <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="cancelModal()">انصراف</button>
-                <button class="btn btn-secondary" onclick="startRecording()">ضبط دوباره</button>
-                <button class="btn btn-primary" onclick="saveItem()" id="saveBtn">ذخیره</button>
             </div>
         </div>
     </div>
@@ -3097,7 +3116,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v39-2026-10-31-auto-migrate-database';
+const APP_VERSION = 'v44-2026-10-31-fix-header-image-sticky';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -4919,6 +4938,8 @@ function openGroupSettings(groupId) {
     }
 
     _groupSettingsTargetId = groupId;
+    // 🔧 ریست متغیر موقت عکس — هر بار باز کردن تنظیمات، از نو شروع می‌کنیم
+    _tempHeaderImage = null;
 
     // پر کردن فیلدها با مقادیر فعلی گروه
     document.getElementById('groupSettingsName').value = group.name || '';
@@ -4983,54 +5004,123 @@ function openGroupSettings(groupId) {
     document.getElementById('groupSettingsOverlay').classList.add('active');
 }
 
+// 🔧 متغیر موقت برای نگه‌داشتن عکس آپلود‌شده
+// چون getGroupById یک کپی برمی‌گرداند، تغییرات روی آن در saveGroupSettings از دست می‌رود.
+// پس عکس را در این متغیر موقت نگه می‌داریم و در saveGroupSettings از آن استفاده می‌کنیم.
+let _tempHeaderImage = null;
+
 // به‌روزرسانی پیش‌نمایش آیکون (با توجه به آیکون انتخاب‌شده یا عکس)
 function updateGroupIconPreview() {
     const preview = document.getElementById('groupSettingsIconPreview');
     const selectedIcon = document.querySelector('.icon-option.selected');
-    const group = getGroupById(_groupSettingsTargetId);
     if (!preview) return;
 
-    // اگر عکس آپلود شده، آن را نشان بده
-    if (group && group.headerImage) {
-        preview.style.backgroundImage = 'url(' + group.headerImage + ')';
+    // 🔧 اگر عکس آپلود شده (در متغیر موقت)، آن را نشان بده
+    if (_tempHeaderImage) {
+        preview.style.backgroundImage = 'url(' + _tempHeaderImage + ')';
         preview.textContent = '';
-    } else if (selectedIcon) {
-        preview.style.backgroundImage = '';
-        preview.textContent = selectedIcon.dataset.icon;
-    } else if (group && group.headerIcon) {
-        preview.style.backgroundImage = '';
-        preview.textContent = group.headerIcon;
+    } else {
+        // بررسی عکس موجود گروه
+        const group = getGroupById(_groupSettingsTargetId);
+        if (group && group.headerImage) {
+            preview.style.backgroundImage = 'url(' + group.headerImage + ')';
+            preview.textContent = '';
+        } else if (selectedIcon) {
+            preview.style.backgroundImage = '';
+            preview.textContent = selectedIcon.dataset.icon;
+        } else if (group && group.headerIcon) {
+            preview.style.backgroundImage = '';
+            preview.textContent = group.headerIcon;
+        }
     }
 }
 
-// انتخاب عکس برای هدر گروه
+// 🔧 انتخاب عکس برای هدر گروه — فشرده‌سازی خودکار به زیر ۵۰۰KB
 function onGroupHeaderImageSelected(event) {
     const file = event.target.files[0];
     if (!file) return;
-    if (file.size > 500 * 1024) {
-        showToast('حجم عکس باید کمتر از ۵۰۰ کیلوبایت باشد');
-        return;
-    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
-        const group = getGroupById(_groupSettingsTargetId);
-        if (group) {
-            group.headerImage = e.target.result;
-            // ذخیره موقت در حافظه — در saveGroupSettings ذخیره نهایی انجام می‌شود
+        const img = new Image();
+        img.onload = function() {
+            // فشرده‌سازی عکس با Canvas
+            const compressed = compressImage(img, 500 * 1024, 800);
+            // 🔧 ذخیره در متغیر موقت (نه روی group که یک کپی است)
+            _tempHeaderImage = compressed;
             updateGroupIconPreview();
-        }
+            showToast('عکس با موفقیت بارگذاری شد ✓');
+        };
+        img.onerror = function() {
+            showToast('خطا در بارگذاری عکس');
+        };
+        img.src = e.target.result;
+    };
+    reader.onerror = function() {
+        showToast('خطا در خواندن فایل');
     };
     reader.readAsDataURL(file);
 }
 
+// 🔧 فشرده‌سازی عکس با Canvas به زیر حد مشخص‌شده (bytes)
+// img: عنصر Image بارگذاری‌شده
+// maxSize: حداکثر حجم به بایت (مثلاً 500 * 1024 برای ۵۰۰KB)
+// maxDim: حداکثر ابعاد (عرض یا ارتفاع) به پیکسل
+// خروجی: data URL (JPEG)
+function compressImage(img, maxSize, maxDim) {
+    // محاسبه ابعاد نهایی — حفظ نسبت ابعاد
+    let width = img.naturalWidth;
+    let height = img.naturalHeight;
+    if (width > maxDim || height > maxDim) {
+        if (width > height) {
+            height = Math.round(height * maxDim / width);
+            width = maxDim;
+        } else {
+            width = Math.round(width * maxDim / height);
+            height = maxDim;
+        }
+    }
+
+    // رسم روی Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // کاهش کیفیت تدریجی تا زیر maxSize شود
+    let quality = 0.9;  // شروع از کیفیت بالا
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+    while (dataUrl.length > maxSize * 1.37 && quality > 0.1) {
+        // dataUrl طولش ~1.37 برابر حجم واقعی است (base64 overhead)
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    // اگر همچنان بزرگ است، ابعاد را بیشتر کاهش بده
+    while (dataUrl.length > maxSize * 1.37 && width > 100 && height > 100) {
+        width = Math.round(width * 0.8);
+        height = Math.round(height * 0.8);
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    console.log('[CompressImage] Original:', img.naturalWidth + 'x' + img.naturalHeight,
+                '→ Compressed:', width + 'x' + height,
+                'Quality:', quality.toFixed(1),
+                'Size:', Math.round(dataUrl.length / 1024) + 'KB');
+    return dataUrl;
+}
+
 // حذف عکس هدر گروه
 function clearGroupHeaderImage() {
-    const group = getGroupById(_groupSettingsTargetId);
-    if (group) {
-        group.headerImage = '';
-        updateGroupIconPreview();
-        showToast('عکس حذف شد (برای ذخیره، دکمهٔ «ذخیره» را بزنید)');
-    }
+    // 🔧 پاک کردن متغیر موقت — در saveGroupSettings خالی ذخیره می‌شود
+    _tempHeaderImage = '';
+    updateGroupIconPreview();
+    showToast('عکس حذف شد (برای ذخیره، دکمهٔ «ذخیره» را بزنید)');
 }
 
 // تغییر وضعیت toggle نمایش در همه کارها
@@ -5063,7 +5153,10 @@ function saveGroupSettings() {
     };
     if (selectedColor) updates.color = selectedColor.dataset.color;
     if (selectedIcon) updates.headerIcon = selectedIcon.dataset.icon;
-    if (group.headerImage !== undefined) updates.headerImage = group.headerImage;
+    // 🔧 اگر عکس آپلود یا حذف شده، از متغیر موقت استفاده کن
+    if (_tempHeaderImage !== null) {
+        updates.headerImage = _tempHeaderImage;
+    }
 
     if (updateGroup(_groupSettingsTargetId, updates)) {
         closeGroupSettings();
@@ -5078,6 +5171,8 @@ function saveGroupSettings() {
 function closeGroupSettings() {
     document.getElementById('groupSettingsOverlay').classList.remove('active');
     _groupSettingsTargetId = null;
+    // 🔧 ریست متغیر موقت عکس
+    _tempHeaderImage = null;
     // پاک کردن value فایل input تا بتوان همان فایل را دوباره انتخاب کرد
     const fileInput = document.getElementById('groupSettingsImageInput');
     if (fileInput) fileInput.value = '';
@@ -5270,6 +5365,9 @@ function startRecording() {
     document.getElementById('recordingSection').style.display = 'block';
     document.getElementById('formSection').style.display = 'none';
     document.getElementById('modalTitle').textContent = 'در حال ضبط صوت';
+    // 🔧 پنهان کردن دکمه‌های «ضبط دوباره» و «ذخیره» در حالت ضبط (فقط انصراف نمایش داده شود)
+    document.getElementById('reRecordBtn').style.display = 'none';
+    document.getElementById('saveBtn').style.display = 'none';
     document.getElementById('addBtn').classList.add('recording');
     try {
         recognition.start();
@@ -5297,7 +5395,38 @@ function stopRecording() {
 
 // (merged with the version above)
 
+// 🔧 تنظیم سررسید با کلیدهای میانبر
+// - hours: تعداد ساعت (برای ۱ ساعت تا ۱۵ روز)
+// - برای ۱ ماه (720): از تقویم شمسی استفاده می‌شود تا دقیقاً همان روز ماه بعد باشد
+//   مثلاً ۲ خرداد → ۲ تیر (نه ۳۰ روز تقریبی)
+// - برای ۱ هفته (168) و ۲ هفته (336): ۷ و ۱۴ روز دقیق = همان روز هفته
 function setQuickDeadline(hours) {
+    if (hours === 720) {
+        // 🔧 ۱ ماه بعد — با تقویم شمسی
+        // تاریخ امروز را به شمسی تبدیل می‌کنیم، یک ماه اضافه می‌کنیم،
+        // و دوباره به میلادی تبدیل می‌کنیم. این‌طور دقیقاً همان روز ماه می‌شود.
+        const now = new Date();
+        const [jy, jm, jd] = toJalaliParts(now);
+        let newJy = jy, newJm = jm + 1, newJd = jd;
+        // اگر ماه بعد از ۱۲ گذشت، سال بعد
+        if (newJm > 12) { newJm = 1; newJy++; }
+        // اگر روز ماه در ماه بعد وجود ندارد (مثلاً ۳۱ اسفند → اسفند ۳۰ روز است)
+        // به آخرین روز ماه کاهش بده
+        const maxDay = getDaysInJalaliMonth(newJy, newJm);
+        if (newJd > maxDay) newJd = maxDay;
+        // تبدیل به میلادی
+        const g = jalaliToGregorian(newJy, newJm, newJd);
+        // ساخت Date با ساعت فعلی
+        const dt = new Date(g.getUTCFullYear(), g.getUTCMonth(), g.getUTCDate(),
+                           now.getHours(), now.getMinutes(), 0, 0);
+        const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('itemDeadline').value = local;
+        updateDeadlineDisplay(local);
+        return;
+    }
+    // برای سایر کلیدها (۱ ساعت تا ۱۵ روز و ۱۰ روز):
+    // ۱ هفته (۱۶۸ ساعت = ۷ روز) و ۲ هفته (۳۳۶ ساعت = ۱۴ روز) دقیقاً
+    // همان روز هفته را می‌دهند چون ۷ و ۱۴ روز دقیق هستند.
     const dt = new Date(Date.now() + hours * 60 * 60 * 1000);
     const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('itemDeadline').value = local;
@@ -6014,6 +6143,9 @@ function showManualMode(message) {
     document.getElementById('recordingSection').style.display = 'block';
     document.getElementById('formSection').style.display = 'none';
     document.getElementById('modalTitle').textContent = 'یادآور جدید';
+    // 🔧 پنهان کردن دکمه‌های «ضبط دوباره» و «ذخیره» در حالت manual mode
+    document.getElementById('reRecordBtn').style.display = 'none';
+    document.getElementById('saveBtn').style.display = 'none';
     const recSection = document.getElementById('recordingSection');
     recSection.innerHTML = `
         <div style="color:#666;font-size:13px;padding:8px 4px 18px;line-height:1.7;text-align:right;">${message}</div>
@@ -6028,6 +6160,9 @@ function showFormSection(forceFocus) {
     document.getElementById('recordingSection').style.display = 'none';
     document.getElementById('formSection').style.display = 'block';
     document.getElementById('modalTitle').textContent = 'یادآور جدید';
+    // 🔧 نمایش دکمه‌های «ضبط دوباره» و «ذخیره» (در حالت فرم)
+    document.getElementById('reRecordBtn').style.display = '';
+    document.getElementById('saveBtn').style.display = '';
     // Only set default deadline if not already set (e.g., when coming from calendar)
     if (!document.getElementById('itemDeadline').value) {
         setQuickDeadline(1);
