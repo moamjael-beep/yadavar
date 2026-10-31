@@ -1,43 +1,108 @@
-// Service Worker for یادآور صوتی PWA
-// Provides: offline caching, push notifications, periodic background sync for deadline checking
+// ════════════════════════════════════════════════════════════════════
+// 🛡️  سرویس ورکر (Service Worker) برنامهٔ «یادآور صوتی»
+// ════════════════════════════════════════════════════════════════════
+//
+// 📌 سرویس ورکر چیست؟
+//    سرویس ورکر یک «مغز پنهان» در پس‌زمینهٔ مرورگر است که حتی وقتی
+//    صفحه بسته باشد هم کار می‌کند. کارهای مهم این فایل:
+//
+//    1) ذخیرهٔ آفلاین: وقتی اینترنت قطع است، برنامه از حافظهٔ پنهان
+//       (cache) بارگذاری می‌شود و کاربر می‌تواند یادآورهای قبلی را ببیند.
+//
+//    2) اعلان‌های پس‌زمینه: وقتی سررسید یک یادآور نزدیک می‌شود، حتی اگر
+//       مرورگر بسته باشد، یک اعلان به کاربر نشان داده می‌شود.
+//
+//    3) همگام‌سازی دوره‌ای: هر چند ساعت یک‌بار مرورگر این فایل را بیدار
+//       می‌کند تا یادآورها را بررسی کند و اعلان‌های لازم را بفرستد.
+//
+// ⚠️  نکتهٔ مهم: این فایل کاملاً جدا از صفحهٔ اصلی (HTML) اجرا می‌شود
+//    و از طریق «پیام» (postMessage) با صفحه ارتباط برقرار می‌کند.
+// ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'yadavar-cache-v17';
+
+// ────────────────────────────────────────────────────────────────────
+// 📦 بخش ۱: تنظیمات پایه و نام‌گذاری
+// ────────────────────────────────────────────────────────────────────
+// این متغیرها در سراسر فایل استفاده می‌شوند. اگر مقدار یکی را تغییر
+// دادید، حتماً همان تغییر را در فایل HTML هم انجام دهید تا صفحه و
+// سرویس ورکر با هم هماهنگ بمانند.
+
+// نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
+// گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
+// بداند باید فایل‌های جدید را دوباره دانلود کند.
+// 🔒 نسخهٔ جدید: مهاجرت خودکار جامع پایگاه داده
+const CACHE_NAME = 'yadavar-cache-v38';
+
+// نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
+// HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
 const IDB_NAME = 'yadavar_db';
-const IDB_VERSION = 2;  // MUST match the page's IDB_VERSION
+
+// شمارهٔ نسخهٔ ساختار پایگاه داده. اگر ساختار جدول‌ها را تغییر دادید،
+// این عدد را بالا ببرید. ⚠️  حتماً باید با مقدار داخل فایل HTML یکی باشد.
+const IDB_VERSION = 2;
+
+// نام سه «جدول» (object store) داخل پایگاه داده:
+//   - reminders : یادآورها (یک ردیف برای هر یادآور)
+//   - notif_log : تاریخچهٔ اعلان‌های ارسال‌شده (تا دوبار نفرستیم)
+//   - backup    : نسخهٔ پشتیبان کامل دیتابیس (برای بازگردانی)
 const STORE_REMINDERS = 'reminders';
 const STORE_NOTIF_LOG = 'notif_log';
-const STORE_BACKUP = 'backup';  // match the page's backup store
+const STORE_BACKUP = 'backup';
 
-// App shell - resources to cache on install
+
+// ────────────────────────────────────────────────────────────────────
+// 📚 بخش ۲: فهرست منابعی که هنگام نصب، در حافظهٔ پنهان ذخیره می‌شوند
+// ────────────────────────────────────────────────────────────────────
+// این فهرست «پوستهٔ برنامه» (App Shell) نام دارد. وقتی سرویس ورکر
+// برای اولین بار نصب می‌شود، تمام این فایل‌ها را دانلود و ذخیره
+// می‌کند تا برنامه حتی بدون اینترنت هم باز شود.
 const APP_SHELL = [
-  './',
-  './speech-to-text-reminder.html',
-  './manifest.json',
-  './icon-192.png',
+  './',                                  // صفحهٔ ریشه
+  './speech-to-text-reminder.html',      // صفحهٔ اصلی برنامه
+  './manifest.json',                     // فایل معرفی PWA
+  './icon-192.png',                      // آیکون‌های مختلف
   './icon-512.png',
   './icon-maskable-192.png',
   './icon-maskable-512.png',
   './apple-touch-icon.png',
   './favicon-32.png',
   './favicon-16.png',
+  // فونت فارسی وزیرمتن از CDN (در صورت قطع بودن، فونت پیش‌فرض استفاده می‌شود)
   'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css',
+  // کتابخانهٔ SortableJS برای قابلیت کشیدن و رها کردن (Drag & Drop)
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
 ];
 
-// ============ IndexedDB helpers (usable from SW) ============
+
+// ════════════════════════════════════════════════════════════════════
+// 🗄️  بخش ۳: کمک‌函数های کار با IndexedDB
+// ════════════════════════════════════════════════════════════════════
+// IndexedDB یک پایگاه دادهٔ داخلی مرورگر است که می‌تواند حجم زیادی
+// داده را به‌صورت کلید-مقدار ذخیره کند. این توابع، کارهای رایج را
+// ساده می‌کنند: باز کردن پایگاه داده، خواندن همه، افزودن/به‌روزرسانی،
+// حذف و پاک‌سازی.
+//
+// ⚠️  همهٔ این توابع «async» هستند چون کار با دیسک زمان‌بر است و
+//    نباید صفحه را متوقف کنند.
+
+// باز کردن (یا ساختن) پایگاه داده. اگر نسخهٔ جدید است، onupgradeneeded
+// اجرا می‌شود و جدول‌ها ساخته می‌شوند.
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
+      // جدول یادآورها — با کلید اصلی 'id' و دو ایندکس برای جستجوی سریع
       if (!db.objectStoreNames.contains(STORE_REMINDERS)) {
         const store = db.createObjectStore(STORE_REMINDERS, { keyPath: 'id' });
         store.createIndex('deadline', 'deadline', { unique: false });
         store.createIndex('done', 'done', { unique: false });
       }
+      // جدول تاریخچهٔ اعلان‌ها — کلید اصلی 'key' است
       if (!db.objectStoreNames.contains(STORE_NOTIF_LOG)) {
         db.createObjectStore(STORE_NOTIF_LOG, { keyPath: 'key' });
       }
+      // جدول پشتیبان — بدون کلید مشخص (کلید به‌صورت دستی داده می‌شود)
       if (!db.objectStoreNames.contains(STORE_BACKUP)) {
         db.createObjectStore(STORE_BACKUP);
       }
@@ -47,6 +112,7 @@ function openDB() {
   });
 }
 
+// خواندن تمام ردیف‌های یک جدول (به‌صورت آرایه)
 async function idbGetAll(storeName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -58,6 +124,7 @@ async function idbGetAll(storeName) {
   });
 }
 
+// افزودن یا به‌روزرسانی یک ردیف در جدول (اگر کلید تکراری باشد، جایگزین می‌شود)
 async function idbPut(storeName, value) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -69,6 +136,7 @@ async function idbPut(storeName, value) {
   });
 }
 
+// حذف یک ردیف با کلید مشخص
 async function idbDelete(storeName, key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -80,6 +148,7 @@ async function idbDelete(storeName, key) {
   });
 }
 
+// پاک کردن کامل یک جدول (تمام ردیف‌ها حذف می‌شوند)
 async function idbClear(storeName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -91,13 +160,20 @@ async function idbClear(storeName) {
   });
 }
 
-// ============ Install: cache app shell ============
+
+// ════════════════════════════════════════════════════════════════════
+// 🚀 بخش ۴: رویداد «نصب» (Install)
+// ════════════════════════════════════════════════════════════════════
+// این رویداد فقط یک‌بار و هنگام نصب اولیهٔ سرویس ورکر اجرا می‌شود.
+// کار اصلی: دانلود تمام فایل‌های «پوستهٔ برنامه» و ذخیره در حافظهٔ پنهان.
+// اگر دانلود یکی از فایل‌ها شکست خورد، نصب کل سرویس ورکر شکست نمی‌خورد
+// (به‌خاطر Promise.allSettled) — فقط آن فایل ذخیره نمی‌شود.
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing...');
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      // Cache resources one-by-one so partial failures don't break install
+      // هر فایل را جدا دانلود کن تا شکست یکی، بقیه را خراب نکند
       await Promise.allSettled(
         APP_SHELL.map(async (url) => {
           try {
@@ -110,27 +186,38 @@ self.addEventListener('install', (event) => {
           }
         })
       );
+      // بلافاصله سرویس ورکر را فعال کن (بدون انتظار برای بسته شدن همهٔ تب‌ها)
       await self.skipWaiting();
     })()
   );
 });
 
-// ============ Activate: clean old caches ============
+
+// ════════════════════════════════════════════════════════════════════
+// ♻️ بخش ۵: رویداد «فعال‌سازی» (Activate)
+// ════════════════════════════════════════════════════════════════════
+// این رویداد بعد از نصب (و وقتی سرویس ورکر قدیمی از کار افتاد) اجرا
+// می‌شود. کار اصلی:
+//   1) پاک کردن حافظه‌های پنهان قدیمی (که نامشان با CACHE_NAME فعلی
+//      یکی نیست) تا فضای دیسک اشغال نشود.
+//   2) به‌دست گرفتن کنترل تمام صفحات باز (clients.claim).
+//   3) پیام «بارگذاری دوباره» به تمام صفحات — تا کد جدید را بگیرند.
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating...', CACHE_NAME);
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
       console.log('[SW] Existing caches:', keys);
+      // هر کش که نامش با نسخهٔ فعلی یکی نیست را پاک کن
       await Promise.all(
         keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
       );
+      // کنترل تمام صفحات باز را به‌دست بگیر
       await self.clients.claim();
       console.log('[SW] Activated & claimed clients');
-      // CRITICAL: Notify all open clients to reload so they pick up the new
-      // SW fetch strategy. Without this, an existing page might stay on the
-      // old SW's behavior until the next reload. The page listens for this
-      // message and reloads itself.
+      // ⚠️  مهم: به تمام صفحات باز پیام بده که خودشان را بارگذاری دوباره
+      // کنند تا از استراتژی جدید fetch استفاده کنند. بدون این کار، صفحه
+      // ممکن است تا بارگذاری بعدی روی رفتار قدیمی سرویس ورکر بماند.
       try {
         const clientList = await clients.matchAll({ includeUncontrolled: true });
         console.log('[SW] Notifying ' + clientList.length + ' clients to reload');
@@ -142,29 +229,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ============ Fetch: network-first for HTML (so users always get the
-// latest code), cache-first for static assets (fonts, JS libraries, icons),
-// and stale-while-revalidate for cross-origin (CDN fonts). ============
-// IMPORTANT: A previous version used cache-first for HTML, which meant
-// users would run OLD BUGGY CODE forever (the SW served the cached HTML
-// even when a fixed version was deployed). Network-first for HTML ensures
-// users always get the latest version when online, and gracefully falls
-// back to cache when offline.
+
+// ════════════════════════════════════════════════════════════════════
+// 🌐 بخش ۶: رویداد «fetch» — مدیریت تمام درخواست‌های شبکه
+// ════════════════════════════════════════════════════════════════════
+// هر بار که صفحه چیزی از اینترنت بخواهد (HTML، CSS، JS، تصویر، فونت)،
+// این رویداد اجرا می‌شود. ما تصمیم می‌گیریم که:
+//   - از حافظهٔ پنهان بخوانیم (سریع، آفلاین)
+//   - از شبکه بخوانیم (تازه، همگام با گیت‌هاب)
+//   - یا ترکیبی از هر دو
+//
+// استراتژی ما:
+//   1) HTML  → «اول شبکه»: همیشه نسخهٔ تازه را از گیت‌هاب بگیر.
+//              اگر اینترنت قطع است، از حافظهٔ پنهان استفاده کن.
+//   2) فایل‌های ثابت (JS, CSS, تصاویر) → «اول حافظه»: سریع‌تر است.
+//   3) فایل‌های خارجی (CDN فونت) → «اول قدیمی، سپس به‌روزرسانی».
+//
+// ⚠️  در نسخه‌های قدیمی، HTML «اول حافظه» بود که باعث می‌شد کاربر
+//    همیشه کد قدیمی و باگ‌دار را ببیند. به همین دلیل تغییر کرد.
 self.addEventListener('fetch', (event) => {
+  // فقط درخواست‌های GET را مدیریت می‌کنیم (POST، PUT و ... دست‌نخورده)
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   const isSameOrigin = url.origin === self.location.origin;
 
-  // Skip non-http(s) requests
+  // درخواست‌های غیر HTTP (مثل file:// یا chrome-extension://) را رد کن
   if (!url.protocol.startsWith('http')) return;
 
-  // CRITICAL: Bypass cache entirely for reachability check requests.
-  // These have a special query param '_rc=1' that tells the SW to always
-  // go to the network. If the network fails, return 503 (not cached!).
-  // This ensures the page's reachability check ACTUALLY tests the network,
-  // not the SW's cache. Without this, offline detection fails because
-  // the SW would serve manifest.json from cache even when truly offline.
+  // ──────────────────────────────────────────────────────────────────
+  // 🚨 استثنای ۱: درخواست‌های بررسی اتصال (_rc=1)
+  // ──────────────────────────────────────────────────────────────────
+  // این پارامتر مخصوص بررسی «واقعی» اتصال اینترنت است. سرویس ورکر
+  // باید حتماً به شبکه برود تا بفهمیم واقعاً آنلاین هستیم یا نه.
+  // اگر از حافظهٔ پنهان بخوانیم، تشخیص آفلاین بودن خراب می‌شود.
   if (url.searchParams.has('_rc')) {
     event.respondWith(
       fetch(event.request).catch(() => new Response('offline', { status: 503, statusText: 'Offline' }))
@@ -172,16 +270,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CRITICAL: Bypass cache for version-check requests (?vcheck= or ?fresh=).
-  // The page uses these to verify it's running the latest HTML version. If
-  // we served a cached copy here, the version check would always match
-  // (defeating its purpose) and the user would be stuck on old buggy code.
+  // ──────────────────────────────────────────────────────────────────
+  // 🚨 استثنای ۲: درخواست‌های بررسی نسخه (?vcheck= یا ?fresh=)
+  // ──────────────────────────────────────────────────────────────────
+  // صفحه از این پارامترها استفاده می‌کند تا مطمئن شود در حال اجرای
+  // آخرین نسخهٔ HTML است. باید حتماً از شبکه بخوانیم.
   if (url.searchParams.has('vcheck') || url.searchParams.has('fresh')) {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
         .then(res => {
           if (res && res.ok) {
-            // Update the cache with the fresh version (without query string)
+            // نسخهٔ تازه را در حافظهٔ پنهان هم ذخیره کن (بدون کوئری استرینگ)
             const cleanUrl = new Request(url.pathname);
             const resClone = res.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, resClone)).catch(() => {});
@@ -193,7 +292,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Determine if this is an HTML navigation request
+  // ──────────────────────────────────────────────────────────────────
+  // تشخیص اینکه آیا این درخواست HTML است یا فایل ثابت
+  // ──────────────────────────────────────────────────────────────────
   const acceptHeader = event.request.headers.get('accept') || '';
   const isHTMLRequest =
     event.request.mode === 'navigate' ||
@@ -202,10 +303,15 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/' ||
     url.pathname.endsWith('/');
 
+  // ──────────────────────────────────────────────────────────────────
+  // مسیر ۱: درخواست از همان دامنه (گیت‌هاب)
+  // ──────────────────────────────────────────────────────────────────
   if (isSameOrigin) {
     if (isHTMLRequest) {
-      // Network-first for HTML — always try network first so users get the
-      // latest version. Fall back to cache if offline. Update cache on success.
+      // ─── HTML: «اول شبکه» ───
+      // اول از گیت‌هاب بخوان تا نسخهٔ تازه باشد. اگر شکست خورد، از
+      // حافظهٔ پنهان (آفلاین) استفاده کن. در صورت موفقیت، نسخهٔ تازه
+      // را در حافظهٔ پنهان هم ذخیره کن.
       event.respondWith(
         (async () => {
           try {
@@ -217,10 +323,10 @@ self.addEventListener('fetch', (event) => {
             }
             return res;
           } catch(e) {
-            // Network failed — fall back to cache (offline mode)
+            // شبکه شکست خورد — از حافظهٔ پنهان بخوان
             const cached = await caches.match(event.request);
             if (cached) return cached;
-            // No cache either — show offline page
+            // نه شبکه، نه حافظه — صفحهٔ آفلاین نشان بده
             return new Response(
               '<!DOCTYPE html><html><head><meta charset="utf-8"><title>آفلاین</title>' +
               '<body style="font-family:Tahoma;direction:rtl;text-align:center;padding:50px;">' +
@@ -234,7 +340,9 @@ self.addEventListener('fetch', (event) => {
         })()
       );
     } else {
-      // Cache-first for static assets (JS, CSS, fonts, images, icons)
+      // ─── فایل‌های ثابت: «اول حافظه» ───
+      // اگر در حافظه هست، همان را بده (سریع‌تر). اگر نبود، از شبکه
+      // بخوان و در حافظه ذخیره کن برای دفعهٔ بعد.
       event.respondWith(
         (async () => {
           const cached = await caches.match(event.request);
@@ -254,7 +362,12 @@ self.addEventListener('fetch', (event) => {
       );
     }
   } else {
-    // Stale-while-revalidate for cross-origin (CDN fonts)
+    // ──────────────────────────────────────────────────────────────────
+    // مسیر ۲: درخواست از دامنهٔ دیگر (CDN فونت)
+    // ──────────────────────────────────────────────────────────────────
+    // «قدیمی را بده، در پس‌زمینه به‌روزرسانی کن»: ابتدا نسخهٔ ذخیره‌شده
+    // را بده تا صفحه سریع باز شود، سپس در پس‌زمینه نسخهٔ تازه را
+    // دانلود و ذخیره کن برای دفعهٔ بعد.
     event.respondWith(
       (async () => {
         const cached = await caches.match(event.request);
@@ -267,7 +380,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         } catch(e) {
-          // Offline - return cached if available, otherwise empty response (not undefined)
+          // آفلاین — اگر حافظه بود همان را بده، وگرنه پاسخ خالی
           return cached || new Response('', { status: 504, statusText: 'Offline' });
         }
       })()
@@ -275,7 +388,12 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// ============ Push: show notification from server push ============
+
+// ════════════════════════════════════════════════════════════════════
+// 🔔 بخش ۷: رویداد «push» — دریافت اعلان از سرور
+// ════════════════════════════════════════════════════════════════════
+// اگر سرور (در آینده) بخواهد اعلانی بفرستد، این رویداد اجرا می‌شود.
+// در حال حاضر سرور فعال نیست، اما کد آماده است.
 self.addEventListener('push', (event) => {
   console.log('[SW] Push received:', event.data);
   let data = {};
@@ -288,16 +406,24 @@ self.addEventListener('push', (event) => {
       body: data.body || '',
       icon: 'icon-192.png',
       badge: 'icon-32.png',
-      dir: 'rtl',
+      dir: 'rtl',           // راست‌چین (فارسی)
       lang: 'fa-IR',
       tag: data.tag || 'push-' + Date.now(),
-      vibrate: [200, 100, 200],
+      vibrate: [200, 100, 200],  // الگوی لرزش (در گوشی‌های پشتیبان)
       data: data.data || {}
     })
   );
 });
 
-// ============ Notification click: focus app & expand item ============
+
+// ════════════════════════════════════════════════════════════════════
+// 👆 بخش ۸: رویداد «کلیک روی اعلان»
+// ════════════════════════════════════════════════════════════════════
+// وقتی کاربر روی یک اعلان کلیک می‌کند:
+//   1) اگر برنامه باز است، آن را متمرکز (focus) کن.
+//   2) اگر اعلان مربوط به یک یادآور خاص است (تگ با 'reminder-' شروع
+//      می‌شود)، پیامی به صفحه بفرست تا آن یادآور باز/گسترش یابد.
+//   3) اگر برنامه بسته است، آن را باز کن.
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked:', event.notification.tag);
   event.notification.close();
@@ -307,47 +433,71 @@ self.addEventListener('notificationclick', (event) => {
       let client = clientList.find(c => c.focused) || clientList[0];
       if (client) {
         await client.focus();
-        // Send message to expand the item if tag contains reminder ID
+        // اگر تگ اعلان با 'reminder-' شروع شود، شناسهٔ یادآور را استخراج کن
+        // و به صفحه بفرست تا آن را گسترش دهد (باز کند).
         const tag = event.notification.tag || '';
         if (tag.startsWith('reminder-')) {
           const id = tag.replace('reminder-', '');
           client.postMessage({ type: 'expand-reminder', id });
         }
       } else {
+        // برنامه بسته است — آن را باز کن
         await clients.openWindow('./speech-to-text-reminder.html');
       }
     })()
   );
 });
 
-// ============ Periodic Background Sync: check deadlines in background ============
+
+// ════════════════════════════════════════════════════════════════════
+// ⏰ بخش ۹: همگام‌سازی پس‌زمینهٔ دوره‌ای (Periodic Background Sync)
+// ════════════════════════════════════════════════════════════════════
+// مرورگر (در کروم دسکتاپ/اندروید) هر چند ساعت یک‌بار سرویس ورکر را
+// بیدار می‌کند تا یادآورها را بررسی کند و اعلان‌های لازم را بفرستد.
+// این کار حتی وقتی برنامه بسته باشد هم انجام می‌شود.
 self.addEventListener('periodicsync', (event) => {
   console.log('[SW] Periodic sync:', event.tag);
   if (event.tag === 'check-deadlines') {
     event.waitUntil(checkDeadlinesBackground());
   } else {
-    // Unknown periodic sync tag
+    // تگ ناشناخته — کاری نکن
   }
 });
 
-// ============ Sync (Background Sync API - for retries) ============
+
+// ════════════════════════════════════════════════════════════════════
+// 🔁 بخش ۱۰: همگام‌سازی پس‌زمینه (Background Sync) — برای زمان اتصال دوباره
+// ════════════════════════════════════════════════════════════════════
+// وقتی اینترنت قطع است و دوباره وصل می‌شود، این رویداد اجرا می‌شود.
+// کاربرد: بررسی یادآورهایی که در مدت آفلاین بودن، سررسیدشان گذشته.
 self.addEventListener('sync', (event) => {
   if (event.tag === 'check-deadlines-on-reconnect') {
     event.waitUntil(checkDeadlinesBackground());
   }
 });
 
-// ============ Message from page ============
+
+// ════════════════════════════════════════════════════════════════════
+// 📨 بخش ۱۱: دریافت پیام از صفحهٔ HTML
+// ════════════════════════════════════════════════════════════════════
+// صفحهٔ HTML از طریق navigator.serviceWorker.controller.postMessage
+// پیام‌هایی به این سرویس ورکر می‌فرستد. ما بر اساس «type» پیام،
+// کار مناسب را انجام می‌دهیم.
 self.addEventListener('message', (event) => {
   console.log('[SW] Message:', event.data);
   if (!event.data) return;
   switch (event.data.type) {
+    // پیام «الان فعال شو» — وقتی نسخهٔ جدیدی منتظر فعال‌سازی است
     case 'SKIP_WAITING':
       self.skipWaiting();
       break;
+
+    // پیام «یادآورها را بررسی کن» — از طرف صفحه فراخوانی می‌شود
     case 'CHECK_DEADLINES':
       event.waitUntil(checkDeadlinesBackground());
       break;
+
+    // پیام «اعلان تست بفرست» — برای تست دستی
     case 'TRIGGER_TEST_NOTIFICATION':
       event.waitUntil(
         self.registration.showNotification('یادآور صوتی', {
@@ -360,23 +510,24 @@ self.addEventListener('message', (event) => {
         })
       );
       break;
+
+    // پیام «تمام حافظه‌های پنهان را پاک کن» — وقتی اتصال از آفلاین
+    // به آنلاین برمی‌گردد، صفحه این پیام را می‌فرستد تا کاربر حتماً
+    // نسخهٔ تازهٔ گیت‌هاب را ببیند.
     case 'CLEAR_CACHE':
-      // Clear ALL caches (including the current one) so the page can reload
-      // from the network and get the latest version from GitHub. This is
-      // called when the reachability check transitions from offline to online.
       event.waitUntil(
         (async () => {
           try {
             const keys = await caches.keys();
             await Promise.all(keys.map(k => caches.delete(k)));
             console.log('[SW] All caches cleared:', keys.length, 'caches deleted');
-            // Notify all clients that the cache is cleared
+            // به تمام صفحات اطلاع بده که حافظه پاک شد
             const clientList = await clients.matchAll({ includeUncontrolled: true });
             clientList.forEach(c => c.postMessage({ type: 'CACHE_CLEARED' }));
             console.log('[SW] Sent CACHE_CLEARED to', clientList.length, 'clients');
           } catch(e) {
             console.error('[SW] Cache clear failed:', e);
-            // Even on failure, notify clients so they can reload
+            // حتی در صورت شکست، به صفحات اطلاع بده تا بارگذاری دوباره کنند
             const clientList = await clients.matchAll({ includeUncontrolled: true });
             clientList.forEach(c => c.postMessage({ type: 'CACHE_CLEARED' }));
           }
@@ -386,7 +537,21 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// ============ Background deadline check ============
+
+// ════════════════════════════════════════════════════════════════════
+// 🕐 بخش ۱۲: بررسی سررسیدها در پس‌زمینه
+// ════════════════════════════════════════════════════════════════════
+// این تابع از تمام یادآورها می‌گذرد و برای هر کدام که به سررسیدش
+// نزدیک شده (یا گذشته)، یک اعلان می‌فرستد. اعلان‌های قبلاً ارسال‌شده
+// را دوبار نمی‌فرستد (به‌ کمک STORE_NOTIF_LOG).
+
+// سطوح زمانی برای اعلان: هر کدام فقط یک‌بار فرستاده می‌شوند.
+//   d1  : یک روز قبل
+//   h6  : شش ساعت قبل
+//   h1  : یک ساعت قبل
+//   m30 : سی دقیقه قبل
+//   m10 : ده دقیقه قبل
+//   due : در لحظهٔ سررسید
 const NOTIF_THRESHOLDS = [
   { minutes: 60 * 24, key: 'd1', label: '۱ روز' },
   { minutes: 60 * 6,  key: 'h6', label: '۶ ساعت' },
@@ -398,6 +563,7 @@ const NOTIF_THRESHOLDS = [
 
 async function checkDeadlinesBackground() {
   try {
+    // ۱) تمام یادآورها و تاریخچهٔ اعلان‌ها را از پایگاه داده بخوان
     const reminders = await idbGetAll(STORE_REMINDERS);
     const notifLogEntries = await idbGetAll(STORE_NOTIF_LOG);
     const sentSet = new Set(notifLogEntries.map(e => e.key));
@@ -406,7 +572,10 @@ async function checkDeadlinesBackground() {
     console.log(`[SW] Background check: ${reminders.length} reminders, ${sentSet.size} sent notifs`);
 
     let notificationsSent = 0;
+
+    // ۲) روی هر یادآور و هر سطح زمانی بگذر
     for (const item of reminders) {
+      // یادآورهای انجام‌شده را رد کن
       if (item.done) continue;
       const deadlineMs = new Date(item.deadline).getTime();
       if (isNaN(deadlineMs)) continue;
@@ -415,11 +584,14 @@ async function checkDeadlinesBackground() {
       for (const t of NOTIF_THRESHOLDS) {
         const triggerMs = t.minutes * 60 * 1000;
         const notifKey = `${item.id}_${t.key}`;
+        // اگر این اعلان قبلاً فرستاده شده، رد کن
         if (sentSet.has(notifKey)) continue;
 
-        // For background check (less frequent), use wide window (up to 24h past threshold)
-        // This way, if SW wakes up hours later, it still catches the notification
+        // در بررسی پس‌زمینه (که کم‌تر اجرا می‌شود)، پنجرهٔ زمانی وسیع‌تر
+        // می‌گیریم (تا ۲۴ ساعت بعد از آستانه) تا اگر سرویس ورکر دیر بیدار
+        // شد، اعلان از قلم نیفتد.
         if (remaining <= triggerMs && remaining > triggerMs - 24 * 60 * 60 * 1000) {
+          // متن کوتاه برای عنوان اعلان (حداکثر ۴۰ کاراکتر)
           const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
           const isOverdue = remaining <= 0;
           const title = isOverdue
@@ -429,6 +601,7 @@ async function checkDeadlinesBackground() {
             ? 'زمان انجام این یادآور گذشته است. همین حالا بررسی کنید.'
             : 'یادآور شما نزدیک سررسید است';
 
+          // اعلان را نمایش بده
           try {
             await self.registration.showNotification(title, {
               body: body,
@@ -438,8 +611,10 @@ async function checkDeadlinesBackground() {
               lang: 'fa-IR',
               tag: `reminder-${item.id}`,
               vibrate: [200, 100, 200, 100, 200],
+              // اعلان‌های «سررسید گذشته» تا زمان کلیک کاربر پنهان نمی‌شوند
               requireInteraction: isOverdue
             });
+            // کلید را در تاریخچه ثبت کن تا دوبار فرستاده نشود
             await idbPut(STORE_NOTIF_LOG, { key: notifKey, ts: now });
             sentSet.add(notifKey);
             notificationsSent++;
@@ -451,7 +626,7 @@ async function checkDeadlinesBackground() {
       }
     }
 
-    // Cleanup: remove notif_log entries older than 30 days
+    // ۳) پاک‌سازی: ردیف‌های تاریخچهٔ قدیمی‌تر از ۳۰ روز را حذف کن
     const cutoff = now - 30 * 24 * 60 * 60 * 1000;
     const oldEntries = notifLogEntries.filter(e => e.ts < cutoff);
     for (const e of oldEntries) {
