@@ -2333,6 +2333,24 @@ body.locked .header-actions button {
     direction: rtl;
 }
 .contact-dynamic-item input:focus { outline: none; border-color: #1976D2; }
+
+/* 🔧 رادیو «موبایل اصلی» کنار هر شماره تلفن */
+.contact-phone-primary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-size: 10px;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.contact-phone-primary input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #1976D2;
+}
 .contact-dynamic-remove {
     background: #ffebee;
     border: none;
@@ -3121,7 +3139,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v46-2026-10-31-fix-backbtn-iranian-apps';
+const APP_VERSION = 'v48-2026-10-31-primary-phone-selection';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -3992,6 +4010,7 @@ function migrateContacts(rawContacts) {
             commissionPaid: c.commissionPaid ? String(c.commissionPaid) : '',
             commissionPercent: c.commissionPercent ? String(c.commissionPercent) : '',
             phones: Array.isArray(c.phones) ? c.phones.filter(p => p).map(p => String(p)) : [],
+            primaryPhone: c.primaryPhone ? String(c.primaryPhone) : '',  // 🔧 موبایل اصلی
             addresses: Array.isArray(c.addresses) ? c.addresses.filter(a => a).map(a => String(a)) : [],
             notes: Array.isArray(c.notes) ? c.notes.filter(n => n).map(n => String(n)) : [],
             createdAt: c.createdAt ? String(c.createdAt) : new Date().toISOString(),
@@ -8342,13 +8361,14 @@ function renderContactsList() {
     html += '</tr></thead><tbody>';
 
     contacts.forEach((c, idx) => {
-        const firstPhone = (c.phones && c.phones.length > 0) ? c.phones[0] : '';
+        // 🔧 اگر primaryPhone وجود دارد، آن را نمایش بده؛ وگرنه اولین تلفن
+        const displayPhone = c.primaryPhone || ((c.phones && c.phones.length > 0) ? c.phones[0] : '');
         html += '<tr>';
         html += '<td>' + toPersianNumber(idx + 1) + '</td>';
         html += '<td>' + escapeHtml(c.company || '—') + '</td>';
         html += '<td>' + escapeHtml(c.name || '—') + '</td>';
         html += '<td>' + escapeHtml(c.position || '—') + '</td>';
-        html += '<td>' + renderClickablePhone(firstPhone) + '</td>';
+        html += '<td>' + renderClickablePhone(displayPhone) + '</td>';
         html += '<td><div class="contact-row-actions">';
         html += '<button class="contact-row-btn" onclick="editContact(\'' + c.id + '\')">✏️</button>';
         html += '<button class="contact-row-btn danger" onclick="deleteContact(\'' + c.id + '\')">🗑</button>';
@@ -8378,7 +8398,7 @@ function openContactForm(id) {
         document.getElementById('contactCommissionAsked').value = c.commissionAsked || '';
         document.getElementById('contactCommissionPaid').value = c.commissionPaid || '';
         document.getElementById('contactCommissionPercent').value = c.commissionPercent || '';
-        renderDynamicList('contactPhonesList', c.phones || [], 'تلفن');
+        renderDynamicList('contactPhonesList', c.phones || [], 'تلفن', c.primaryPhone);
         renderDynamicList('contactAddressesList', c.addresses || [], 'آدرس');
         renderDynamicList('contactNotesList', c.notes || [], 'توضیح');
     } else {
@@ -8406,8 +8426,10 @@ function closeContactForm() {
 
 // ─── لیست‌های پویا (تلفن، آدرس، توضیح) ───
 
-function renderDynamicList(listId, items, placeholder) {
+// 🔧 رندر لیست پویا — برای تلفن‌ها، رادیو «موبایل اصلی» هم اضافه می‌شود
+function renderDynamicList(listId, items, placeholder, primaryValue) {
     const list = document.getElementById(listId);
+    const isPhoneList = (listId === 'contactPhonesList');
     list.innerHTML = '';
     if (items.length === 0) items = [''];
     items.forEach((val, idx) => {
@@ -8419,6 +8441,33 @@ function renderDynamicList(listId, items, placeholder) {
         input.placeholder = placeholder;
         input.dataset.idx = idx;
         div.appendChild(input);
+
+        // 🔧 اگر لیست تلفن است، رادیو «موبایل اصلی» اضافه کن
+        if (isPhoneList) {
+            const primaryLabel = document.createElement('label');
+            primaryLabel.className = 'contact-phone-primary';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'primaryPhone';
+            radio.value = val;
+            // اگر این شماره = primaryPhone، checked کن
+            if (primaryValue && val === primaryValue) {
+                radio.checked = true;
+            }
+            // وقتی کاربر رادیو را تغییر می‌دهد، value آن را با input هماهنگ کن
+            input.addEventListener('input', function() {
+                if (radio.checked) {
+                    radio.value = input.value;
+                }
+            });
+            radio.addEventListener('change', function() {
+                radio.value = input.value;
+            });
+            primaryLabel.appendChild(radio);
+            primaryLabel.appendChild(document.createTextNode('موبایل اصلی'));
+            div.appendChild(primaryLabel);
+        }
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'contact-dynamic-remove';
         removeBtn.textContent = '×';
@@ -8436,7 +8485,7 @@ function renderDynamicList(listId, items, placeholder) {
 }
 
 function addContactPhone() {
-    addDynamicItem('contactPhonesList', 'تلفن');
+    addDynamicItem('contactPhonesList', 'تلفن', true);
 }
 function addContactAddress() {
     addDynamicItem('contactAddressesList', 'آدرس');
@@ -8445,7 +8494,7 @@ function addContactNote() {
     addDynamicItem('contactNotesList', 'توضیح');
 }
 
-function addDynamicItem(listId, placeholder) {
+function addDynamicItem(listId, placeholder, isPhone) {
     const list = document.getElementById(listId);
     const div = document.createElement('div');
     div.className = 'contact-dynamic-item';
@@ -8453,6 +8502,28 @@ function addDynamicItem(listId, placeholder) {
     input.type = 'text';
     input.placeholder = placeholder;
     div.appendChild(input);
+
+    // 🔧 اگر لیست تلفن است، رادیو «موبایل اصلی» اضافه کن
+    if (isPhone) {
+        const primaryLabel = document.createElement('label');
+        primaryLabel.className = 'contact-phone-primary';
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'primaryPhone';
+        radio.value = '';
+        input.addEventListener('input', function() {
+            if (radio.checked) {
+                radio.value = input.value;
+            }
+        });
+        radio.addEventListener('change', function() {
+            radio.value = input.value;
+        });
+        primaryLabel.appendChild(radio);
+        primaryLabel.appendChild(document.createTextNode('موبایل اصلی'));
+        div.appendChild(primaryLabel);
+    }
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'contact-dynamic-remove';
     removeBtn.textContent = '×';
@@ -8471,11 +8542,20 @@ function addDynamicItem(listId, placeholder) {
 function getDynamicListValues(listId) {
     const list = document.getElementById(listId);
     const values = [];
-    list.querySelectorAll('input').forEach(input => {
+    list.querySelectorAll('input[type="text"]').forEach(input => {
         const val = input.value.trim();
         if (val) values.push(val);
     });
     return values;
+}
+
+// 🔧 گرفتن شماره موبایل اصلی از رادیو انتخاب‌شده
+function getPrimaryPhone() {
+    const checkedRadio = document.querySelector('#contactPhonesList input[type="radio"]:checked');
+    if (checkedRadio) {
+        return checkedRadio.value.trim();
+    }
+    return '';
 }
 
 // ─── ذخیره شخص ───
@@ -8497,6 +8577,7 @@ function saveContact() {
         commissionPaid: document.getElementById('contactCommissionPaid').value.trim(),
         commissionPercent: document.getElementById('contactCommissionPercent').value.trim(),
         phones: getDynamicListValues('contactPhonesList'),
+        primaryPhone: getPrimaryPhone(),  // 🔧 موبایل اصلی
         addresses: getDynamicListValues('contactAddressesList'),
         notes: getDynamicListValues('contactNotesList'),
     };
@@ -8612,13 +8693,14 @@ function showContactSearchResults(results) {
         html += '<th>ردیف</th><th>نام شرکت</th><th>نام</th><th>سمت</th><th>تلفن</th><th>شروع همکاری</th><th>تولد</th><th>عملیات</th>';
         html += '</tr></thead><tbody>';
         results.forEach((c, idx) => {
-            const firstPhone = (c.phones && c.phones.length > 0) ? c.phones[0] : '';
+            // 🔧 اگر primaryPhone وجود دارد، آن را نمایش بده
+            const displayPhone = c.primaryPhone || ((c.phones && c.phones.length > 0) ? c.phones[0] : '');
             html += '<tr>';
             html += '<td>' + toPersianNumber(idx + 1) + '</td>';
             html += '<td>' + escapeHtml(c.company || '—') + '</td>';
             html += '<td>' + escapeHtml(c.name || '—') + '</td>';
             html += '<td>' + escapeHtml(c.position || '—') + '</td>';
-            html += '<td>' + renderClickablePhone(firstPhone) + '</td>';
+            html += '<td>' + renderClickablePhone(displayPhone) + '</td>';
             html += '<td>' + escapeHtml(c.startDate || '—') + '</td>';
             html += '<td>' + escapeHtml(c.birthDate || '—') + '</td>';
             html += '<td><div class="contact-row-actions"><button class="contact-row-btn" onclick="editContactFromSearch(\'' + c.id + '\')">✏️</button></div></td>';
@@ -8901,33 +8983,30 @@ function openPhoneActionMenu(phone) {
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2A9D8F"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm-2 9V9l5 3-5 3z" fill="#fff"/></svg>',
             label: 'ایتا',
-            url: 'eitaa://',
-            fallback: 'https://eitaa.com/',
-            target: '_blank',
+            // 🔧 Chrome Intent با package name واقعی — اپلیکیشن نصب‌شده را مستقیم باز می‌کند
+            // منبع: apkpure.com — package: ir.eitaa.messenger
+            intentUrl: 'intent://#Intent;package=ir.eitaa.messenger;S.browser_fallback_url=https%3A%2F%2Feitaa.com%2F;end',
             copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#8E24AA"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'روبیکا',
-            url: 'rubika://',
-            fallback: 'https://rubika.ir/',
-            target: '_blank',
+            // 🔧 package: ir.resaneh1.iptv (منبع: apkpure.com)
+            intentUrl: 'intent://#Intent;package=ir.resaneh1.iptv;S.browser_fallback_url=https%3A%2F%2Frubika.ir%2F;end',
             copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#00BCD4"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'بله',
-            url: 'ble://',
-            fallback: 'https://ble.ir/',
-            target: '_blank',
+            // 🔧 package: ir.nasim (منبع: apkpure.com)
+            intentUrl: 'intent://#Intent;package=ir.nasim;S.browser_fallback_url=https%3A%2F%2Fble.ir%2F;end',
             copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#E53935"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'سروش',
-            url: 'soroush://',
-            fallback: 'https://splus.ir/',
-            target: '_blank',
+            // 🔧 package: mobi.mmdt.ottplus (منبع: apkpure.com)
+            intentUrl: 'intent://#Intent;package=mobi.mmdt.ottplus;S.browser_fallback_url=https%3A%2F%2Fsplus.ir%2F;end',
             copyPhone: true
         },
         {
@@ -8948,7 +9027,7 @@ function openPhoneActionMenu(phone) {
         }
 
         // حالت خاص برای کپی
-        if (action.url.startsWith('copy:')) {
+        if (action.url && action.url.startsWith('copy:')) {
             item.href = '#';
             item.onclick = function(e) {
                 e.preventDefault();
@@ -8956,8 +9035,23 @@ function openPhoneActionMenu(phone) {
                 closePhoneActionMenu();
                 showToast('شماره کپی شد ✓');
             };
+        } else if (action.intentUrl) {
+            // 🔧 Chrome Intent با package name — مستقیم اپلیکیشن نصب‌شده را باز می‌کند
+            // Chrome Intent به‌طور خودکار fallback URL را هم مدیریت می‌کند
+            // نیازی به setTimeout یا بررسی document.hidden نیست
+            item.href = action.intentUrl;
+            item.onclick = function(e) {
+                // اگر copyPhone فعال است، شماره را کپی کن
+                if (action.copyPhone) {
+                    copyToClipboard(cleanPhone);
+                    showToast('شماره کپی شد — در برنامه پیست کنید');
+                }
+                // بستن منو بعد از کوتاه تاخیر
+                setTimeout(closePhoneActionMenu, 300);
+                // اجازه دهیم لینک به‌طور طبیعی باز شود (preventDefault نمی‌کنیم)
+            };
         } else if (action.fallback) {
-            // 🔧 برای شبکه‌های پیام‌رسان: ابتدا اپلیکیشن نصب‌شده را امتحان کن
+            // 🔧 برای تلگرام و واتساپ: ابتدا اپلیکیشن نصب‌شده را امتحان کن
             // اگر باز نشد (اپلیکیشن نصب نیست)، به نسخه وب برو
             item.onclick = function(e) {
                 e.preventDefault();
