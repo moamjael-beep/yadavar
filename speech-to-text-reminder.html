@@ -3139,7 +3139,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v48-2026-10-31-primary-phone-selection';
+const APP_VERSION = 'v50-2026-10-31-fix-number-parsing-sad';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -3410,8 +3410,16 @@ function postProcessPersianNumbers(text) {
                 // هزار — multiply segment
                 total += (segment || 1) * 1000;
                 segment = 0;
-            } else if (val >= 100) {
-                // Hundreds (صد, دویست, etc.)
+            } else if (val === 100) {
+                // 🔧 صد — اگر segment > 0 است، ضرب کن؛ وگرنه 100
+                // مثال: "سه صد" → segment=3, val=100 → segment = 3*100 = 300
+                if (segment > 0) {
+                    segment = segment * 100;
+                } else {
+                    segment = 100;
+                }
+            } else if (val >= 200 && val <= 900) {
+                // دویست، سیصد، چهارصد، پانصد، ششصد، هفتصد، هشتصد، نهصد
                 segment += val;
             } else {
                 // Units and tens (0-99)
@@ -3644,33 +3652,106 @@ function tryParseDigitSequence(tokens, startIdx) {
 }
 
 function tryParseNumberSeq(tokens, startIdx) {
-    let total = 0, segment = 0, foundAny = false, i = startIdx;
+    // 🔧 بازنویسی کامل — منطق صحیح تلفظ فارسی اعداد
+    //
+    // در فارسی، ساختار اعداد به این شکل است:
+    //   [ضرب‌کننده بزرگ] + [هزار] + [صدگان] + [ده‌گان] + [یک‌گان]
+    //
+    // مثال: "دو میلیون و دویست و پنجاه و شش هزار و هفتصد و نود و هشت"
+    //   = 2×1,000,000 + 256×1,000 + 798
+    //   = 2,000,000 + 256,000 + 798
+    //   = 2,256,798
+    //
+    // مثال: "سه صد و بیست و پنج"
+    //   = 3×100 + 20 + 5 = 325
+    //
+    // مثال: "نه صد و نود و نه میلیون"
+    //   = 999 × 1,000,000 = 999,000,000
+    //
+    // منطق صحیح:
+    //   1. وقتی کلمه «صد» می‌آید، اگر segment > 0 است، segment = segment × 100
+    //      در غیر این صورت segment = 100
+    //   2. وقتی «هزار» می‌آید: total += segment × 1000; segment = 0
+    //   3. وقتی «میلیون» می‌آید: total += segment × 1,000,000; segment = 0
+    //   4. وقتی «میلیارد» می‌آید: total += segment × 1,000,000,000; segment = 0
+    //   5. کلمات «دویست»، «سیصد»، «نهصد» و... مستقیماً به segment اضافه می‌شوند
+    //   6. کلمات ۱۰-۹۹ (بیست، سی، چهل...) به segment اضافه می‌شوند
+    //   7. کلمات ۰-۹ (صفر، یک، دو...) به segment اضافه می‌شوند
+
+    let total = 0;
+    let segment = 0;
+    let foundAny = false;
+    let i = startIdx;
+
     while (i < tokens.length) {
         let word = tokens[i].replace(/[\u200c\u200d]/g, '');
         word = word.replace(/تا$/, '').replace(/[.,،؛:!؟()«»]/g, '');
-        // "و" (and) is ambiguous in Persian: it can be a number connector
-        // (e.g., "صد و بیست" = 120) or a sentence conjunction (e.g., "دو نفر
-        // و سه نفر" = two people AND three people). We only treat it as a
-        // connector when we're already inside a number sequence (foundAny).
-        // This prevents "و" from being silently consumed between two
-        // separate number phrases.
-        if (word === 'و' || word === 'وا') {
+
+        // "و" connector
+        if (word === 'و' || word === 'وا' || word === 'وَ') {
             if (foundAny) { i++; continue; }
             else { break; }
         }
+
         let val = PERSIAN_NUM_WORDS[word];
-        if (val === undefined) { const m = word.match(/^(\d+)$/); if (m) val = parseInt(m[1],10); }
-        if (val === undefined) { const pm = word.match(/^([۰-۹]+)$/); if (pm) { val = parseInt(word.replace(/[۰-۹]/g, d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)), 10); } }
+
+        // Latin digits
+        if (val === undefined) {
+            const m = word.match(/^(\d+)$/);
+            if (m) val = parseInt(m[1], 10);
+        }
+
+        // Persian digits
+        if (val === undefined) {
+            const pm = word.match(/^([۰-۹]+)$/);
+            if (pm) {
+                val = parseInt(word.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)), 10);
+            }
+        }
+
         if (val !== undefined) {
             foundAny = true;
-            if (val >= 1000000) { total += (segment||1)*val; segment=0; }
-            else if (val === 1000) { total += (segment||1)*1000; segment=0; }
-            else if (val >= 100) { segment += val; }
-            else { segment += val; }
+
+            if (val === 1000000000) {
+                // میلیارد — ضرب‌کننده بزرگ
+                total += (segment || 1) * val;
+                segment = 0;
+            } else if (val === 1000000) {
+                // میلیون — ضرب‌کننده بزرگ
+                total += (segment || 1) * val;
+                segment = 0;
+            } else if (val === 1000) {
+                // هزار — ضرب‌کننده
+                total += (segment || 1) * 1000;
+                segment = 0;
+            } else if (val === 100) {
+                // 🔧 صد — اگر segment > 0 است، ضرب کن؛ وگرنه 100
+                // مثال: "سه صد" → segment=3, val=100 → segment = 3*100 = 300
+                // مثال: "صد" → segment=0, val=100 → segment = 100
+                if (segment > 0) {
+                    segment = segment * 100;
+                } else {
+                    segment = 100;
+                }
+            } else if (val >= 200 && val <= 900) {
+                // دویست، سیصد، چهارصد، پانصد، ششصد، هفتصد، هشتصد، نهصد
+                // این‌ها مستقیماً به segment اضافه می‌شوند
+                // مثال: "دویست و پنجاه" → segment = 200 + 50 = 250
+                segment += val;
+            } else {
+                // 0-99 — به segment اضافه می‌شوند
+                // مثال: "بیست و پنج" → segment = 20 + 5 = 25
+                segment += val;
+            }
             i++;
-        } else { break; }
+        } else {
+            break;
+        }
     }
+
     if (!foundAny) return null;
+
+    // 🔧 جمع کردن segment باقی‌مانده با total
     return { value: total + segment, endIndex: i };
 }
 
@@ -8957,113 +9038,115 @@ function openPhoneActionMenu(phone) {
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#4CAF50"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.21c.28-.27.36-.66.25-1.01C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>',
             label: 'تماس',
-            url: 'tel:' + cleanPhone,
-            target: ''
+            url: 'tel:' + cleanPhone
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#2196F3"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>',
             label: 'پیامک',
-            url: 'sms:' + cleanPhone,
-            target: ''
+            url: 'sms:' + cleanPhone
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2AABEE"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm2.5 8.5l-4 1.5 1.5-4 4-1.5-1.5 4z" fill="#fff"/></svg>',
             label: 'تلگرام',
             url: 'tg://msg?to=' + cleanPhone,
-            fallback: 'https://t.me/+' + cleanPhone,
-            target: '_blank'
+            fallback: 'https://t.me/+' + cleanPhone
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#25D366"/><path d="M12 6c-3.3 0-6 2.7-6 6 0 1.1.3 2.1.8 3L6 18l3.2-.8c.8.5 1.8.8 2.8.8 3.3 0 6-2.7 6-6s-2.7-6-6-6zm0 11c-1 0-1.9-.3-2.7-.7l-.2-.1-1.9.5.5-1.8-.1-.2c-.5-.8-.7-1.7-.7-2.7 0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5z" fill="#fff"/></svg>',
             label: 'واتساپ',
             url: 'whatsapp://send?phone=' + intlPhone,
-            fallback: 'https://wa.me/' + intlPhone,
-            target: '_blank'
+            fallback: 'https://wa.me/' + intlPhone
         },
         {
+            // 🔧 ایتا: Chrome Intent با package name — اپلیکیشن را باز می‌کند
+            // منبع: apkpure.com — package: ir.eitaa.messenger
+            // اگر نصب نباشد، fallback به نسخه وب با شماره (web.eitaa.com/?0098...)
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2A9D8F"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm-2 9V9l5 3-5 3z" fill="#fff"/></svg>',
             label: 'ایتا',
-            // 🔧 Chrome Intent با package name واقعی — اپلیکیشن نصب‌شده را مستقیم باز می‌کند
-            // منبع: apkpure.com — package: ir.eitaa.messenger
-            intentUrl: 'intent://#Intent;package=ir.eitaa.messenger;S.browser_fallback_url=https%3A%2F%2Feitaa.com%2F;end',
+            intentUrl: 'intent://#Intent;package=ir.eitaa.messenger;S.browser_fallback_url=' + encodeURIComponent('https://web.eitaa.com/?00' + intlPhone) + ';end',
             copyPhone: true
         },
         {
+            // 🔧 روبیکا: Chrome Intent با package name
+            // منبع: apkpure.com — package: ir.resaneh1.iptv
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#8E24AA"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'روبیکا',
-            // 🔧 package: ir.resaneh1.iptv (منبع: apkpure.com)
-            intentUrl: 'intent://#Intent;package=ir.resaneh1.iptv;S.browser_fallback_url=https%3A%2F%2Frubika.ir%2F;end',
+            intentUrl: 'intent://#Intent;package=ir.resaneh1.iptv;S.browser_fallback_url=' + encodeURIComponent('https://rubika.ir/') + ';end',
             copyPhone: true
         },
         {
+            // 🔧 بله: Chrome Intent با package name
+            // منبع: apkpure.com — package: ir.nasim
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#00BCD4"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'بله',
-            // 🔧 package: ir.nasim (منبع: apkpure.com)
-            intentUrl: 'intent://#Intent;package=ir.nasim;S.browser_fallback_url=https%3A%2F%2Fble.ir%2F;end',
+            intentUrl: 'intent://#Intent;package=ir.nasim;S.browser_fallback_url=' + encodeURIComponent('https://ble.ir/') + ';end',
             copyPhone: true
         },
         {
+            // 🔧 سروش: Chrome Intent با package name
+            // منبع: apkpure.com — package: mobi.mmdt.ottplus
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#E53935"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'سروش',
-            // 🔧 package: mobi.mmdt.ottplus (منبع: apkpure.com)
-            intentUrl: 'intent://#Intent;package=mobi.mmdt.ottplus;S.browser_fallback_url=https%3A%2F%2Fsplus.ir%2F;end',
+            intentUrl: 'intent://#Intent;package=mobi.mmdt.ottplus;S.browser_fallback_url=' + encodeURIComponent('https://splus.ir/') + ';end',
             copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#607D8B"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-1 9H9v-2h9v2z"/></svg>',
             label: 'کپی شماره',
-            url: 'copy:' + cleanPhone,
-            target: ''
+            url: 'copy:' + cleanPhone
         },
     ];
 
     actions.forEach(function(action) {
         const item = document.createElement('a');
         item.className = 'phone-action-item';
-        item.href = action.url;
-        if (action.target) {
-            item.target = action.target;
+
+        // 🔧 تعیین href بر اساس نوع action
+        if (action.intentUrl) {
+            item.href = action.intentUrl;
+        } else if (action.url) {
+            item.href = action.url;
+        } else {
+            item.href = '#';
+        }
+
+        if (action.fallback || (action.url && action.url.startsWith('http'))) {
+            item.target = '_blank';
             item.rel = 'noopener noreferrer';
         }
 
-        // حالت خاص برای کپی
-        if (action.url && action.url.startsWith('copy:')) {
-            item.href = '#';
-            item.onclick = function(e) {
+        // 🔧 onclick handler — سه حالت: کپی، Chrome Intent، deep link با fallback
+        item.onclick = function(e) {
+            // حالت ۱: کپی شماره
+            if (action.url && action.url.startsWith('copy:')) {
                 e.preventDefault();
                 copyToClipboard(cleanPhone);
                 closePhoneActionMenu();
                 showToast('شماره کپی شد ✓');
-            };
-        } else if (action.intentUrl) {
-            // 🔧 Chrome Intent با package name — مستقیم اپلیکیشن نصب‌شده را باز می‌کند
-            // Chrome Intent به‌طور خودکار fallback URL را هم مدیریت می‌کند
-            // نیازی به setTimeout یا بررسی document.hidden نیست
-            item.href = action.intentUrl;
-            item.onclick = function(e) {
-                // اگر copyPhone فعال است، شماره را کپی کن
+                return;
+            }
+
+            // حالت ۲: Chrome Intent (شبکه‌های ایرانی)
+            // preventDefault نمی‌کنیم — اجازه می‌دهیم لینک intent به‌طور طبیعی باز شود
+            // Chrome خودش fallback را مدیریت می‌کند
+            if (action.intentUrl) {
                 if (action.copyPhone) {
                     copyToClipboard(cleanPhone);
                     showToast('شماره کپی شد — در برنامه پیست کنید');
                 }
-                // بستن منو بعد از کوتاه تاخیر
                 setTimeout(closePhoneActionMenu, 300);
-                // اجازه دهیم لینک به‌طور طبیعی باز شود (preventDefault نمی‌کنیم)
-            };
-        } else if (action.fallback) {
-            // 🔧 برای تلگرام و واتساپ: ابتدا اپلیکیشن نصب‌شده را امتحان کن
-            // اگر باز نشد (اپلیکیشن نصب نیست)، به نسخه وب برو
-            item.onclick = function(e) {
+                return; // اجازه دهیم لینک باز شود
+            }
+
+            // حالت ۳: deep link با fallback (تلگرام و واتساپ)
+            if (action.fallback) {
                 e.preventDefault();
-                // 🔧 اگر copyPhone فعال است، شماره را کپی کن
                 if (action.copyPhone) {
                     copyToClipboard(cleanPhone);
                 }
-                // تلاش برای باز کردن اپلیکیشن با deep link
-                // استفاده از window.open به‌جای location.href برای جلوگیری از
-                // تغییر URL صفحه فعلی
-                var win = window.open(action.url, '_blank');
-                // بعد از ۱.۵ ثانیه، اگر اپلیکیشن باز نشد، نسخه وب را باز کن
+                // تلاش برای باز کردن اپلیکیشن
+                window.open(action.url, '_blank');
+                // بعد از ۱.۵ ثانیه، اگر اپلیکیشن باز نشد، fallback
                 setTimeout(function() {
                     if (!document.hidden) {
                         window.open(action.fallback, '_blank');
@@ -9072,10 +9155,14 @@ function openPhoneActionMenu(phone) {
                         }
                     }
                 }, 1500);
-                // بستن منو
                 setTimeout(closePhoneActionMenu, 500);
-            };
-        }
+                return;
+            }
+
+            // حالت ۴: لینک‌های ساده (tel:, sms:) — اجازه دهیم باز شوند
+            // preventDefault نمی‌کنیم
+            setTimeout(closePhoneActionMenu, 300);
+        };
 
         item.innerHTML = '<div class="phone-action-icon">' + action.svg + '</div>' +
                          '<div class="phone-action-label">' + action.label + '</div>';
