@@ -2486,8 +2486,13 @@ body.locked .header-actions button {
 .phone-action-item:hover { background: #e3f2fd; }
 .phone-action-item:active { transform: scale(0.95); }
 .phone-action-icon {
-    font-size: 28px;
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.phone-action-icon svg {
+    display: block;
 }
 .phone-action-label {
     font-size: 11px;
@@ -3116,7 +3121,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v44-2026-10-31-fix-header-image-sticky';
+const APP_VERSION = 'v45-2026-10-31-real-icons-deep-link';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8853,34 +8858,87 @@ function openPhoneActionMenu(phone) {
     const grid = document.getElementById('phoneActionGrid');
     grid.innerHTML = '';
 
-    // لیست عملیات: [آیکون, برچسب, URL]
+    // 🔧 آیکون‌های SVG واقعی شبکه‌های پیام‌رسان
+    // و URLهای deep link برای فراخوانی اپلیکیشن نصب‌شده روی موبایل
+    // اگر اپلیکیشن نصب نباشد، مرورگر به‌طور خودکار به نسخه وب می‌رود
+    
+    // شماره با کد کشور برای واتساپ (98 به‌جای 0)
+    const intlPhone = cleanPhone.replace(/^0/, '98');
+
     const actions = [
-        ['📞', 'تماس', 'tel:' + cleanPhone],
-        ['💬', 'پیامک', 'sms:' + cleanPhone],
-        ['✈️', 'تلگرام', 'https://t.me/+' + cleanPhone],
-        ['🟢', 'واتساپ', 'https://wa.me/' + cleanPhone.replace(/^0/, '98')],
-        ['🤖', 'ایتا', 'https://eitaa.com/#send?to=' + cleanPhone],
-        ['🟣', 'روبیکا', 'https://rubika.ir/'],
-        ['🔵', 'بله', 'https://ble.ir/'],
-        ['🔴', 'سروش', 'https://splus.ir/'],
-        ['📋', 'کپی شماره', 'copy:' + cleanPhone],
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#4CAF50"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.21c.28-.27.36-.66.25-1.01C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>',
+            label: 'تماس',
+            url: 'tel:' + cleanPhone,
+            target: ''
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#2196F3"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>',
+            label: 'پیامک',
+            url: 'sms:' + cleanPhone,
+            target: ''
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2AABEE"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm2.5 8.5l-4 1.5 1.5-4 4-1.5-1.5 4z" fill="#fff"/></svg>',
+            label: 'تلگرام',
+            url: 'tg://msg?to=' + cleanPhone,
+            fallback: 'https://t.me/+' + cleanPhone,
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#25D366"/><path d="M12 6c-3.3 0-6 2.7-6 6 0 1.1.3 2.1.8 3L6 18l3.2-.8c.8.5 1.8.8 2.8.8 3.3 0 6-2.7 6-6s-2.7-6-6-6zm0 11c-1 0-1.9-.3-2.7-.7l-.2-.1-1.9.5.5-1.8-.1-.2c-.5-.8-.7-1.7-.7-2.7 0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5z" fill="#fff"/></svg>',
+            label: 'واتساپ',
+            url: 'whatsapp://send?phone=' + intlPhone,
+            fallback: 'https://wa.me/' + intlPhone,
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2A9D8F"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm-2 9V9l5 3-5 3z" fill="#fff"/></svg>',
+            label: 'ایتا',
+            url: 'eitaa://msg?to=' + cleanPhone,
+            fallback: 'https://eitaa.com/#send?to=' + cleanPhone,
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#8E24AA"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
+            label: 'روبیکا',
+            url: 'rubika://msg?to=' + cleanPhone,
+            fallback: 'https://rubika.ir/',
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#00BCD4"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
+            label: 'بله',
+            url: 'ble://msg?to=' + cleanPhone,
+            fallback: 'https://ble.ir/',
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#E53935"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
+            label: 'سروش',
+            url: 'splus://msg?to=' + cleanPhone,
+            fallback: 'https://splus.ir/',
+            target: '_blank'
+        },
+        {
+            svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#607D8B"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-1 9H9v-2h9v2z"/></svg>',
+            label: 'کپی شماره',
+            url: 'copy:' + cleanPhone,
+            target: ''
+        },
     ];
 
     actions.forEach(function(action) {
-        const icon = action[0];
-        const label = action[1];
-        const url = action[2];
-
         const item = document.createElement('a');
         item.className = 'phone-action-item';
-        item.href = url;
-        if (url.startsWith('http')) {
-            item.target = '_blank';
+        item.href = action.url;
+        if (action.target) {
+            item.target = action.target;
             item.rel = 'noopener noreferrer';
         }
 
         // حالت خاص برای کپی
-        if (url.startsWith('copy:')) {
+        if (action.url.startsWith('copy:')) {
             item.href = '#';
             item.onclick = function(e) {
                 e.preventDefault();
@@ -8888,10 +8946,27 @@ function openPhoneActionMenu(phone) {
                 closePhoneActionMenu();
                 showToast('شماره کپی شد ✓');
             };
+        } else if (action.fallback) {
+            // 🔧 برای شبکه‌های پیام‌رسان: ابتدا اپلیکیشن نصب‌شده را امتحان کن
+            // اگر باز نشد (اپلیکیشن نصب نیست)، به نسخه وب برو
+            item.onclick = function(e) {
+                e.preventDefault();
+                // تلاش برای باز کردن اپلیکیشن با deep link
+                window.location.href = action.url;
+                // بعد از ۱.۵ ثانیه، اگر اپلیکیشن باز نشد، نسخه وب را باز کن
+                setTimeout(function() {
+                    // اگر کاربر هنوز روی صفحه است (اپلیکیشن باز نشد)
+                    if (!document.hidden) {
+                        window.open(action.fallback, '_blank');
+                    }
+                }, 1500);
+                // بستن منو
+                setTimeout(closePhoneActionMenu, 500);
+            };
         }
 
-        item.innerHTML = '<div class="phone-action-icon">' + icon + '</div>' +
-                         '<div class="phone-action-label">' + label + '</div>';
+        item.innerHTML = '<div class="phone-action-icon">' + action.svg + '</div>' +
+                         '<div class="phone-action-label">' + action.label + '</div>';
         grid.appendChild(item);
     });
 
