@@ -3121,7 +3121,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v45-2026-10-31-real-icons-deep-link';
+const APP_VERSION = 'v46-2026-10-31-fix-backbtn-iranian-apps';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8305,6 +8305,7 @@ function getContactById(id) {
 function openContacts() {
     renderContactsList();
     document.getElementById('contactsOverlay').classList.add('active');
+    history.pushState({ view: 'contacts' }, '');
 }
 
 function closeContacts() {
@@ -8395,6 +8396,7 @@ function openContactForm(id) {
     }
 
     document.getElementById('contactFormOverlay').classList.add('active');
+    history.pushState({ view: 'contactForm' }, '');
 }
 
 function closeContactForm() {
@@ -8546,6 +8548,7 @@ function openContactSearch() {
     document.getElementById('searchCommissionPaidMin').value = '';
     document.getElementById('searchCommissionPercent').value = '';
     document.getElementById('contactSearchOverlay').classList.add('active');
+    history.pushState({ view: 'contactSearch' }, '');
 }
 
 function closeContactSearch() {
@@ -8626,6 +8629,7 @@ function showContactSearchResults(results) {
     }
 
     document.getElementById('contactSearchResultsOverlay').classList.add('active');
+    history.pushState({ view: 'contactSearchResults' }, '');
 }
 
 function closeContactSearchResults() {
@@ -8650,6 +8654,7 @@ function openContactReport() {
     document.getElementById('reportCommissionPaidMin').value = '';
     document.getElementById('reportCommissionPercent').value = '';
     document.getElementById('contactReportOverlay').classList.add('active');
+    history.pushState({ view: 'contactReport' }, '');
 }
 
 function closeContactReport() {
@@ -8736,6 +8741,7 @@ function showContactReportResults(results, criteria) {
     body.dataset.reportData = JSON.stringify(results);
 
     document.getElementById('contactReportResultsOverlay').classList.add('active');
+    history.pushState({ view: 'contactReportResults' }, '');
 }
 
 function closeContactReportResults() {
@@ -8895,30 +8901,34 @@ function openPhoneActionMenu(phone) {
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2A9D8F"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm-2 9V9l5 3-5 3z" fill="#fff"/></svg>',
             label: 'ایتا',
-            url: 'eitaa://msg?to=' + cleanPhone,
-            fallback: 'https://eitaa.com/#send?to=' + cleanPhone,
-            target: '_blank'
+            url: 'eitaa://',
+            fallback: 'https://eitaa.com/',
+            target: '_blank',
+            copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#8E24AA"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'روبیکا',
-            url: 'rubika://msg?to=' + cleanPhone,
+            url: 'rubika://',
             fallback: 'https://rubika.ir/',
-            target: '_blank'
+            target: '_blank',
+            copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#00BCD4"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'بله',
-            url: 'ble://msg?to=' + cleanPhone,
+            url: 'ble://',
             fallback: 'https://ble.ir/',
-            target: '_blank'
+            target: '_blank',
+            copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#E53935"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#fff"/></svg>',
             label: 'سروش',
-            url: 'splus://msg?to=' + cleanPhone,
+            url: 'soroush://',
             fallback: 'https://splus.ir/',
-            target: '_blank'
+            target: '_blank',
+            copyPhone: true
         },
         {
             svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="#607D8B"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-1 9H9v-2h9v2z"/></svg>',
@@ -8951,13 +8961,21 @@ function openPhoneActionMenu(phone) {
             // اگر باز نشد (اپلیکیشن نصب نیست)، به نسخه وب برو
             item.onclick = function(e) {
                 e.preventDefault();
+                // 🔧 اگر copyPhone فعال است، شماره را کپی کن
+                if (action.copyPhone) {
+                    copyToClipboard(cleanPhone);
+                }
                 // تلاش برای باز کردن اپلیکیشن با deep link
-                window.location.href = action.url;
+                // استفاده از window.open به‌جای location.href برای جلوگیری از
+                // تغییر URL صفحه فعلی
+                var win = window.open(action.url, '_blank');
                 // بعد از ۱.۵ ثانیه، اگر اپلیکیشن باز نشد، نسخه وب را باز کن
                 setTimeout(function() {
-                    // اگر کاربر هنوز روی صفحه است (اپلیکیشن باز نشد)
                     if (!document.hidden) {
                         window.open(action.fallback, '_blank');
+                        if (action.copyPhone) {
+                            showToast('شماره کپی شد — در برنامه پیست کنید');
+                        }
                     }
                 }, 1500);
                 // بستن منو
@@ -8972,6 +8990,7 @@ function openPhoneActionMenu(phone) {
 
     // نمایش منو
     document.getElementById('phoneActionOverlay').classList.add('active');
+    history.pushState({ view: 'phoneAction' }, '');
 }
 
 // بستن منوی انتخاب عملیات تلفن
