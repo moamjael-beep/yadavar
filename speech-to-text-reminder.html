@@ -533,13 +533,13 @@ body { padding-bottom: 30px; }
     justify-content: center;
 }
 .action-btn {
-    flex: 1 1 0;  /* 3 buttons per row, equal width */
+    flex: 1 1 0;  /* buttons share the row equally, wrapping on small screens */
     background: rgba(255,255,255,0.2);
     border: none;
     color: inherit;
-    padding: 14px 8px;
+    padding: 14px 6px;
     border-radius: 10px;
-    font-size: 14px;
+    font-size: 13px;
     font-family: inherit;
     font-weight: 700;
     cursor: pointer;
@@ -553,6 +553,8 @@ body { padding-bottom: 30px; }
     justify-content: center;
 }
 .action-btn.danger { background: rgba(0,0,0,0.35); }
+/* 🔧 دکمه «انصراف» — خاکستری روشن برای تمایز */
+.action-btn.secondary { background: rgba(0,0,0,0.18); font-size: 12px; }
 .action-btn:active { transform: scale(0.95); }
 
 /* On very small screens, buttons wrap to 2 per row */
@@ -3139,7 +3141,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v51-2026-10-31-fix-contact-date-picker-and-commission-default';
+const APP_VERSION = 'v52-2026-10-31-task-cancel-btn-and-urgent-display-only';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5796,6 +5798,11 @@ function openGroupPicker() {
     groups.forEach(group => {
         // In moveTasks mode, exclude the group being deleted
         if (_groupPickerMode === 'moveTasks' && group.id === _groupPickerExcluded) return;
+        // 🔧 گروه «کارهای فوری» یک گروه نمایشی است — در لیست انتخاب
+        // گروه برای ساخت تسک جدید یا انتقال تسک نشان داده نمی‌شود.
+        // کاربر باید با روشن کردن چک‌باکس «فوری» در جزئیات تسک، آن را
+        // به این گروه نمایشی اضافه کند.
+        if (group.id === 'urgent') return;
         const count = group.id === 'all'
             ? items.length
             : items.filter(i => i.groupId === group.id).length;
@@ -7773,7 +7780,11 @@ function renderTasksView(groupId) {
         row.appendChild(pinBtn);
 
         const groups = getGroups();
-        const groupOpts = groups.map(g => `<option value="${g.id}" ${g.id === (item.groupId || 'all') ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
+        // 🔧 گروه «کارهای فوری» یک گروه نمایشی است و نباید در dropdown
+        // انتخاب گروه (در جزئیات تسک) ظاهر شود. کاربر باید به‌جای انتخاب
+        // این گروه، چک‌باکس «فوری» را روشن کند.
+        const selectableGroups = groups.filter(g => g.id !== 'urgent');
+        const groupOpts = selectableGroups.map(g => `<option value="${g.id}" ${g.id === (item.groupId || 'all') ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
 
         const details = document.createElement('div');
         details.className = 'item-details';
@@ -7784,7 +7795,7 @@ function renderTasksView(groupId) {
             ${item.completedAt ? `<div class="detail-row"><span class="detail-label">روز انجام:</span><span class="detail-value">${toJalaliLong(item.completedAt)}</span></div>` : ''}
             <div class="detail-row group-selector-row"><span class="detail-label">گروه:</span><select class="group-selector" onchange="changeTaskGroup('${item.id}', this.value)">${groupOpts}</select></div>
             <div class="detail-row urgent-toggle-row"><span class="detail-label">🚨 فوری:</span><label class="urgent-checkbox-label"><input type="checkbox" class="urgent-checkbox" ${item.urgent ? 'checked' : ''} onchange="toggleTaskUrgent('${item.id}')"> <span>این تسک در گروه «کارهای فوری» نمایش داده شود</span></label></div>
-            <div class="item-actions"><button class="action-btn" data-action="edit">✏️ ویرایش</button><button class="action-btn" data-action="toggle">${item.done ? '↩ بازگردانی' : '✓ انجام شد'}</button><button class="action-btn danger" data-action="delete">🗑 حذف</button></div>
+            <div class="item-actions"><button class="action-btn" data-action="edit">✏️ ویرایش</button><button class="action-btn" data-action="toggle">${item.done ? '↩ بازگردانی' : '✓ انجام شد'}</button><button class="action-btn danger" data-action="delete">🗑 حذف</button><button class="action-btn secondary" data-action="cancel">✕ انصراف</button></div>
         `;
         div.appendChild(row);
         div.appendChild(details);
@@ -7793,6 +7804,8 @@ function renderTasksView(groupId) {
             if (action === 'toggle') { e.stopPropagation(); toggleDone(item.id); return; }
             if (action === 'delete') { e.stopPropagation(); deleteItem(item.id); return; }
             if (action === 'edit') { e.stopPropagation(); editTask(item.id); return; }
+            // 🔧 دکمه «انصراف» — جزئیات تسک را می‌بندد (مانند کلیک روی تسک)
+            if (action === 'cancel') { e.stopPropagation(); toggleExpand(item.id); return; }
             if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox')) return;
             toggleExpand(item.id);
         });
