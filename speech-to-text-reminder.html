@@ -1785,19 +1785,19 @@ body.locked .header-actions button {
 .group-menu-btn:hover { background: rgba(255,255,255,0.4); }
 .group-menu-btn:active { transform: scale(0.92); }
 
-/* منوی کشویی همبرگری — position: fixed تا مستقل از هدر باشد و بریده نشود.
-   موقعیت با جاوا اسکریپت (getBoundingClientRect) دقیقاً زیر هدر تنظیم می‌شود. */
+/* منوی کشویی همبرگری — position: fixed تا مستقل از هدر باشد.
+   موقعیت و عرض با جاوا اسکریپت تنظیم می‌شود (مطابق با عرض هدر).
+   منو مستقیماً زیر هدر باز می‌شود (نه کنار دکمه). */
 .group-menu-dropdown {
     position: fixed;
     background: white;
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    min-width: 240px;
-    max-width: 280px;
     z-index: 10000;
     overflow: hidden;
     display: none;
     direction: rtl;
+    box-sizing: border-box;
 }
 .group-menu-dropdown.active { display: block; animation: menuSlideDown 0.2s ease; }
 @keyframes menuSlideDown {
@@ -3304,7 +3304,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v78-2026-10-31-hamburger-menu-fixed-position-clean-solution';
+const APP_VERSION = 'v79-2026-10-31-hamburger-menu-below-header-full-width-responsive';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5221,20 +5221,21 @@ function toggleGroupMenu(groupId, btnEl) {
         _activeGroupMenu = null;
     }
 
-    // 🔧 موقعیت‌دهی منو با position: fixed — دقیقاً زیر دکمه همبرگر
-    // از getBoundingClientRect برای محاسبهٔ موقعیت دکمه استفاده می‌کنیم.
-    // این روش مستقل از overflow هدر است و منو همیشه قابل مشاهده است.
+    // 🔧 موقعیت‌دهی منو با position: fixed — مستقیماً زیر هدر، با عرض هدر.
+    // از getBoundingClientRect هدر (نه دکمه) استفاده می‌کنیم تا منو دقیقاً
+    // زیر هدر و هم‌عرض با آن باز شود. این یعنی هدر تغییر اندازه نمی‌دهد
+    // و منو از صفحه بیرون نمی‌زند.
     if (btnEl) {
-        const rect = btnEl.getBoundingClientRect();
-        const menuWidth = 260;  // عرض تقریبی منو
-        // در RTL، منو باید به سمت چپ دکمه باز شود (نه راست)
-        let leftPos = rect.right - menuWidth;
-        // اگر منو از سمت چپ صفحه بیرون می‌زد، آن را به لبهٔ چپ بچسبان
-        if (leftPos < 8) leftPos = 8;
-        // موقعیت عمودی: ۶px زیر دکمه
-        const topPos = rect.bottom + 6;
-        menu.style.left = leftPos + 'px';
-        menu.style.top = topPos + 'px';
+        // پیدا کردن هدر (والد دکمه همبرگر)
+        const headerEl = btnEl.closest('.group-tasks-header');
+        if (headerEl) {
+            const rect = headerEl.getBoundingClientRect();
+            // منو هم‌عرض با هدر، مستقیماً زیر آن
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 4) + 'px';
+            menu.style.width = rect.width + 'px';
+            menu.style.maxWidth = rect.width + 'px';
+        }
     }
 
     // باز کردن این منو
