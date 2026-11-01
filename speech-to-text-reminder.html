@@ -1538,11 +1538,10 @@ body { padding-bottom: 30px; }
        نه روی کل viewport. بدون این، ::before با position: absolute نسبت به
        viewport قرار می‌گیرد و یک لایهٔ خاکستری روی کل صفحه می‌اندازد. */
     position: relative;
-    /* 🔧 overflow-y: visible تا منوی همبرگری (که با position: absolute زیر هدر
-       باز می‌شود) بریده نشود و قابل مشاهده باشد. overflow-x: hidden برای جلوگیری
-       از سرریز افقی لایهٔ تیرهٔ عکس. */
-    overflow-x: hidden;
-    overflow-y: visible;
+    /* 🔧 overflow حذف شد — طبق مشخصات CSS، اگر overflow-x: hidden و
+       overflow-y: visible باشند، مرورگر overflow-y را به auto تبدیل می‌کند
+       که باعث بریده شدن منوی همبرگری می‌شود. به‌جای overflow، لایهٔ تیرهٔ
+       عکس با border-radius و position: absolute کنترل می‌شود. */
     /* 🔧 همان استایل گروه‌های صفحهٔ اصلی (group-item) برای یکپارچگی ظاهری */
     transition: transform 0.2s;
     -webkit-user-select: none;
@@ -2182,7 +2181,7 @@ body.locked .header-actions button {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.4);
-    border-radius: 10px;
+    border-radius: 12px;  /* 🔧 مطابق با border-radius هدر (12px) تا از سرریز گوشه‌ها جلوگیری شود */
     z-index: 0;  /* زیر محتوا */
 }
 /* محتوای هدر (دکمه‌ها، عنوان) روی لایهٔ تیره */
@@ -3317,7 +3316,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v76-2026-10-31-fix-hamburger-menu-visibility-in-group-header';
+const APP_VERSION = 'v77-2026-10-31-fix-hamburger-menu-overflow-completely';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8112,7 +8111,9 @@ function renderTasksView(groupId) {
     countHtml += `<span class="group-task-count">${toPersianNumber(notDoneCount)}</span>`;
 
     // چیدمان: back → icon → title (flex:1) → menu → count
-    header.innerHTML = `<div style="position: relative; display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${dropdownHtml}${countHtml}</div>`;
+    // 🔧 منوی کشویی (dropdownHtml) خارج از wrapper داخلی و مستقیماً در هدر
+    // قرار می‌گیرد تا از محدودیت overflow wrapper خارج باشد.
+    header.innerHTML = `<div style="position: relative; display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div>${dropdownHtml}`;
     container.appendChild(header);
 
     if (items.length === 0) {
