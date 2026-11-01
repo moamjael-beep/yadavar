@@ -3310,7 +3310,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v73-2026-10-31-floating-btns-bottom-unify-group-headers';
+const APP_VERSION = 'v74-2026-10-31-fix-urgent-group-badge-count-all-urgent-tasks';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -4153,14 +4153,16 @@ function migrateItem(item) {
     // قبلی که این قانون را نداشتند) هم هنگام بارگذاری پاکسازی شوند:
     // مقادیر pinned، pinnedAt، pinnedOrder و urgent فقط در صورتی کپی
     // می‌شوند که تسک انجام‌نشده باشد.
-    if (item.pinned === true && !out.done) out.pinned = true;
+    // 🔧 بررسی با == (نه ===) تا مقادیر truthy قدیمی (مثل "true" یا 1) هم
+    // به‌عنوان true تلقی شوند.
+    if (item.pinned == true && !out.done) out.pinned = true;
     if (item.pinnedAt && !out.done) out.pinnedAt = item.pinnedAt;
     if (typeof item.pinnedOrder === 'number' && isFinite(item.pinnedOrder) && !out.done) {
         out.pinnedOrder = item.pinnedOrder;
     }
 
-    // 🔧 فیلد فوری (Urgent)
-    if (item.urgent === true && !out.done) out.urgent = true;
+    // 🔧 فیلد فوری (Urgent) — بررسی با == برای پذیرش مقادیر قدیمی
+    if (item.urgent == true && !out.done) out.urgent = true;
 
     // parentId — لینک به والد برای فرزندان تکرارشونده
     if (item.parentId && typeof item.parentId === 'string' && item.parentId !== item.id) {
@@ -7873,8 +7875,9 @@ function renderGroupsView() {
         const showUrgentBadge = o.showUrgentBadge !== false;
         const notDone = groupItems.filter(i => !i.done);
         const notDoneCount = notDone.length;
-        const pinnedCount = notDone.filter(i => i.pinned === true).length;
-        const urgentCount = notDone.filter(i => i.urgent === true).length;
+        // 🔧 بررسی با == true برای پذیرش مقادیر قدیمی
+        const pinnedCount = notDone.filter(i => i.pinned == true).length;
+        const urgentCount = notDone.filter(i => i.urgent == true).length;
         let html = '';
         if (pinnedCount > 0) {
             html += `<span class="group-badge-pinned">📌${toPersianNumber(pinnedCount)}</span>`;
@@ -7903,10 +7906,10 @@ function renderGroupsView() {
 
     // 🔧 "کارهای فوری" (yellow, second — NOT draggable, sticky)
     // این گروه تسک‌هایی که علامت «فوری» خورده‌اند را نمایش می‌دهد
-    // 🔧 در هدر «کارهای فوری» هم فقط تسک‌های فوری از گروه‌های قابل‌مشاهده
-    // در «همه کارها» شمرده می‌شوند — تسک‌های فوری از گروه‌های مخفی‌شده
-    // شامل نمی‌شوند.
-    const urgentItems = allVisibleItems.filter(i => i.urgent === true);
+    // 🔧 در هدر «کارهای فوری»، تمام تسک‌های فوری (از همهٔ گروه‌ها) شمرده
+    // می‌شوند — فارغ از اینکه گروهشان در «همه کارها» مخفی است یا نه.
+    // این با فیلتر گروه «کارهای فوری» در renderTasksView مطابقت دارد.
+    const urgentItems = items.filter(i => i.urgent === true);
     const urgentDiv = document.createElement('div');
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
@@ -7978,7 +7981,8 @@ function renderTasksView(groupId) {
         // 🔧 در گروه «کارهای فوری»، تمام تسک‌های فوری (از همهٔ گروه‌ها)
         // نمایش داده می‌شوند — فارغ از اینکه گروهشان در «همه کارها» مخفی
         // است یا نه. این گروه یک نمای ویژه است که همهٔ فوری‌ها را نشان می‌دهد.
-        items = items.filter(i => i.urgent === true);
+        // 🔧 بررسی با == true برای پذیرش مقادیر قدیمی (مثل "true" یا 1)
+        items = items.filter(i => i.urgent == true);
     } else {
         // گروه‌های سفارشی — فقط تسک‌های همین گروه
         items = items.filter(i => i.groupId === groupId);
@@ -8078,10 +8082,11 @@ function renderTasksView(groupId) {
 
     // 🔧 شمارش تسک‌ها — دایره (انجام‌نشده) + عدد قرمز پین + عدد زرد فوری
     // برای گروه «کارهای فوری»، badge فوری نشان داده نمی‌شود (زیرتکراری است).
+    // 🔧 بررسی با == true برای پذیرش مقادیر قدیمی
     const notDoneItems = items.filter(i => !i.done);
     const notDoneCount = notDoneItems.length;
-    const pinnedCount = notDoneItems.filter(i => i.pinned === true).length;
-    const urgentCount = notDoneItems.filter(i => i.urgent === true).length;
+    const pinnedCount = notDoneItems.filter(i => i.pinned == true).length;
+    const urgentCount = notDoneItems.filter(i => i.urgent == true).length;
     const isUrgentGroup = (groupId === 'urgent');
     let countHtml = '';
     if (pinnedCount > 0) {
