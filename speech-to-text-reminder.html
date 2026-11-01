@@ -247,8 +247,7 @@ body { padding-bottom: 30px; }
 .floating-add-btn {
     position: fixed;
     left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: 20px;
     z-index: 9000;
     width: 56px;
     height: 56px;
@@ -269,7 +268,7 @@ body { padding-bottom: 30px; }
     border: 2px solid rgba(255,255,255,0.4);
 }
 .floating-add-btn:active {
-    transform: translateY(-50%) scale(0.92);
+    transform: scale(0.92);
 }
 .floating-add-btn.recording {
     background: var(--red);
@@ -283,12 +282,12 @@ body { padding-bottom: 30px; }
     pointer-events: none;
 }
 @keyframes floatingPulse {
-    0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
-    50% { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+    50% { transform: scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
 }
 /* در صفحات کوچک، دکمه کمی کوچک‌تر */
 @media (max-width: 480px) {
-    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; }
+    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; bottom: 14px; }
 }
 
 /* 🔧 دکمهٔ شناور افزودن شخص جدید — در صفحه اشخاص نمایش داده می‌شود.
@@ -297,8 +296,7 @@ body { padding-bottom: 30px; }
 .floating-contact-btn {
     position: fixed;
     left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: 20px;
     z-index: 10050;
     width: 56px;
     height: 56px;
@@ -317,10 +315,10 @@ body { padding-bottom: 30px; }
     border: 2px solid rgba(255,255,255,0.4);
 }
 .floating-contact-btn:active {
-    transform: translateY(-50%) scale(0.92);
+    transform: scale(0.92);
 }
 @media (max-width: 480px) {
-    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; }
+    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; bottom: 14px; }
 }
 /* Disabled state for the reset-order button (↩). Used on the groups list
    view AND inside the "همه کارها" group — there's no manual ordering to
@@ -1527,19 +1525,28 @@ body { padding-bottom: 30px; }
     line-height: 1;
 }
 .group-tasks-header {
-    padding: 14px 16px;
-    border-radius: 10px;
+    padding: 16px 20px;
+    border-radius: 12px;
     color: white;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    min-height: 60px;
     /* 🔧 position: relative تا ::before (لایهٔ تیرهٔ عکس) فقط روی هدر قرار بگیرد،
        نه روی کل viewport. بدون این، ::before با position: absolute نسبت به
        viewport قرار می‌گیرد و یک لایهٔ خاکستری روی کل صفحه می‌اندازد. */
     position: relative;
     overflow: hidden;
+    /* 🔧 همان استایل گروه‌های صفحهٔ اصلی (group-item) برای یکپارچگی ظاهری */
+    transition: transform 0.2s;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .back-btn {
     background: rgba(255,255,255,0.25);
@@ -1552,7 +1559,7 @@ body { padding-bottom: 30px; }
     cursor: pointer;
 }
 .group-title {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 700;
     /* flex: 1 pushes the edit/delete buttons AND the count pill to the LEFT
        side (in RTL), matching the groups-list layout where the name is on
@@ -2116,21 +2123,21 @@ body.locked .header-actions button {
 
 /* آیکون/تصویر هدر گروه (نمایش در هدر) */
 .group-header-icon {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 22px;
     flex-shrink: 0;
-    margin-left: 4px;
+    margin-left: 12px;
     background-size: cover;
     background-position: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     /* 🔧 حاشیهٔ سفید برای خوانایی روی عکس پس‌زمینه */
-    border: 2px solid rgba(255,255,255,0.5);
+    border: 2px solid rgba(255,255,255,0.3);
 }
 
 /* دکمه بازگردانی ترتیب در هدر گروه (همچنان مستقل قابل نمایش) */
@@ -3303,7 +3310,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v71-2026-10-31-fix-gray-overlay-covering-tasks';
+const APP_VERSION = 'v73-2026-10-31-floating-btns-bottom-unify-group-headers';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7462,11 +7469,14 @@ function togglePinTask(taskId) {
     const item = items.find(i => i.id === taskId);
     if (!item) return;
 
-    if (item.pinned) {
-        // نپین کردن — 🔧 استفاده از false صریح (نه undefined) تا در JSON
-        // به‌درستی ذخیره شود و رندر به‌طور قطعی کلاس pinned-task را حذف کند.
-        item.pinned = false;
+    if (item.pinned === true) {
+        // 🔧 نپین کردن — فیلدهای pinned کاملاً حذف می‌شوند (delete + null)
+        // تا هیچ اثری از پین باقی نماند و کلاس pinned-task قطعاً حذف شود.
+        try { delete item.pinned; } catch(e) {}
+        item.pinned = null;
+        try { delete item.pinnedAt; } catch(e) {}
         item.pinnedAt = null;
+        try { delete item.pinnedOrder; } catch(e) {}
         item.pinnedOrder = null;
         // حذف position هم برای اینکه به ترتیب لمسی/زمانی برگردد
         try { delete item.position; } catch(e) {}
@@ -7481,7 +7491,7 @@ function togglePinTask(taskId) {
     recalcPinnedOrder(item.groupId || 'all');
     fullRender();
     if (navigator.vibrate) navigator.vibrate(20);
-    showToast(item.pinned ? '📌 پین شد' : '📌 پین برداشته شد');
+    showToast(item.pinned === true ? '📌 پین شد' : '📌 پین برداشته شد');
 }
 
 // محاسبهٔ مجدد pinnedOrder برای تمام پین‌های یک گروه
@@ -7965,12 +7975,10 @@ function renderTasksView(groupId) {
         const visibleGroupIds = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
         items = items.filter(i => visibleGroupIds.has(i.groupId || 'all'));
     } else if (groupId === 'urgent') {
-        // 🔧 در گروه «کارهای فوری»، فقط تسک‌های فوری نمایش داده می‌شوند.
-        // 🔧 اما فقط از گروه‌هایی که showInAll !== false هستند — تسک‌های فوری
-        // از گروه‌های مخفی‌شده در «همه کارها» اینجا هم نمایش داده نمی‌شوند.
-        const groups = getGroups();
-        const visibleGroupIds = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
-        items = items.filter(i => i.urgent === true && visibleGroupIds.has(i.groupId || 'all'));
+        // 🔧 در گروه «کارهای فوری»، تمام تسک‌های فوری (از همهٔ گروه‌ها)
+        // نمایش داده می‌شوند — فارغ از اینکه گروهشان در «همه کارها» مخفی
+        // است یا نه. این گروه یک نمای ویژه است که همهٔ فوری‌ها را نشان می‌دهد.
+        items = items.filter(i => i.urgent === true);
     } else {
         // گروه‌های سفارشی — فقط تسک‌های همین گروه
         items = items.filter(i => i.groupId === groupId);
@@ -8096,9 +8104,11 @@ function renderTasksView(groupId) {
     items.forEach((item) => {
         const level = getUrgencyLevel(item.deadline, item.done);
         const div = document.createElement('div');
-        // 🔧 اگر تسک پین شده، کلاس pinned-task اضافه کن (نوار زرد در سمت راست)
+        // 🔧 اگر تسک پین شده، کلاس pinned-task اضافه کن (نوار آبی در سمت راست)
         // 🔧 اگر تسک فوری است، کلاس urgent-task اضافه کن (نوار زرد در سمت چپ)
-        div.className = `item ${level}` + (expandedId === item.id ? ' expanded' : '') + (item.pinned ? ' pinned-task' : '') + (item.urgent ? ' urgent-task' : '');
+        // 🔧 بررسی دقیق === true تا تسک‌هایی که urgent ندارند یا false شده‌اند
+        // قطعاً نوار زرد نداشته باشند.
+        div.className = `item ${level}` + (expandedId === item.id ? ' expanded' : '') + (item.pinned === true ? ' pinned-task' : '') + (item.urgent === true ? ' urgent-task' : '');
         div.dataset.id = item.id;
 
         const row = document.createElement('div');
@@ -8232,7 +8242,9 @@ function toggleDone(id) {
         item.pinnedAt = null;
         // pinnedOrder را هم پاک می‌کنیم تا ترتیب پین‌ها به‌هم نخورد
         if ('pinnedOrder' in item) { try { delete item.pinnedOrder; } catch(e) {} item.pinnedOrder = null; }
-        item.urgent = false;
+        // 🔧 فوری بودن هم کاملاً حذف می‌شود (delete + null)
+        try { delete item.urgent; } catch(e) {}
+        item.urgent = null;
     } else {
         // EXPLICITLY clear all completion-related fields when reverting.
         // Use BOTH delete AND = null to be absolutely sure the field is cleared.
@@ -8268,17 +8280,18 @@ function toggleTaskUrgent(id) {
     const items = getDB();
     const item = items.find(i => i.id === id);
     if (!item) return;
-    if (item.urgent) {
-        // حذف فوری — 🔧 استفاده از false صریح (نه undefined) تا در JSON
-        // به‌درستی ذخیره شود و رندر به‌طور قطعی کلاس urgent-task را حذف کند.
-        item.urgent = false;
+    if (item.urgent === true) {
+        // 🔧 حذف فوری — فیلد urgent کاملاً حذف می‌شود (delete + null) تا
+        // هیچ اثری از آن باقی نماند و کلاس urgent-task قطعاً حذف شود.
+        try { delete item.urgent; } catch(e) {}
+        item.urgent = null;
     } else {
         // افزودن فوری
         item.urgent = true;
     }
     setDB(items);
     fullRender();
-    showToast(item.urgent ? '🚨 فوری شد' : 'فوری برداشته شد');
+    showToast(item.urgent === true ? '🚨 فوری شد' : 'فوری برداشته شد');
     if (navigator.vibrate) navigator.vibrate(20);
 }
 
