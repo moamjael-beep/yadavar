@@ -1868,6 +1868,26 @@ body.locked .header-actions button {
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
+/* 🔧 پیش‌نمایش عکس پس‌زمینه (جدا از آیکون) */
+.image-preview {
+    width: 100%;
+    height: 80px;
+    border-radius: 10px;
+    background: #f0f0f0;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0;
+    border: 2px dashed #ccc;
+    overflow: hidden;
+}
+.image-preview .image-preview-placeholder {
+    color: #999;
+    font-size: 13px;
+}
+
 /* دکمه‌های انتخاب آیکون */
 /* 🔧 گرید آیکون‌ها کاملاً رسپانسیو است:
    - auto-fill باعث می‌شود به‌طور خودکار به تعداد لازم در هر ردیف قرار بگیرند
@@ -1994,6 +2014,8 @@ body.locked .header-actions button {
     background-size: cover;
     background-position: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    /* 🔧 حاشیهٔ سفید برای خوانایی روی عکس پس‌زمینه */
+    border: 2px solid rgba(255,255,255,0.5);
 }
 
 /* دکمه بازگردانی ترتیب در هدر گروه (همچنان مستقل قابل نمایش) */
@@ -2722,16 +2744,27 @@ body.locked .header-actions button {
             </div>
 
             <div class="group-settings-section">
-                <label class="group-settings-label">آیکون یا عکس هدر</label>
+                <label class="group-settings-label">آیکون گروه</label>
+                <!-- 🔧 پیش‌نمایش آیکون — همیشه آیکون انتخاب‌شده را نشان می‌دهد
+                     (مستقل از عکس پس‌زمینه) -->
                 <div class="icon-preview" id="groupSettingsIconPreview">📋</div>
                 <div class="icon-picker-grid" id="groupSettingsIconGrid"></div>
+            </div>
+
+            <div class="group-settings-section">
+                <label class="group-settings-label">عکس پس‌زمینه هدر</label>
+                <!-- 🔧 پیش‌نمایش عکس پس‌زمینه — جدا از آیکون.
+                     اگر عکس باشد، تصویر کوچک نشان داده می‌شود؛ وگرنه placeholder. -->
+                <div class="image-preview" id="groupSettingsImagePreview">
+                    <span class="image-preview-placeholder">بدون عکس</span>
+                </div>
                 <div class="image-action-btns">
                     <button class="image-action-btn" onclick="document.getElementById('groupSettingsImageInput').click()">📷 آپلود عکس</button>
                     <button class="image-action-btn danger" onclick="clearGroupHeaderImage()">🗑 حذف عکس</button>
                 </div>
                 <input type="file" id="groupSettingsImageInput" accept="image/*" style="display:none" onchange="onGroupHeaderImageSelected(event)">
                 <div style="margin-top: 8px; font-size: 11px; color: #888; text-align: center;">
-                    عکس به‌صورت پس‌زمینهٔ هدر نمایش داده می‌شود
+                    عکس فقط به‌عنوان پس‌زمینهٔ هدر استفاده می‌شود (آیکون جداگانه است)
                 </div>
             </div>
 
@@ -3141,7 +3174,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v53-2026-10-31-fix-edit-buttons-visibility-offline-mode';
+const APP_VERSION = 'v54-2026-10-31-separate-icon-and-background-image';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5098,6 +5131,8 @@ function openGroupSettings(groupId) {
 
     // به‌روزرسانی پیش‌نمایش آیکون
     updateGroupIconPreview();
+    // 🔧 به‌روزرسانی پیش‌نمایش عکس پس‌زمینه (جدا از آیکون)
+    updateGroupImagePreview();
 
     // به‌روزرسانی toggle showInAll
     const toggle = document.getElementById('groupSettingsShowInAll');
@@ -5116,29 +5151,43 @@ function openGroupSettings(groupId) {
 // پس عکس را در این متغیر موقت نگه می‌داریم و در saveGroupSettings از آن استفاده می‌کنیم.
 let _tempHeaderImage = null;
 
-// به‌روزرسانی پیش‌نمایش آیکون (با توجه به آیکون انتخاب‌شده یا عکس)
+// به‌روزرسانی پیش‌نمایش آیکون — همیشه آیکون انتخاب‌شده را نشان می‌دهد.
+// 🔧 طبق درخواست کاربر: آیکون و عکس کاملاً مستقل هستند. آیکون در جای خودش
+// نمایش داده می‌شود و عکس در پیش‌نمایش جداگانهٔ عکس پس‌زمینه.
 function updateGroupIconPreview() {
     const preview = document.getElementById('groupSettingsIconPreview');
     const selectedIcon = document.querySelector('.icon-option.selected');
     if (!preview) return;
-
-    // 🔧 اگر عکس آپلود شده (در متغیر موقت)، آن را نشان بده
-    if (_tempHeaderImage) {
-        preview.style.backgroundImage = 'url(' + _tempHeaderImage + ')';
-        preview.textContent = '';
+    // پاک کردن پس‌زمینهٔ preview آیکون (دیگر عکس اینجا نشان داده نمی‌شود)
+    preview.style.backgroundImage = '';
+    if (selectedIcon) {
+        preview.textContent = selectedIcon.dataset.icon;
     } else {
-        // بررسی عکس موجود گروه
+        const group = getGroupById(_groupSettingsTargetId);
+        preview.textContent = (group && group.headerIcon) ? group.headerIcon : '📋';
+    }
+}
+
+// 🔧 به‌روزرسانی پیش‌نمایش عکس پس‌زمینه (جدا از آیکون)
+function updateGroupImagePreview() {
+    const preview = document.getElementById('groupSettingsImagePreview');
+    if (!preview) return;
+    // تشخیص عکس فعلی: اول متغیر موقت، بعد عکس موجود گروه
+    let imageUrl = '';
+    if (_tempHeaderImage) {
+        imageUrl = _tempHeaderImage;
+    } else {
         const group = getGroupById(_groupSettingsTargetId);
         if (group && group.headerImage) {
-            preview.style.backgroundImage = 'url(' + group.headerImage + ')';
-            preview.textContent = '';
-        } else if (selectedIcon) {
-            preview.style.backgroundImage = '';
-            preview.textContent = selectedIcon.dataset.icon;
-        } else if (group && group.headerIcon) {
-            preview.style.backgroundImage = '';
-            preview.textContent = group.headerIcon;
+            imageUrl = group.headerImage;
         }
+    }
+    if (imageUrl) {
+        preview.style.backgroundImage = 'url(' + imageUrl + ')';
+        preview.innerHTML = '';
+    } else {
+        preview.style.backgroundImage = '';
+        preview.innerHTML = '<span class="image-preview-placeholder">بدون عکس</span>';
     }
 }
 
@@ -5155,7 +5204,7 @@ function onGroupHeaderImageSelected(event) {
             const compressed = compressImage(img, 500 * 1024, 800);
             // 🔧 ذخیره در متغیر موقت (نه روی group که یک کپی است)
             _tempHeaderImage = compressed;
-            updateGroupIconPreview();
+            updateGroupImagePreview();
             showToast('عکس با موفقیت بارگذاری شد ✓');
         };
         img.onerror = function() {
@@ -5226,7 +5275,7 @@ function compressImage(img, maxSize, maxDim) {
 function clearGroupHeaderImage() {
     // 🔧 پاک کردن متغیر موقت — در saveGroupSettings خالی ذخیره می‌شود
     _tempHeaderImage = '';
-    updateGroupIconPreview();
+    updateGroupImagePreview();
     showToast('عکس حذف شد (برای ذخیره، دکمهٔ «ذخیره» را بزنید)');
 }
 
@@ -7559,18 +7608,13 @@ function renderGroupsView() {
 
     container.innerHTML = '';
 
-    // 🔧 تابع کمکی: ساخت HTML آیکون یا عکس گروه برای نمایش در هدر
-    // اگر گروه عکس دارد → عکس به‌صورت پس‌زمینه نمایش داده می‌شود
-    // اگر نه → آیکون (اموجی) در یک دایره نمایش داده می‌شود
+    // 🔧 تابع کمکی: ساخت HTML آیکون گروه برای نمایش در هدر
+    // 🔧 طبق درخواست کاربر: آیکون (اموجی) همیشه در دایرهٔ آیکون نمایش داده
+    // می‌شود. عکس فقط به‌صورت پس‌زمینهٔ کل هدر استفاده می‌شود و جای آیکون
+    // را نمی‌گیرد.
     function getGroupIconHtml(group) {
-        if (group.headerImage) {
-            // عکس به‌صورت پس‌زمینه دایره‌ای
-            return `<div class="group-list-icon" style="background-image: url('${group.headerImage}');"></div>`;
-        } else if (group.headerIcon) {
-            // آیکون اموجی
-            return `<div class="group-list-icon"><span>${group.headerIcon}</span></div>`;
-        }
-        return '';
+        const icon = group.headerIcon || '📋';
+        return `<div class="group-list-icon"><span>${icon}</span></div>`;
     }
 
     // "همه کارها" (green, always first — NOT draggable). We add a marker
@@ -7718,8 +7762,10 @@ function renderTasksView(groupId) {
         header.style.background = `linear-gradient(135deg, ${group.color}, ${group.color}DD)`;
     }
 
-    // آیکون هدر (در کنار عنوان)
-    const iconHtml = (group.headerIcon && !group.headerImage)
+    // 🔧 آیکون هدر (در کنار عنوان) — همیشه نمایش داده می‌شود، حتی اگر
+    // عکس پس‌زمینه تنظیم شده باشد. عکس فقط پس‌زمینه است و جای آیکون را
+    // نمی‌گیرد.
+    const iconHtml = group.headerIcon
         ? `<div class="group-header-icon">${group.headerIcon}</div>`
         : '';
 
