@@ -3305,7 +3305,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v80-2026-10-31-hamburger-menu-body-append-fixed-positioning';
+const APP_VERSION = 'v81-2026-10-31-close-hamburger-menu-on-back-button';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7693,6 +7693,11 @@ function closeModalByType(type) {
 window.addEventListener('popstate', (e) => {
     const state = e.state || { view: 'groups' };
 
+    // 🔧 اگر منوی همبرگری باز است، آن را ببست
+    if (typeof _activeGroupMenu !== 'undefined' && _activeGroupMenu) {
+        closeGroupMenu();
+    }
+
     // ===== Modal handling =====
     // If ANY modal is open, close ONLY the topmost one. This handles:
     //   1. Single modal open + back pressed → modal closes, underlying view stays.
@@ -8225,6 +8230,10 @@ function renderTasksView(groupId) {
 }
 
 function goToGroups() {
+    // 🔧 اگر منوی همبرگری باز است، ابتدا آن را ببند
+    if (typeof _activeGroupMenu !== 'undefined' && _activeGroupMenu) {
+        closeGroupMenu();
+    }
     // If we're inside a group's tasks view, use history.back() so that
     // popstate restores the previous (groups) view. This makes the in-app
     // ◄ back button behave exactly like the mobile hardware back button.
