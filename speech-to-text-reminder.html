@@ -462,13 +462,16 @@ body { padding-bottom: 30px; }
    - کم‌رنگ وقتی پین نیست (opacity: 0.4)
    - پررنگ وقتی پین شده (opacity: 1, با چرخش و رنگ زرد)
    - با کلیک روی آن، تسک پین/نپین می‌شود */
+/* 🔧 دکمه پین — کوچک‌تر، داخل یک دایره خاکستری روشن.
+   وقتی پین نیست: دایره خاکستری روشن، آیکون کم‌رنگ.
+   وقتی پین شده: دایره سفید/آبی روشن، آیکون پررنگ با چرخش. */
 .task-pin-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border: none;
-    background: transparent;
+    background: rgba(200, 200, 200, 0.35);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 13px;
     line-height: 1;
     display: flex;
     align-items: center;
@@ -477,12 +480,12 @@ body { padding-bottom: 30px; }
     padding: 0;
     border-radius: 50%;
     transition: transform 0.2s, background 0.2s, opacity 0.2s;
-    opacity: 0.4;  /* کم‌رنگ وقتی پین نیست */
+    opacity: 0.55;  /* کم‌رنگ وقتی پین نیست */
     -webkit-tap-highlight-color: transparent;
 }
 .task-pin-btn:hover {
-    opacity: 0.7;
-    background: rgba(255,255,255,0.15);
+    opacity: 0.8;
+    background: rgba(200, 200, 200, 0.5);
 }
 .task-pin-btn:active {
     transform: scale(0.85);
@@ -490,15 +493,17 @@ body { padding-bottom: 30px; }
 /* وقتی تسک پین شده است */
 .task-pin-btn.pinned {
     opacity: 1;  /* پررنگ */
+    background: rgba(33, 150, 243, 0.2);  /* دایره آبی روشن */
     transform: rotate(-40deg);  /* چرخش آیکون پین */
-    filter: drop-shadow(0 0 4px rgba(255, 235, 59, 0.8));
 }
 .task-pin-btn.pinned:hover {
-    background: rgba(255, 235, 59, 0.2);
+    background: rgba(33, 150, 243, 0.35);
 }
-/* نشانگر پین شده بودن تسک — یک نوار رنگی کوچک در سمت راست تسک */
+/* نشانگر پین شده بودن تسک — یک نوار آبی در سمت راست تسک.
+   🔧 رنگ آبی (نه زرد) و سمت راست (نه چپ) انتخاب شده تا با نشانگر فوری
+   (زرد، سمت چپ) اشتباه گرفته نشود. */
 .item.pinned-task {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFEB3B;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset -4px 0 0 #2196F3;
 }
 .item-done-mark {
     width: 22px;
@@ -1501,17 +1506,11 @@ body { padding-bottom: 30px; }
     cursor: pointer;
     /* 🔧 بوردر مشکی ضخیم برای گروه‌های «همه کارها» و «کارهای فوری» */
     border: 3px solid #000 !important;
-    /* 🔧 sticky — با اسکرول گروه‌ها به پایین، این دو گروه ثابت می‌مانند */
-    position: sticky;
-    position: -webkit-sticky;
-    top: 78px;  /* زیر هدر اصلی (~70px) با کمی فاصله */
-    z-index: 50;
+    /* 🔧 طبق درخواست کاربر: این گروه‌ها دیگر sticky نیستند — فضای خودشان
+       را در جریان سند دارند و هیچ گروهی به زیر آن‌ها نمی‌خزند. همراه با
+       بقیهٔ گروه‌ها به‌طور طبیعی اسکرول می‌شوند. */
 }
-/* 🔧 گروه «کارهای فوری» زیر «همه کارها» قرار می‌گیرد */
-.group-item-fixed.group-urgent {
-    top: 138px;  /* زیر «همه کارها» (~60px ارتفاع + 78px top) */
-}
-/* 🔧 پس‌زمینهٔ کمی مات برای خوانایی هنگام اسکرول */
+/* 🔧 پس‌زمینهٔ کمی مات برای خوانایی */
 .group-item-fixed {
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
@@ -1534,18 +1533,14 @@ body { padding-bottom: 30px; }
     padding: 14px 16px;
     border-radius: 10px;
     color: white;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
     gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    /* 🔒 فیکس شدن هدر گروه هنگام اسکرول — مثل هدر اصلی برنامه بالای صفحه ثابت می‌ماند.
-       این کار با position: sticky انجام می‌شود. top: 70px یعنی هدر زیر هدر اصلی
-       (که ارتفاعش حدود 70px است) قرار می‌گیرد. z-index بالا برای قرار گرفتن روی تسک‌ها. */
-    position: sticky;
-    position: -webkit-sticky;
-    top: 70px;
-    z-index: 100;
+    /* 🔧 طبق درخواست کاربر: هدر گروه دیگر sticky نیست — تسک‌ها هنگام اسکرول
+       به زیر هدر نمی‌خزند و در فضای خودشان پنهان می‌شوند. هدر همراه با
+       تسک‌ها به‌طور طبیعی اسکرول می‌شود. */
 }
 .back-btn {
     background: rgba(255,255,255,0.25);
@@ -2209,9 +2204,67 @@ body.locked .header-actions button {
 .urgent-checkbox-label span {
     line-height: 1.4;
 }
-/* وقتی تسک فوری است، یک نوار زرد در سمت چپ نشان بده */
+/* وقتی تسک فوری است، یک نوار زرد در سمت چپ نشان بده.
+   🔧 دیگر !important نیست تا وقتی تسک هم پین و هم فوری است، هر دو
+   نوار (آبی راست + زرد چپ) همزمان نمایش داده شوند. */
 .item.urgent-task {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107;
+}
+/* 🔧 وقتی تسک هم پین و هم فوری است: هر دو نوار نمایش داده می‌شود
+   (آبی سمت راست + زرد سمت چپ) */
+.item.pinned-task.urgent-task {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107, inset -4px 0 0 #2196F3;
+}
+
+/* 🔧 دکمه پین در جزئیات تسک — پایین، کنار زمان باقی‌مانده/گذشته.
+   همان استایل دکمه پین کوچک اما در سایز ثابت برای جزئیات. */
+.detail-pin-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(200, 200, 200, 0.35);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+.detail-pin-btn:hover {
+    background: rgba(200, 200, 200, 0.5);
+}
+.detail-pin-btn:active {
+    transform: scale(0.85);
+}
+.detail-pin-btn.pinned {
+    background: rgba(33, 150, 243, 0.2);
+    transform: rotate(-40deg);
+}
+.detail-pin-btn.pinned:hover {
+    background: rgba(33, 150, 243, 0.35);
+}
+/* 🔧 ردیف پایین جزئیات: زمان باقی‌مانده/گذشته + دکمه پین کنار هم */
+.detail-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 8px 4px;
+}
+.detail-remaining {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.08);
+    flex: 1;
+    text-align: center;
 }
 
 /* ============ 👥 بانک اطلاعاتی اشخاص (CRM) ============ */
@@ -3302,7 +3355,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v57-2026-10-31-floating-contact-add-button';
+const APP_VERSION = 'v62-2026-10-31-hide-hidden-group-tasks-from-all-badges';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -4140,14 +4193,19 @@ function migrateItem(item) {
     }
 
     // 🔧 سیستم پین (Pin)
-    if (item.pinned === true) out.pinned = true;
-    if (item.pinnedAt) out.pinnedAt = item.pinnedAt;
-    if (typeof item.pinnedOrder === 'number' && isFinite(item.pinnedOrder)) {
+    // 🔧 طبق درخواست کاربر: تسک‌های انجام‌شده نباید پین‌شده یا فوری باشند.
+    // این قانون در migrateItem اعمال می‌شود تا داده‌های قدیمی (از نسخه‌های
+    // قبلی که این قانون را نداشتند) هم هنگام بارگذاری پاکسازی شوند:
+    // مقادیر pinned، pinnedAt، pinnedOrder و urgent فقط در صورتی کپی
+    // می‌شوند که تسک انجام‌نشده باشد.
+    if (item.pinned === true && !out.done) out.pinned = true;
+    if (item.pinnedAt && !out.done) out.pinnedAt = item.pinnedAt;
+    if (typeof item.pinnedOrder === 'number' && isFinite(item.pinnedOrder) && !out.done) {
         out.pinnedOrder = item.pinnedOrder;
     }
 
     // 🔧 فیلد فوری (Urgent)
-    if (item.urgent === true) out.urgent = true;
+    if (item.urgent === true && !out.done) out.urgent = true;
 
     // parentId — لینک به والد برای فرزندان تکرارشونده
     if (item.parentId && typeof item.parentId === 'string' && item.parentId !== item.id) {
@@ -7230,12 +7288,10 @@ function saveNewOrder(draggedId) {
         }
     });
 
-    // 🔧 ذخیرهٔ ترتیب پین‌ها (pinnedOrder)
-    // ترتیب در DOM همان ترتیب نمایش است — پین‌ها به همین ترتیب ذخیره می‌شوند
-    pinnedIds.forEach((id, idx) => {
-        const it = items.find(i => i.id === id);
-        if (it) it.pinnedOrder = idx;
-    });
+    // 🔧 ذخیرهٔ ترتیب پین‌ها (pinnedOrder) — ❌ حذف شد.
+    // طبق درخواست کاربر: ترتیب پین‌ها همیشه بر اساس زمان پین‌شدن (pinnedAt)
+    // تعیین می‌شود. drag-drop دیگر ترتیب پین‌ها را تغییر نمی‌دهد.
+    // فقط ترتیب غیرپین‌ها ذخیره می‌شود.
 
     // 🔧 ذخیرهٔ ترتیب لمسی غیرپین‌ها (position)
     notDoneIds.forEach((id, idx) => {
@@ -7386,16 +7442,13 @@ function togglePinTask(taskId) {
     if (!item) return;
 
     if (item.pinned) {
-        // نپین کردن — حذف pinned, pinnedAt, pinnedOrder
-        try { delete item.pinned; } catch(e) {}
-        item.pinned = undefined;
-        try { delete item.pinnedAt; } catch(e) {}
-        item.pinnedAt = undefined;
-        try { delete item.pinnedOrder; } catch(e) {}
-        item.pinnedOrder = undefined;
+        // نپین کردن — 🔧 استفاده از false صریح (نه undefined) تا در JSON
+        // به‌درستی ذخیره شود و رندر به‌طور قطعی کلاس pinned-task را حذف کند.
+        item.pinned = false;
+        item.pinnedAt = null;
+        item.pinnedOrder = null;
         // حذف position هم برای اینکه به ترتیب لمسی/زمانی برگردد
         try { delete item.position; } catch(e) {}
-        item.position = undefined;
     } else {
         // پین کردن
         item.pinned = true;
@@ -7411,9 +7464,11 @@ function togglePinTask(taskId) {
 }
 
 // محاسبهٔ مجدد pinnedOrder برای تمام پین‌های یک گروه
-// پین‌ها به ترتیب زمان پین شدن (pinnedAt) مرتب می‌شوند:
-// آخرین پین‌شده (pinnedAt بزرگ‌تر) → pinnedOrder کمتر (بالاتر در لیست)
-// کاربر می‌تواند بعداً با drag-drop ترتیب پین‌ها را تغییر دهد
+// 🔧 طبق درخواست کاربر: پین‌ها همیشه بر اساس زمان پین شدن مرتب می‌شوند.
+// تسکی که تازه پین شده همیشه بالاترین (pinnedOrder = 0) قرار می‌گیرد،
+// فارغ از زمان سررسید. فقط تسکی که بعداً پین شود بالاتر می‌رود.
+// ترتیب دستی (drag-drop) دیگر برای پین‌ها اعمال نمی‌شود — همیشه زمان
+// پین ملاک است.
 function recalcPinnedOrder(groupId) {
     const items = getDB();
     let pinnedItems;
@@ -7425,18 +7480,14 @@ function recalcPinnedOrder(groupId) {
     }
     // مرتب‌سازی بر اساس pinnedAt (نزولی: آخرین پین‌شده اول)
     pinnedItems.sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
-    // اگر کاربر قبلاً با drag-drop ترتیب پین‌ها را تغییر داده (pinnedOrder دارد),
-    // آن ترتیب را حفظ کن. ولی برای پین‌های جدید که pinnedOrder ندارند،
-    // به‌طور خودکار بر اساس pinnedAt تنظیم کن.
-    const hasManualOrder = pinnedItems.some(i => typeof i.pinnedOrder === 'number');
-    if (!hasManualOrder) {
-        // هیچ ترتیب دستی نیست — بر اساس pinnedAt تنظیم کن
-        pinnedItems.forEach((item, idx) => {
-            const orig = items.find(i => i.id === item.id);
-            if (orig) orig.pinnedOrder = idx;
-        });
-        setDB(items);
-    }
+    // 🔧 همیشه pinnedOrder را بر اساس ترتیب pinnedAt تنظیم کن.
+    // این تضمین می‌کند که تسک تازه پین‌شده همیشه pinnedOrder = 0 (بالاترین)
+    // می‌گیرد و بقیه یک واحد پایین‌تر شیفت می‌کنند.
+    pinnedItems.forEach((item, idx) => {
+        const orig = items.find(i => i.id === item.id);
+        if (orig) orig.pinnedOrder = idx;
+    });
+    setDB(items);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -7807,17 +7858,24 @@ function renderGroupsView() {
     // "همه کارها" (green, always first — NOT draggable). We add a marker
     // class so the drag-drop Sortable can recognize it as a fixed item
     // and refuse to drag it or move items above it.
+    // 🔧 در هدر «همه کارها»، فقط تسک‌های گروه‌هایی که showInAll !== false
+    // هستند شمرده می‌شوند — تسک‌های پین/فوری گروه‌های مخفی‌شده شامل نمی‌شوند.
+    const visibleGroupIdsForAll = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
+    const allVisibleItems = items.filter(i => visibleGroupIdsForAll.has(i.groupId || 'all'));
     const allDiv = document.createElement('div');
     allDiv.className = 'group-item group-item-fixed';
     allDiv.dataset.groupId = 'all';
     allDiv.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
-    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(items)}</div>`;
+    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems)}</div>`;
     allDiv.onclick = () => openGroupView('all');
     container.appendChild(allDiv);
 
     // 🔧 "کارهای فوری" (yellow, second — NOT draggable, sticky)
     // این گروه تسک‌هایی که علامت «فوری» خورده‌اند را نمایش می‌دهد
-    const urgentItems = items.filter(i => i.urgent === true);
+    // 🔧 در هدر «کارهای فوری» هم فقط تسک‌های فوری از گروه‌های قابل‌مشاهده
+    // در «همه کارها» شمرده می‌شوند — تسک‌های فوری از گروه‌های مخفی‌شده
+    // شامل نمی‌شوند.
+    const urgentItems = allVisibleItems.filter(i => i.urgent === true);
     const urgentDiv = document.createElement('div');
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
@@ -7886,8 +7944,12 @@ function renderTasksView(groupId) {
         const visibleGroupIds = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
         items = items.filter(i => visibleGroupIds.has(i.groupId || 'all'));
     } else if (groupId === 'urgent') {
-        // 🔧 در گروه «کارهای فوری»، فقط تسک‌هایی که urgent === true هستند نمایش داده می‌شوند
-        items = items.filter(i => i.urgent === true);
+        // 🔧 در گروه «کارهای فوری»، فقط تسک‌های فوری نمایش داده می‌شوند.
+        // 🔧 اما فقط از گروه‌هایی که showInAll !== false هستند — تسک‌های فوری
+        // از گروه‌های مخفی‌شده در «همه کارها» اینجا هم نمایش داده نمی‌شوند.
+        const groups = getGroups();
+        const visibleGroupIds = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
+        items = items.filter(i => i.urgent === true && visibleGroupIds.has(i.groupId || 'all'));
     } else {
         // گروه‌های سفارشی — فقط تسک‌های همین گروه
         items = items.filter(i => i.groupId === groupId);
@@ -8065,6 +8127,8 @@ function renderTasksView(groupId) {
 
         const details = document.createElement('div');
         details.className = 'item-details';
+        // 🔧 زمان باقی‌مانده/گذشته برای نمایش در ردیف پایین جزئیات
+        const remainingText = toPersianDigits(formatRemaining(item.deadline, item.done));
         details.innerHTML = `
             <div class="detail-row"><span class="detail-label">ساخته شد:</span><span class="detail-value">${toPersianDigits(toJalaliFull(item.createdAt))}</span></div>
             <div class="deadline-box"><div class="detail-row"><span class="detail-label">سررسید:</span><span class="detail-value">${toPersianDigits(toJalaliFull(item.deadline))}</span></div><div class="detail-row"><span class="detail-label">روز سررسید:</span><span class="detail-value">${toJalaliLong(item.deadline)}</span></div></div>
@@ -8072,6 +8136,10 @@ function renderTasksView(groupId) {
             ${item.completedAt ? `<div class="detail-row"><span class="detail-label">روز انجام:</span><span class="detail-value">${toJalaliLong(item.completedAt)}</span></div>` : ''}
             <div class="detail-row group-selector-row"><span class="detail-label">گروه:</span><select class="group-selector" onchange="changeTaskGroup('${item.id}', this.value)">${groupOpts}</select></div>
             <div class="detail-row urgent-toggle-row"><span class="detail-label">🚨 فوری:</span><label class="urgent-checkbox-label"><input type="checkbox" class="urgent-checkbox" ${item.urgent ? 'checked' : ''} onchange="toggleTaskUrgent('${item.id}')"> <span>این تسک در گروه «کارهای فوری» نمایش داده شود</span></label></div>
+            <div class="detail-bottom-row">
+                <span class="detail-remaining">${remainingText}</span>
+                <button class="detail-pin-btn ${item.pinned ? 'pinned' : ''}" data-action="pin" title="${item.pinned ? 'حذف پین' : 'پین کردن'}">📌</button>
+            </div>
             <div class="item-actions"><button class="action-btn" data-action="edit">✏️ ویرایش</button><button class="action-btn" data-action="toggle">${item.done ? '↩ بازگردانی' : '✓ انجام شد'}</button><button class="action-btn danger" data-action="delete">🗑 حذف</button><button class="action-btn secondary" data-action="cancel">✕ انصراف</button></div>
         `;
         div.appendChild(row);
@@ -8083,7 +8151,9 @@ function renderTasksView(groupId) {
             if (action === 'edit') { e.stopPropagation(); editTask(item.id); return; }
             // 🔧 دکمه «انصراف» — جزئیات تسک را می‌بندد (مانند کلیک روی تسک)
             if (action === 'cancel') { e.stopPropagation(); toggleExpand(item.id); return; }
-            if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox')) return;
+            // 🔧 دکمه پین در جزئیات — پین/نپین می‌کند
+            if (action === 'pin') { e.stopPropagation(); togglePinTask(item.id); return; }
+            if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox') || e.target.closest('.detail-pin-btn')) return;
             toggleExpand(item.id);
         });
         container.appendChild(div);
@@ -8143,6 +8213,13 @@ function toggleDone(id) {
     if (item.done) {
         // Set completion date/time at the moment of clicking "Done"
         item.completedAt = new Date().toISOString();
+        // 🔧 طبق درخواست کاربر: هنگام انجام شدن تسک، پین‌شدگی و فوری بودن
+        // آن پاک شوند. تسک انجام‌شده دیگر نیازی به پین یا فوری بودن ندارد.
+        item.pinned = false;
+        item.pinnedAt = null;
+        // pinnedOrder را هم پاک می‌کنیم تا ترتیب پین‌ها به‌هم نخورد
+        if ('pinnedOrder' in item) { try { delete item.pinnedOrder; } catch(e) {} item.pinnedOrder = null; }
+        item.urgent = false;
     } else {
         // EXPLICITLY clear all completion-related fields when reverting.
         // Use BOTH delete AND = null to be absolutely sure the field is cleared.
@@ -8179,9 +8256,9 @@ function toggleTaskUrgent(id) {
     const item = items.find(i => i.id === id);
     if (!item) return;
     if (item.urgent) {
-        // حذف فوری
-        try { delete item.urgent; } catch(e) {}
-        item.urgent = undefined;
+        // حذف فوری — 🔧 استفاده از false صریح (نه undefined) تا در JSON
+        // به‌درستی ذخیره شود و رندر به‌طور قطعی کلاس urgent-task را حذف کند.
+        item.urgent = false;
     } else {
         // افزودن فوری
         item.urgent = true;
