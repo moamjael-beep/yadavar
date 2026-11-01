@@ -238,6 +238,90 @@ body { padding-bottom: 30px; }
     filter: grayscale(0.7);
     pointer-events: none;
 }
+
+/* 🔧 دکمهٔ شناور افزودن تسک (floating add button)
+   - عیناً همان استایل دکمهٔ + هدر را دارد
+   - ثابت (fixed) در وسط سمت چپ صفحه
+   - فقط در حالت نمایش تسک‌های یک گروه (tasks view) ظاهر می‌شود
+   - در حالت ضبط، قرمز و پالس می‌زند (مانند دکمهٔ هدر) */
+.floating-add-btn {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 9000;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 32px;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    display: none;  /* به‌صورت پیش‌فرض مخفی — فقط در tasks view نمایش داده می‌شود */
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    /* 🔧 حاشیهٔ سفید نازک برای تمایز از پس‌زمینه */
+    border: 2px solid rgba(255,255,255,0.4);
+}
+.floating-add-btn:active {
+    transform: translateY(-50%) scale(0.92);
+}
+.floating-add-btn.recording {
+    background: var(--red);
+    color: white;
+    animation: floatingPulse 1.2s infinite;
+}
+.floating-add-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(0.7);
+    pointer-events: none;
+}
+@keyframes floatingPulse {
+    0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+    50% { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+}
+/* در صفحات کوچک، دکمه کمی کوچک‌تر */
+@media (max-width: 480px) {
+    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; }
+}
+
+/* 🔧 دکمهٔ شناور افزودن شخص جدید — در صفحه اشخاص نمایش داده می‌شود.
+   z-index بالاتر از contactsOverlay (10000) اما پایین‌تر از contactForm (10500)
+   تا وقتی فرم شخص باز می‌شود، زیر فرم قرار گیرد. */
+.floating-contact-btn {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10050;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    display: none;  /* به‌صورت پیش‌فرض مخفی — فقط در صفحه اشخاص نمایش داده می‌شود */
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 2px solid rgba(255,255,255,0.4);
+}
+.floating-contact-btn:active {
+    transform: translateY(-50%) scale(0.92);
+}
+@media (max-width: 480px) {
+    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; }
+}
 /* Disabled state for the reset-order button (↩). Used on the groups list
    view AND inside the "همه کارها" group — there's no manual ordering to
    reset in either case. */
@@ -1370,11 +1454,40 @@ body { padding-bottom: 30px; }
     z-index: 1;
 }
 .group-count {
+    /* 🔧 دایره‌ای — تعداد تسک‌های انجام‌نشدهٔ گروه (بدون احتساب انجام‌شده‌ها) */
     background: rgba(255,255,255,0.25);
-    padding: 4px 12px;
-    border-radius: 20px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    border-radius: 50%;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+/* 🔧 اعداد پین‌شده (قرمز) و فوری (زرد) بدون دایره، در کنار شمارندهٔ اصلی */
+.group-badge-pinned {
+    color: #FF5252;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+.group-badge-urgent {
+    color: #FFD600;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-right: 8px;  /* 🔧 فاصله از عدد پین‌شده */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+/* 🔧 گروهی که از نمایش در «همه کارها» منع شده — بوردر نقطه‌چین مشکی */
+.group-item-hidden-from-all {
+    border: 3px dashed #000 !important;
+    box-sizing: border-box;
 }
 /* Draggable group items (custom groups in the groups list). Slightly
    different cursor + touch-action so users can long-press to drag. */
@@ -1495,14 +1608,22 @@ body { padding-bottom: 30px; }
 }
 .group-delete-btn:hover { background: rgba(244,67,54,0.6); }
 .group-delete-btn:active { transform: scale(0.92); }
-/* Task count in the group header — pill badge style, matching the groups-list
-   .group-count badge (same background, padding, border-radius, font). */
+/* Task count in the group header — circular badge, matching the groups-list
+   .group-count badge. 🔧 فقط تعداد تسک‌های انجام‌نشده (بدون احتساب انجام‌شده‌ها)
+   در دایره نمایش داده می‌شود. اعداد پین (قرمز) و فوری (زرد) بدون دایره
+   در کنار آن قرار می‌گیرند. */
 .group-task-count {
     background: rgba(255,255,255,0.25);
-    padding: 4px 12px;
-    border-radius: 20px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    border-radius: 50%;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     flex-shrink: 0;
 }
 .group-selector-row { margin-top: 4px; }
@@ -2631,6 +2752,13 @@ body.locked .header-actions button {
     </div>
 </div>
 
+<!-- 🔧 دکمهٔ شناور افزودن تسک — فقط در حالت نمایش تسک‌های یک گروه ظاهر می‌شود.
+     عیناً همان عملکرد دکمهٔ + هدر را دارد ولی در وسط سمت چپ صفحه شناور است. -->
+<button class="floating-add-btn" id="floatingAddBtn" onclick="startAdding()" title="افزودن یادآور">+</button>
+
+<!-- 🔧 دکمهٔ شناور افزودن شخص جدید — فقط در صفحه اشخاص ظاهر می‌شود. -->
+<button class="floating-contact-btn" id="floatingContactBtn" onclick="openContactForm()" title="افزودن شخص جدید">➕</button>
+
 <div class="container" id="container">
     <div class="empty">
         <div class="empty-icon">🎤</div>
@@ -3174,7 +3302,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v54-2026-10-31-separate-icon-and-background-image';
+const APP_VERSION = 'v57-2026-10-31-floating-contact-add-button';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5421,6 +5549,9 @@ function initRecognition() {
         if (isRecording) {
             isRecording = false;
             document.getElementById('addBtn').classList.remove('recording');
+            // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+            const fab = document.getElementById('floatingAddBtn');
+            if (fab) fab.classList.remove('recording');
             if (currentSessionText.trim()) {
                 allFinalText = (allFinalText + ' ' + currentSessionText).trim().replace(/\s+/g, ' ');
                 currentSessionText = '';
@@ -5474,6 +5605,9 @@ function initRecognition() {
                             console.error('Restart failed twice', e2);
                             isRecording = false;
                             document.getElementById('addBtn')?.classList.remove('recording');
+                            // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+                            const fabR = document.getElementById('floatingAddBtn');
+                            if (fabR) fabR.classList.remove('recording');
                             document.getElementById('itemText').value = addNumericAfterWords(allFinalText);
                             showFormSection(true);
                             showToast('ضبط قطع شد. می‌توانید متن را تایپ کنید یا دوباره ضبط کنید.');
@@ -5534,6 +5668,9 @@ function startRecording() {
     document.getElementById('reRecordBtn').style.display = 'none';
     document.getElementById('saveBtn').style.display = 'none';
     document.getElementById('addBtn').classList.add('recording');
+    // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+    const fab2 = document.getElementById('floatingAddBtn');
+    if (fab2) fab2.classList.add('recording');
     try {
         recognition.start();
     } catch(e) {
@@ -5541,6 +5678,9 @@ function startRecording() {
         showToast('خطا در شروع ضبط');
         isRecording = false;
         document.getElementById('addBtn').classList.remove('recording');
+        // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+        const fab3 = document.getElementById('floatingAddBtn');
+        if (fab3) fab3.classList.remove('recording');
         showFormSection();
     }
 }
@@ -5548,6 +5688,9 @@ function startRecording() {
 function stopRecording() {
     isRecording = false;
     document.getElementById('addBtn').classList.remove('recording');
+    // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+    const fabStop = document.getElementById('floatingAddBtn');
+    if (fabStop) fabStop.classList.remove('recording');
     if (recognition) { try { recognition.stop(); } catch(e) {} }
     // Commit current session and apply number conversion on final text
     if (currentSessionText.trim()) {
@@ -6375,6 +6518,9 @@ function cancelModal() {
     if (isRecording) {
         isRecording = false;
         document.getElementById('addBtn').classList.remove('recording');
+        // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+        const fabCancel = document.getElementById('floatingAddBtn');
+        if (fabCancel) fabCancel.classList.remove('recording');
         if (recognition) { try { recognition.stop(); } catch(e) {} }
     }
     // Visually close the form + remove from the modal stack + reset edit flag.
@@ -7411,6 +7557,9 @@ function closeModalByType(type) {
                 isRecording = false;
                 const addBtn = document.getElementById('addBtn');
                 if (addBtn) addBtn.classList.remove('recording');
+                // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
+                const fabClose = document.getElementById('floatingAddBtn');
+                if (fabClose) fabClose.classList.remove('recording');
                 if (typeof recognition !== 'undefined' && recognition) {
                     try { recognition.stop(); } catch(e) {}
                 }
@@ -7586,6 +7735,18 @@ function render() {
             addBtn.classList.remove('disabled');
         }
     }
+    // 🔧 دکمهٔ شناور + فقط در حالت نمایش تسک‌های یک گروه (tasks view)
+    // ظاهر می‌شود. در صفحهٔ لیست گروه‌ها مخفی است.
+    const floatingAddBtn = document.getElementById('floatingAddBtn');
+    if (floatingAddBtn) {
+        if (currentView === 'tasks') {
+            floatingAddBtn.style.display = 'flex';
+        } else {
+            floatingAddBtn.style.display = 'none';
+            // 🔧 اگر در حال ضبط بودیم و از گروه خارج شدیم، حالت ضبط دکمه را ریست کن
+            floatingAddBtn.classList.remove('recording');
+        }
+    }
     // دکمه بازگردانی (↩) از هدر اصلی به منوی همبرگری هر گروه منتقل شد.
     // این کد برای سازگاری با نسخه‌های قدیمی نگه داشته شده، اما دکمه
     // در هدر اصلی مخفی است (display:none).
@@ -7617,6 +7778,32 @@ function renderGroupsView() {
         return `<div class="group-list-icon"><span>${icon}</span></div>`;
     }
 
+    // 🔧 تابع کمکی: ساخت HTML نشان‌های شمارش برای یک گروه
+    // — دایره: تعداد تسک‌های انجام‌نشدهٔ این گروه (بدون احتساب انجام‌شده‌ها)
+    // — عدد قرمز (بدون دایره): تعداد پین‌شده‌های انجام‌نشده
+    // — عدد زرد (بدون دایره، با فاصله): تعداد فوری‌های انجام‌نشده
+    // پارامترها:
+    //   groupItems: آرایهٔ تسک‌های این گروه (قبل از فیلتر انجام‌شده)
+    //   opts: { showUrgentBadge: bool } — برای گروه «کارهای فوری» که خودش
+    //         فوری است، badge فوری نشان داده نمی‌شود (زیرتکراری است).
+    function buildGroupBadges(groupItems, opts) {
+        const o = opts || {};
+        const showUrgentBadge = o.showUrgentBadge !== false;
+        const notDone = groupItems.filter(i => !i.done);
+        const notDoneCount = notDone.length;
+        const pinnedCount = notDone.filter(i => i.pinned === true).length;
+        const urgentCount = notDone.filter(i => i.urgent === true).length;
+        let html = '';
+        if (pinnedCount > 0) {
+            html += `<span class="group-badge-pinned">📌${toPersianNumber(pinnedCount)}</span>`;
+        }
+        if (showUrgentBadge && urgentCount > 0) {
+            html += `<span class="group-badge-urgent">🚨${toPersianNumber(urgentCount)}</span>`;
+        }
+        html += `<span class="group-count">${toPersianNumber(notDoneCount)}</span>`;
+        return html;
+    }
+
     // "همه کارها" (green, always first — NOT draggable). We add a marker
     // class so the drag-drop Sortable can recognize it as a fixed item
     // and refuse to drag it or move items above it.
@@ -7624,18 +7811,19 @@ function renderGroupsView() {
     allDiv.className = 'group-item group-item-fixed';
     allDiv.dataset.groupId = 'all';
     allDiv.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
-    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span><span class="group-count">${toPersianNumber(items.length)}</span></div>`;
+    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(items)}</div>`;
     allDiv.onclick = () => openGroupView('all');
     container.appendChild(allDiv);
 
     // 🔧 "کارهای فوری" (yellow, second — NOT draggable, sticky)
     // این گروه تسک‌هایی که علامت «فوری» خورده‌اند را نمایش می‌دهد
-    const urgentCount = items.filter(i => i.urgent === true).length;
+    const urgentItems = items.filter(i => i.urgent === true);
     const urgentDiv = document.createElement('div');
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
     urgentDiv.style.background = 'linear-gradient(135deg, #FFC107, #FF8F00)';
-    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span><span class="group-count">${toPersianNumber(urgentCount)}</span></div>`;
+    // 🔧 برای گروه «کارهای فوری»، badge فوری نشان داده نمی‌شود (زیرتکراری است)
+    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false })}</div>`;
     urgentDiv.onclick = () => openGroupView('urgent');
     container.appendChild(urgentDiv);
 
@@ -7644,10 +7832,14 @@ function renderGroupsView() {
     // saves the new order to localStorage on drag-end.
     // 🔧 گروه‌های 'all' و 'urgent' در این لیست نیستند (فیلتر می‌شوند)
     groups.filter(g => g.id !== 'all' && g.id !== 'urgent').forEach(group => {
-        const count = items.filter(i => i.groupId === group.id).length;
+        const groupItems = items.filter(i => i.groupId === group.id);
         const div = document.createElement('div');
         div.className = 'group-item group-item-draggable';
         div.dataset.groupId = group.id;
+        // 🔧 اگر گروه از نمایش در «همه کارها» منع شده، بوردر نقطه‌چین مشکی بگیرد
+        if (group.showInAll === false) {
+            div.classList.add('group-item-hidden-from-all');
+        }
         // 🔧 اگر گروه عکس دارد، عکس به‌صورت پس‌زمینه کل هدر نمایش داده می‌شود
         if (group.headerImage) {
             div.style.backgroundImage = `url('${group.headerImage}')`;
@@ -7659,7 +7851,7 @@ function renderGroupsView() {
             div.style.background = `linear-gradient(135deg, ${group.color}, ${group.color}DD)`;
         }
         const iconHtml = getGroupIconHtml(group);
-        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span><span class="group-count">${toPersianNumber(count)}</span></div>`;
+        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span>${buildGroupBadges(groupItems)}</div>`;
         div.onclick = () => openGroupView(group.id);
         container.appendChild(div);
     });
@@ -7793,8 +7985,21 @@ function renderTasksView(groupId) {
         `;
     }
 
-    // شمارش تسک‌ها
-    const countHtml = `<span class="group-task-count">${toPersianNumber(items.length)}</span>`;
+    // 🔧 شمارش تسک‌ها — دایره (انجام‌نشده) + عدد قرمز پین + عدد زرد فوری
+    // برای گروه «کارهای فوری»، badge فوری نشان داده نمی‌شود (زیرتکراری است).
+    const notDoneItems = items.filter(i => !i.done);
+    const notDoneCount = notDoneItems.length;
+    const pinnedCount = notDoneItems.filter(i => i.pinned === true).length;
+    const urgentCount = notDoneItems.filter(i => i.urgent === true).length;
+    const isUrgentGroup = (groupId === 'urgent');
+    let countHtml = '';
+    if (pinnedCount > 0) {
+        countHtml += `<span class="group-badge-pinned">📌${toPersianNumber(pinnedCount)}</span>`;
+    }
+    if (!isUrgentGroup && urgentCount > 0) {
+        countHtml += `<span class="group-badge-urgent">🚨${toPersianNumber(urgentCount)}</span>`;
+    }
+    countHtml += `<span class="group-task-count">${toPersianNumber(notDoneCount)}</span>`;
 
     // چیدمان: back → icon → title (flex:1) → menu → count
     header.innerHTML = `<div style="position: relative; display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${dropdownHtml}${countHtml}</div>`;
@@ -8528,6 +8733,9 @@ function getContactById(id) {
 function openContacts() {
     renderContactsList();
     document.getElementById('contactsOverlay').classList.add('active');
+    // 🔧 نمایش دکمهٔ شناور افزودن شخص جدید
+    const fcb = document.getElementById('floatingContactBtn');
+    if (fcb) fcb.style.display = 'flex';
     history.pushState({ view: 'contacts' }, '');
 }
 
@@ -8540,8 +8748,28 @@ function closeContacts() {
     document.getElementById('contactReportResultsOverlay').classList.remove('active');
     // بستن خود صفحه اشخاص
     document.getElementById('contactsOverlay').classList.remove('active');
+    // 🔧 مخفی کردن دکمهٔ شناور افزودن شخص جدید
+    const fcb = document.getElementById('floatingContactBtn');
+    if (fcb) fcb.style.display = 'none';
     // ریست حالت ویرایش
     _editingContactId = null;
+}
+
+// 🔧 تابع کمکی: دکمهٔ شناور افزودن شخص را فقط وقتی نشان بده که صفحهٔ
+// اشخاص باز است و هیچ زیر-صفحه‌ای (فرم/جستجو/گزارش/نتایج) روی آن باز نیست.
+function refreshFloatingContactBtn() {
+    const fcb = document.getElementById('floatingContactBtn');
+    if (!fcb) return;
+    const contactsOpen = document.getElementById('contactsOverlay').classList.contains('active');
+    if (!contactsOpen) { fcb.style.display = 'none'; return; }
+    const childOpen =
+        document.getElementById('contactFormOverlay').classList.contains('active') ||
+        document.getElementById('contactSearchOverlay').classList.contains('active') ||
+        document.getElementById('contactSearchResultsOverlay').classList.contains('active') ||
+        document.getElementById('contactReportOverlay').classList.contains('active') ||
+        document.getElementById('contactReportResultsOverlay').classList.contains('active') ||
+        document.getElementById('phoneActionOverlay').classList.contains('active');
+    fcb.style.display = childOpen ? 'none' : 'flex';
 }
 
 // ─── رندر لیست اشخاص ───
@@ -8623,11 +8851,13 @@ function openContactForm(id) {
 
     document.getElementById('contactFormOverlay').classList.add('active');
     history.pushState({ view: 'contactForm' }, '');
+    refreshFloatingContactBtn();
 }
 
 function closeContactForm() {
     document.getElementById('contactFormOverlay').classList.remove('active');
     _editingContactId = null;
+    refreshFloatingContactBtn();
 }
 
 // ─── لیست‌های پویا (تلفن، آدرس، توضیح) ───
@@ -8836,10 +9066,12 @@ function openContactSearch() {
     document.getElementById('searchCommissionPercent').value = '';
     document.getElementById('contactSearchOverlay').classList.add('active');
     history.pushState({ view: 'contactSearch' }, '');
+    refreshFloatingContactBtn();
 }
 
 function closeContactSearch() {
     document.getElementById('contactSearchOverlay').classList.remove('active');
+    refreshFloatingContactBtn();
 }
 
 function executeContactSearch() {
@@ -8918,10 +9150,12 @@ function showContactSearchResults(results) {
 
     document.getElementById('contactSearchResultsOverlay').classList.add('active');
     history.pushState({ view: 'contactSearchResults' }, '');
+    refreshFloatingContactBtn();
 }
 
 function closeContactSearchResults() {
     document.getElementById('contactSearchResultsOverlay').classList.remove('active');
+    refreshFloatingContactBtn();
 }
 
 // 🔧 ویرایش شخص از صفحه نتایج جستجو
@@ -8943,10 +9177,12 @@ function openContactReport() {
     document.getElementById('reportCommissionPercent').value = '';
     document.getElementById('contactReportOverlay').classList.add('active');
     history.pushState({ view: 'contactReport' }, '');
+    refreshFloatingContactBtn();
 }
 
 function closeContactReport() {
     document.getElementById('contactReportOverlay').classList.remove('active');
+    refreshFloatingContactBtn();
 }
 
 function executeContactReport() {
@@ -9030,10 +9266,12 @@ function showContactReportResults(results, criteria) {
 
     document.getElementById('contactReportResultsOverlay').classList.add('active');
     history.pushState({ view: 'contactReportResults' }, '');
+    refreshFloatingContactBtn();
 }
 
 function closeContactReportResults() {
     document.getElementById('contactReportResultsOverlay').classList.remove('active');
+    refreshFloatingContactBtn();
 }
 
 // ─── ذخیره و ارسال گزارش ───
@@ -9301,11 +9539,13 @@ function openPhoneActionMenu(phone) {
     // نمایش منو
     document.getElementById('phoneActionOverlay').classList.add('active');
     history.pushState({ view: 'phoneAction' }, '');
+    refreshFloatingContactBtn();
 }
 
 // بستن منوی انتخاب عملیات تلفن
 function closePhoneActionMenu() {
     document.getElementById('phoneActionOverlay').classList.remove('active');
+    refreshFloatingContactBtn();
 }
 
 // کپی به کلیپ‌بورد (fallback برای مرورگرهای قدیمی)
