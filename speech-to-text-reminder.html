@@ -114,21 +114,20 @@
 html, body {
     font-family: 'Vazirmatn', 'Tahoma', 'IRANSans', sans-serif;
     background: var(--bg);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;  /* 🔧 body اسکرول نمی‌کند — فقط .container اسکرول می‌کند */
     direction: rtl;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
-    /* Use 'clip' instead of 'hidden' — 'hidden' breaks position:sticky
-       on child elements by creating a new scroll container.
-       'clip' prevents horizontal scroll without breaking sticky. */
-    overflow-x: clip;
 }
-body { padding-bottom: 30px; }
+body {
+    display: flex;
+    flex-direction: column;
+    /* padding-bottom حذف شد — .container خودش padding دارد */
+}
 
 .header {
-    position: sticky;
-    position: -webkit-sticky;
-    top: 0;
+    flex-shrink: 0;  /* 🔧 هدر اصلی جمع نمی‌شود — همیشه بالای صفحه */
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
     padding: 14px 16px;
@@ -344,6 +343,13 @@ body { padding-bottom: 30px; }
     width: 100%;
     max-width: 100%;
     margin: 0 auto;
+    /* 🔧 container حالا ناحیهٔ اسکرول است — body دیگر اسکرول نمی‌کند.
+       هدرها (group-item-fixed و group-tasks-header) با position: sticky
+       در بالای container فیکس می‌شوند و تسک‌ها/گروه‌های دیگر اسکرول می‌شوند. */
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;  /* اسکرول نرم در iOS */
 }
 
 .empty {
@@ -373,6 +379,9 @@ body { padding-bottom: 30px; }
     line-height: 1.6;
     direction: ltr;  /* English text, LTR even on RTL pages */
     user-select: none;
+    /* 🔧 در طرح flex column جدید، footer در انتهای container (داخل ناحیهٔ اسکرول)
+       قرار می‌گیرد تا با اسکرول پایین قابل مشاهده باشد. */
+    flex-shrink: 0;
 }
 .credit-footer .credit-line {
     display: block;
@@ -1506,9 +1515,20 @@ body { padding-bottom: 30px; }
     cursor: pointer;
     /* 🔧 بوردر مشکی ضخیم برای گروه‌های «همه کارها» و «کارهای فوری» */
     border: 3px solid #000 !important;
-    /* 🔧 طبق درخواست کاربر: این گروه‌ها دیگر sticky نیستند — فضای خودشان
-       را در جریان سند دارند و هیچ گروهی به زیر آن‌ها نمی‌خزند. همراه با
-       بقیهٔ گروه‌ها به‌طور طبیعی اسکرول می‌شوند. */
+    /* 🔧 طبق درخواست کاربر: این گروه‌ها در بالای container فیکس می‌شوند
+       (sticky) و با اسکرول حرکت نمی‌کنند. فقط تسک‌ها و گروه‌های قابل‌کشیدن
+       اسکرول می‌شوند. */
+    position: sticky;
+    position: -webkit-sticky;
+    top: 0;
+    z-index: 50;
+}
+/* 🔧 گروه «کارهای فوری» زیر «همه کارها» فیکس می‌شود.
+   ارتفاع تقریبی هر group-item: padding(16+16) + min-height(60) + border(3+3) + margin-bottom(8) ≈ 106px
+   اما برای دقت بیشتر، از مقدار 98px استفاده می‌کنیم (بدون margin-bottom در حالت sticky). */
+.group-item-fixed.group-urgent {
+    top: 98px;
+    z-index: 49;  /* زیر «همه کارها» */
 }
 /* 🔧 پس‌زمینهٔ کمی مات برای خوانایی */
 .group-item-fixed {
@@ -1538,9 +1558,12 @@ body { padding-bottom: 30px; }
     align-items: center;
     gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    /* 🔧 طبق درخواست کاربر: هدر گروه دیگر sticky نیست — تسک‌ها هنگام اسکرول
-       به زیر هدر نمی‌خزند و در فضای خودشان پنهان می‌شوند. هدر همراه با
-       تسک‌ها به‌طور طبیعی اسکرول می‌شود. */
+    /* 🔧 طبق درخواست کاربر: هدر گروه در بالای container فیکس می‌شود (sticky)
+       و با اسکرول حرکت نمی‌کند. فقط تسک‌ها اسکرول می‌شوند. */
+    position: sticky;
+    position: -webkit-sticky;
+    top: 0;
+    z-index: 100;
 }
 .back-btn {
     background: rgba(255,255,255,0.25);
@@ -2817,13 +2840,13 @@ body.locked .header-actions button {
         <div class="empty-icon">🎤</div>
         <div>برای افزودن یادآور،<br>دکمه + را بزنید و صحبت کنید</div>
     </div>
-</div>
-
-<div class="credit-footer">
-    <span class="credit-line">Designed &amp; developed by</span>
-    <span class="credit-names">Reza Jalili</span>
-    <span class="credit-sep">&amp;</span>
-    <span class="credit-names">Emad Tavakoli</span>
+    <!-- 🔧 credit-footer داخل container قرار گرفت تا با اسکرول پایین قابل مشاهده باشد -->
+    <div class="credit-footer">
+        <span class="credit-line">Designed &amp; developed by</span>
+        <span class="credit-names">Reza Jalili</span>
+        <span class="credit-sep">&amp;</span>
+        <span class="credit-names">Emad Tavakoli</span>
+    </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -3355,7 +3378,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v63-2026-10-31-backup-v6-full-restore-forward-compat';
+const APP_VERSION = 'v64-2026-10-31-fixed-headers-flex-layout-scroll-container';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7198,7 +7221,7 @@ function initSortable() {
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         // Don't allow dragging the empty-state message or expanded details
-        filter: '.empty, .item-details, .item-actions, .action-btn, .deadline-box',
+        filter: '.empty, .item-details, .item-actions, .action-btn, .deadline-box, .credit-footer',
         preventOnFilter: false,   // allow clicks on filtered elements
         // Long-press on touch to start drag (so tap-to-expand still works)
         delay: 400,               // 400ms long-press (slightly faster)
@@ -7248,7 +7271,7 @@ function initGroupsSortable(container) {
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
             // Don't drag the fixed "همه کارها" item or the "add new group" button.
-            filter: '.group-item-fixed, .add-group',
+            filter: '.group-item-fixed, .add-group, .credit-footer',
             preventOnFilter: false,  // allow clicks on filtered elements
             // Long-press on touch to start drag (so tap-to-open still works).
             // 300ms is a good balance — feels responsive but doesn't conflict with tap.
@@ -7273,6 +7296,10 @@ function initGroupsSortable(container) {
                 // Prevent dragging items ABOVE the fixed "همه کارها" item.
                 if (evt.related && evt.related.classList.contains('group-item-fixed')
                     && !evt.willInsertAfter) {
+                    return false;
+                }
+                // 🔧 Prevent dragging items BELOW the credit-footer.
+                if (evt.related && evt.related.classList.contains('credit-footer')) {
                     return false;
                 }
                 return true;
@@ -7993,6 +8020,20 @@ function renderGroupsView() {
         showToast('گروه ایجاد شد ✓');
     };
     container.appendChild(addDiv);
+    // 🔧 افزودن credit-footer به انتهای container (چون innerHTML='' آن را پاک کرد)
+    appendCreditFooter(container);
+}
+
+// 🔧 تابع کمکی: افزودن credit-footer به انتهای container
+// (چون renderها با innerHTML='' محتوا را پاک می‌کنند، footer هم پاک می‌شود)
+function appendCreditFooter(container) {
+    const footer = document.createElement('div');
+    footer.className = 'credit-footer';
+    footer.innerHTML = '<span class="credit-line">Designed &amp; developed by</span>' +
+        '<span class="credit-names">Reza Jalili</span>' +
+        '<span class="credit-sep">&amp;</span>' +
+        '<span class="credit-names">Emad Tavakoli</span>';
+    container.appendChild(footer);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -8223,6 +8264,8 @@ function renderTasksView(groupId) {
         });
         container.appendChild(div);
     });
+    // 🔧 افزودن credit-footer به انتهای container (چون innerHTML='' آن را پاک کرد)
+    appendCreditFooter(container);
     setTimeout(initSortable, 0);
 }
 
