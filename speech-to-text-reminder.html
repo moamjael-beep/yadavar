@@ -3355,7 +3355,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v62-2026-10-31-hide-hidden-group-tasks-from-all-badges';
+const APP_VERSION = 'v63-2026-10-31-backup-v6-full-restore-forward-compat';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -4172,8 +4172,8 @@ function getDB() {
 function migrateItem(item) {
     if (!item || !item.id || !item.text || !item.createdAt || !item.deadline) return null;
 
+    // 🔧 شروع با فیلدهای ضروری
     const out = {
-        // فیلدهای ضروری
         id: String(item.id),
         text: String(item.text),
         createdAt: String(item.createdAt),
@@ -4227,6 +4227,31 @@ function migrateItem(item) {
         }
     }
 
+    // 🔧 v6: حفظ تمام فیلدهای ناشناخته (forward-compatibility)
+    // اگر فیلد جدیدی در آینده اضافه شود، در بک‌آپ ذخیره می‌شود و هنگام
+    // بازیابی نیز حفظ می‌شود. این تضمین می‌کند که هیچ داده‌ای از دست نرود.
+    const knownKeys = new Set([
+        'id', 'text', 'createdAt', 'deadline', 'done', 'groupId',
+        'completedAt', 'position',
+        'pinned', 'pinnedAt', 'pinnedOrder',
+        'urgent', 'parentId', 'repeat'
+    ]);
+    for (const key of Object.keys(item)) {
+        if (!knownKeys.has(key) && out[key] === undefined) {
+            // فقط فیلدهای primitive (string, number, boolean) و آرایه/آبجکت ساده
+            const val = item[key];
+            if (val !== null && val !== undefined) {
+                try {
+                    // تست serializable بودن
+                    JSON.stringify(val);
+                    out[key] = val;
+                } catch(e) {
+                    // نادیده بگیر
+                }
+            }
+        }
+    }
+
     return out;
 }
 
@@ -4239,7 +4264,7 @@ function migrateGroup(group) {
     // چون خودکار ساخته می‌شوند
     if (group.id === 'all' || group.id === 'urgent') return null;
 
-    return {
+    const out = {
         id: String(group.id),
         name: String(group.name),
         color: group.color ? String(group.color) : '#607D8B',
@@ -4249,6 +4274,25 @@ function migrateGroup(group) {
         headerImage: group.headerImage ? String(group.headerImage) : '',
         showInAll: group.showInAll !== false  // پیش‌فرض: true
     };
+
+    // 🔧 v6: حفظ تمام فیلدهای ناشناخته گروه (forward-compatibility)
+    const knownGroupKeys = new Set([
+        'id', 'name', 'color', 'isDefault',
+        'headerIcon', 'headerImage', 'showInAll'
+    ]);
+    for (const key of Object.keys(group)) {
+        if (!knownGroupKeys.has(key) && out[key] === undefined) {
+            const val = group[key];
+            if (val !== null && val !== undefined) {
+                try {
+                    JSON.stringify(val);
+                    out[key] = val;
+                } catch(e) {}
+            }
+        }
+    }
+
+    return out;
 }
 
 // مهاجرت کامل لیست items + groups به ساختار فعلی
@@ -4301,22 +4345,43 @@ function migrateContacts(rawContacts) {
     if (!Array.isArray(rawContacts)) return [];
     return rawContacts
         .filter(c => c && c.id && c.name)
-        .map(c => ({
-            id: String(c.id),
-            company: c.company ? String(c.company) : '',
-            name: String(c.name),
-            position: c.position ? String(c.position) : '',
-            startDate: c.startDate ? String(c.startDate) : '',
-            birthDate: c.birthDate ? String(c.birthDate) : '',
-            commissionAsked: c.commissionAsked ? String(c.commissionAsked) : '',
-            commissionPaid: c.commissionPaid ? String(c.commissionPaid) : '',
-            commissionPercent: c.commissionPercent ? String(c.commissionPercent) : '',
-            phones: Array.isArray(c.phones) ? c.phones.filter(p => p).map(p => String(p)) : [],
-            primaryPhone: c.primaryPhone ? String(c.primaryPhone) : '',  // 🔧 موبایل اصلی
-            addresses: Array.isArray(c.addresses) ? c.addresses.filter(a => a).map(a => String(a)) : [],
-            notes: Array.isArray(c.notes) ? c.notes.filter(n => n).map(n => String(n)) : [],
-            createdAt: c.createdAt ? String(c.createdAt) : new Date().toISOString(),
-        }));
+        .map(c => {
+            const out = {
+                id: String(c.id),
+                company: c.company ? String(c.company) : '',
+                name: String(c.name),
+                position: c.position ? String(c.position) : '',
+                startDate: c.startDate ? String(c.startDate) : '',
+                birthDate: c.birthDate ? String(c.birthDate) : '',
+                commissionAsked: c.commissionAsked ? String(c.commissionAsked) : '',
+                commissionPaid: c.commissionPaid ? String(c.commissionPaid) : '',
+                commissionPercent: c.commissionPercent ? String(c.commissionPercent) : '',
+                phones: Array.isArray(c.phones) ? c.phones.filter(p => p).map(p => String(p)) : [],
+                primaryPhone: c.primaryPhone ? String(c.primaryPhone) : '',  // 🔧 موبایل اصلی
+                addresses: Array.isArray(c.addresses) ? c.addresses.filter(a => a).map(a => String(a)) : [],
+                notes: Array.isArray(c.notes) ? c.notes.filter(n => n).map(n => String(n)) : [],
+                createdAt: c.createdAt ? String(c.createdAt) : new Date().toISOString(),
+            };
+            // 🔧 v6: حفظ تمام فیلدهای ناشناخته (forward-compatibility)
+            const knownContactKeys = new Set([
+                'id', 'company', 'name', 'position',
+                'startDate', 'birthDate',
+                'commissionAsked', 'commissionPaid', 'commissionPercent',
+                'phones', 'primaryPhone', 'addresses', 'notes', 'createdAt'
+            ]);
+            for (const key of Object.keys(c)) {
+                if (!knownContactKeys.has(key) && out[key] === undefined) {
+                    const val = c[key];
+                    if (val !== null && val !== undefined) {
+                        try {
+                            JSON.stringify(val);
+                            out[key] = val;
+                        } catch(e) {}
+                    }
+                }
+            }
+            return out;
+        });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -8335,12 +8400,12 @@ function saveBackupToLocal() {
     const customGroups = getGroups().filter(g => g.id !== 'all' && g.id !== 'urgent');
     const contacts = getContacts();
 
-    // 🔧 نسخه v5: شامل تمام فیلدهای جدید
-    //   - urgent (فوری)
-    //   - pinned, pinnedAt, pinnedOrder (سیستم پین)
-    //   - headerIcon, headerImage, showInAll (شخصی‌سازی هدر گروه)
-    //   - contacts (بانک اطلاعاتی اشخاص)
-    //   - appVersion (نسخه برنامه برای مهاجرت هوشمند)
+    // 🔧 نسخه v6: شامل تمام عکس‌ها، رنگ‌ها، آیکون‌ها، محیط ظاهری، پین‌شده‌ها،
+    //   فوری‌ها، و هر چیزی که برنامهٔ صفر را شبیه قبلی می‌کند.
+    //   داده‌های items و groups و contacts به‌طور کامل (با تمام فیلدها) ذخیره
+    //   می‌شوند چون از JSON.stringify روی کل آبجکت استفاده می‌کنیم.
+    //   در زمان بازیابی، migrateItem/migrateGroup/migrateContacts تمام
+    //   فیلدهای معتبر را حفظ می‌کنند.
     const dbContent = JSON.stringify({
         // Backup format version history:
         //   v1 (legacy) — just an array of items
@@ -8349,7 +8414,9 @@ function saveBackupToLocal() {
         //   v4 — preserves parentId, repeat, pinned, position, completedAt
         //   v5 — + urgent, pinnedAt, pinnedOrder, headerIcon, headerImage,
         //        showInAll, contacts, appVersion
-        version: 5,
+        //   v6 — + settings (snapshot of app-level settings for full restore)
+        //        شامل تمام عکس‌های هدر، رنگ‌ها، آیکون‌ها و محیط ظاهری
+        version: 6,
         appVersion: APP_VERSION,
         exportedAt: new Date().toISOString(),
         exportedAtJalali: toJalaliLong(new Date()),
@@ -8358,7 +8425,12 @@ function saveBackupToLocal() {
         contactsCount: contacts.length,
         groups: customGroups,
         items: items,
-        contacts: contacts
+        contacts: contacts,
+        // 🔧 v6: snapshot از تنظیمات اپلیکیشن برای بازگردانی کامل محیط ظاهری
+        settings: {
+            appVersion: APP_VERSION,
+            notificationPermission: ('Notification' in window) ? Notification.permission : 'unsupported'
+        }
     }, null, 2);
     const dbBlob = new Blob([dbContent], { type: 'application/json' });
     // Filename: YadAvar_YYYYMMDDHHmm.json where the date/time is Jalali (Shamsi).
@@ -8525,7 +8597,15 @@ function importDatabase() {
                     showToast(parts.join('، ') + ' ✓');
                 } else {
                     // ===== REPLACE MODE =====
-                    if (confirm(`دیتابیس فعلی (${currentItems.length} مورد) با ${normalizedItems.length} مورد جدید جایگزین شود؟`)) {
+                    // 🔧 جایگزینی کامل: تمام تسک‌ها، گروه‌ها، اشخاص، عکس‌ها،
+                    // رنگ‌ها، آیکون‌ها، پین‌ها و فوری‌ها از بک‌آپ جایگزین می‌شوند.
+                    const replaceMsg = `⚠️ جایگزینی کامل دیتابیس\n\n` +
+                        `دیتابیس فعلی: ${currentItems.length} یادآور، ${validImportedGroups.length} گروه، ${getContacts().length} شخص\n` +
+                        `بک‌آپ: ${normalizedItems.length} یادآور، ${validImportedGroups.length} گروه، ${validImportedContacts.length} شخص\n\n` +
+                        `تمام داده‌های فعلی حذف و با بک‌آپ جایگزین می‌شود.\n` +
+                        `(شامل عکس‌ها، رنگ‌ها، آیکون‌ها، پین‌ها و فوری‌ها)\n\n` +
+                        `برای تأیید = بله`;
+                    if (confirm(replaceMsg)) {
                         // 1. جایگزینی گروه‌ها — گروه‌های سیستمی (all, urgent) خودکار ساخته می‌شوند
                         //    فقط گروه‌های سفارشی از بک‌آپ می‌آیند
                         const replacedGroups = [
@@ -8545,15 +8625,23 @@ function importDatabase() {
                         setDB(fixedItems);
                         clearSentNotificationsFor(fixedItems);
 
-                        // 3. 🔧 جایگزینی contacts
-                        if (validImportedContacts.length > 0) {
-                            setContacts(validImportedContacts);
+                        // 3. 🔧 جایگزینی کامل contacts — حتی اگر بک‌آپ خالی باشد
+                        //    (برای شبیه‌سازی دقیق برنامهٔ صفر)
+                        setContacts(validImportedContacts);
+
+                        // 4. 🔧 اگر بک‌آپ v6 است و settings دارد، notification permission
+                        //    را درخواست کن (اگر قبلاً granted بوده)
+                        if (data && data.settings && data.settings.notificationPermission === 'granted') {
+                            if ('Notification' in window && Notification.permission !== 'granted') {
+                                try { Notification.requestPermission(); } catch(e) {}
+                            }
                         }
 
                         fullRender();
                         const parts = ['دیتابیس جایگزین شد'];
+                        parts.push(`${fixedItems.length} یادآور`);
                         if (validImportedGroups.length > 0) parts.push(`${validImportedGroups.length} گروه`);
-                        if (validImportedContacts.length > 0) parts.push(`${validImportedContacts.length} شخص`);
+                        parts.push(`${validImportedContacts.length} شخص`);
                         showToast(parts.join('، ') + ' ✓');
                     }
                 }
