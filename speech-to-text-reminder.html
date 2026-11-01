@@ -246,8 +246,7 @@ body {
 .floating-add-btn {
     position: fixed;
     left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: 20px;
     z-index: 9000;
     width: 56px;
     height: 56px;
@@ -268,7 +267,7 @@ body {
     border: 2px solid rgba(255,255,255,0.4);
 }
 .floating-add-btn:active {
-    transform: translateY(-50%) scale(0.92);
+    transform: scale(0.92);
 }
 .floating-add-btn.recording {
     background: var(--red);
@@ -282,12 +281,12 @@ body {
     pointer-events: none;
 }
 @keyframes floatingPulse {
-    0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
-    50% { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+    50% { transform: scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
 }
 /* در صفحات کوچک، دکمه کمی کوچک‌تر */
 @media (max-width: 480px) {
-    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; }
+    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; bottom: 14px; }
 }
 
 /* 🔧 دکمهٔ شناور افزودن شخص جدید — در صفحه اشخاص نمایش داده می‌شود.
@@ -296,8 +295,7 @@ body {
 .floating-contact-btn {
     position: fixed;
     left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: 20px;
     z-index: 10050;
     width: 56px;
     height: 56px;
@@ -316,10 +314,10 @@ body {
     border: 2px solid rgba(255,255,255,0.4);
 }
 .floating-contact-btn:active {
-    transform: translateY(-50%) scale(0.92);
+    transform: scale(0.92);
 }
 @media (max-width: 480px) {
-    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; }
+    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; bottom: 14px; }
 }
 /* Disabled state for the reset-order button (↩). Used on the groups list
    view AND inside the "همه کارها" group — there's no manual ordering to
@@ -1522,12 +1520,17 @@ body {
     position: -webkit-sticky;
     top: 0;
     z-index: 50;
+    /* 🔧 margin-bottom برای عناصر sticky حذف می‌شود چون باعث فاصلهٔ
+       اضافی بین «همه کارها» و «کارهای فوری» می‌شود. فاصلهٔ استاندارد
+       با gap در container مدیریت می‌شود. */
+    margin-bottom: 0 !important;
 }
 /* 🔧 گروه «کارهای فوری» زیر «همه کارها» فیکس می‌شود.
-   ارتفاع تقریبی هر group-item: padding(16+16) + min-height(60) + border(3+3) + margin-bottom(8) ≈ 106px
-   اما برای دقت بیشتر، از مقدار 98px استفاده می‌کنیم (بدون margin-bottom در حالت sticky). */
+   ارتفاع واقعی هر group-item: padding(16+16) + min-height(60) + border(3+3) = 98px
+   + فاصلهٔ استاندارد gap (6px) که در container تعریف شده = 104px
+   یعنی «کارهای فوری» با همان فاصلهٔ استاندارد گروه‌ها زیر «همه کارها» قرار می‌گیرد. */
 .group-item-fixed.group-urgent {
-    top: 98px;
+    top: 104px;
     z-index: 49;  /* زیر «همه کارها» */
 }
 /* 🔧 پس‌زمینهٔ کمی مات برای خوانایی */
@@ -3378,7 +3381,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v64-2026-10-31-fixed-headers-flex-layout-scroll-container';
+const APP_VERSION = 'v66-2026-10-31-fix-urgent-gap-and-floating-btns-bottom';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5718,7 +5721,13 @@ function initRecognition() {
                 }
                 return 'دسترسی به میکروفون رد شد. در تنظیمات مرورگر اجازه دهید.';
             case 'network':
-                return null;
+                // 🔧 خطای شبکه — احتمالاً اینترنت قطع شده هنگام ضبط
+                // isReachable را به‌روزرسانی کن تا هدر آفلاین شود
+                if (isReachable) {
+                    isReachable = false;
+                    updateOnlineStatus();
+                }
+                return 'اتصال اینترنت قطع شد. ضبط متوقف شد. می‌توانید متن را تایپ کنید.';
             case 'audio-capture':
                 return 'میکروفون پیدا نشد. یک میکروفون وصل کنید.';
             case 'language-not-supported':
@@ -5844,7 +5853,7 @@ function stopRecording() {
         currentSessionText = '';
     }
     document.getElementById('itemText').value = addNumericAfterWords(allFinalText);
-    setTimeout(() => showFormSection(), 250);
+    setTimeout(() => { showFormSection(); checkPendingReload(); }, 250);
 }
 
 // (merged with the version above)
@@ -6674,6 +6683,8 @@ function cancelModal() {
     closeModalByType('taskForm');
     // Pop the modal marker pushed on startAdding.
     navBack();
+    // 🔧 اگر reload در انتظار است، حالا که فرم بسته شد اجرا کن
+    setTimeout(checkPendingReload, 500);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -9066,6 +9077,8 @@ function closeContactForm() {
     document.getElementById('contactFormOverlay').classList.remove('active');
     _editingContactId = null;
     refreshFloatingContactBtn();
+    // 🔧 اگر reload در انتظار است، حالا که فرم بسته شد اجرا کن
+    setTimeout(checkPendingReload, 500);
 }
 
 // ─── لیست‌های پویا (تلفن، آدرس، توضیح) ───
@@ -10223,9 +10236,21 @@ async function registerServiceWorker() {
             // Reload to get the new code from the updated SW cache.
             // This is critical: without the reload, the page runs OLD code
             // (from the previous SW's cache) even after the new SW activates.
-            if (!isRecording) {
-                window.location.reload();
+            // 🔧 اگر در حال ضبط یا ویرایش فرم هستیم، reload را به تعویق بینداز
+            // تا داده‌های کاربر از دست نرود.
+            if (isRecording) {
+                console.log('[Page] Recording in progress, deferring reload');
+                setTimeout(() => location.reload(), 5000);
+                return;
             }
+            const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+            const contactFormOpen = document.getElementById('contactFormOverlay') && document.getElementById('contactFormOverlay').classList.contains('active');
+            if (taskFormOpen || contactFormOpen) {
+                console.log('[Page] Form open, deferring reload');
+                setTimeout(() => location.reload(), 10000);
+                return;
+            }
+            window.location.reload();
         });
 
         // Wait for SW to be active
@@ -10281,15 +10306,34 @@ if ('serviceWorker' in navigator) {
         // mobile browsers).
         if (event.data.type === 'RELOAD_PLEASE') {
             console.log('[Page] SW requested reload (version=' + event.data.version + ')');
-            if (!isRecording) {
-                window.location.reload();
-            } else {
-                // Defer reload until recording stops
+            // 🔧 اگر در حال ضبط یا ویرایش فرم هستیم، reload را به تعویق بینداز
+            if (isRecording) {
                 console.log('[Page] Recording in progress — deferring reload');
                 window._pendingReload = true;
+                return;
             }
+            const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+            const contactFormOpen = document.getElementById('contactFormOverlay') && document.getElementById('contactFormOverlay').classList.contains('active');
+            if (taskFormOpen || contactFormOpen) {
+                console.log('[Page] Form open — deferring reload');
+                window._pendingReload = true;
+                return;
+            }
+            window.location.reload();
         }
     });
+}
+
+// 🔧 تابع کمکی: اگر reload در انتظار است و هیچ فرمی باز نیست، reload کن
+function checkPendingReload() {
+    if (!window._pendingReload) return;
+    const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+    const contactFormOpen = document.getElementById('contactFormOverlay') && document.getElementById('contactFormOverlay').classList.contains('active');
+    if (!taskFormOpen && !contactFormOpen && !isRecording) {
+        console.log('[Page] Performing pending reload now');
+        window._pendingReload = false;
+        window.location.reload();
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -10405,11 +10449,22 @@ async function checkReachability(force = false) {
 // Clear all Service Worker caches and reload the page from the network.
 // Called when transitioning from offline to online — ensures the user gets
 // the latest GitHub version, not a stale cached copy.
+// 🔧 اگر کاربر در حال تایپ/ویرایش یک یادآور است (مودال فرم باز است)،
+// reload به تعویق می‌افتد تا داده‌های کاربر از دست نرود.
 function clearSWCacheAndReload() {
     if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
         // No SW controller — just reload
         console.log('[clearSWCacheAndReload] No SW controller, reloading...');
         location.reload();
+        return;
+    }
+    // 🔧 اگر مودال فرم تسک یا فرم شخص باز است، reload را به تعویق بینداز
+    const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+    const contactFormOpen = document.getElementById('contactFormOverlay') && document.getElementById('contactFormOverlay').classList.contains('active');
+    if (taskFormOpen || contactFormOpen) {
+        console.log('[clearSWCacheAndReload] Form is open, deferring reload...');
+        // ۵ دقیق بعد دوباره امتحان کن — کاربر احتمالاً تا آن موقع فرم را بسته باشد
+        setTimeout(() => clearSWCacheAndReload(), 300000);
         return;
     }
     // Listen for the SW's CACHE_CLEARED confirmation message
