@@ -1528,11 +1528,11 @@ body { padding-bottom: 30px; }
     padding: 16px 20px;
     border-radius: 12px;
     color: white;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     display: flex;
     align-items: center;
     gap: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.25);
     min-height: 60px;
     /* 🔧 position: relative تا ::before (لایهٔ تیرهٔ عکس) فقط روی هدر قرار بگیرد،
        نه روی کل viewport. بدون این، ::before با position: absolute نسبت به
@@ -1547,6 +1547,8 @@ body { padding-bottom: 30px; }
     user-select: none;
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
+    /* 🔧 حاشیهٔ نازک برای برجستگی بیشتر هدر */
+    border: 1px solid rgba(255,255,255,0.15);
 }
 .back-btn {
     background: rgba(255,255,255,0.25);
@@ -3310,7 +3312,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v74-2026-10-31-fix-urgent-group-badge-count-all-urgent-tasks';
+const APP_VERSION = 'v75-2026-10-31-scroll-to-top-on-group-open-prominent-header';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7567,6 +7569,8 @@ function openGroupView(groupId) {
     expandedId = null;
     navPush({ view: 'tasks', groupId: groupId });
     fullRender();
+    // 🔧 اسکرول به بالای صفحه تا هدر داخلی گروه کاملاً مشخص و زیر هدر اصلی قرار گیرد
+    window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 // Open a task's details (expands it). Pushes a history entry so back
@@ -7776,6 +7780,7 @@ window.addEventListener('popstate', (e) => {
     }
 
     // ===== Normal navigation =====
+    const prevView = currentView;
     if (state.view === 'groups') {
         currentView = 'groups';
         currentGroupId = null;
@@ -7789,6 +7794,10 @@ window.addEventListener('popstate', (e) => {
         return;
     }
     fullRender();
+    // 🔧 اگر ویو تغییر کرده، اسکرول به بالای صفحه تا هدر گروه مشخص باشد
+    if (prevView !== currentView) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+    }
 });
 
 function fullRender() {
