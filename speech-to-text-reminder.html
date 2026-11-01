@@ -3141,7 +3141,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v52-2026-10-31-task-cancel-btn-and-urgent-display-only';
+const APP_VERSION = 'v53-2026-10-31-fix-edit-buttons-visibility-offline-mode';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5450,14 +5450,23 @@ function startRecording() {
     // flashing blue-yellow (offline / no real internet — VPN with no
     // connectivity, quota exhausted, GitHub unreachable, etc.), skip
     // recording and go directly to manual typing.
+    // 🔧 طبق درخواست کاربر: در حالت آفلاین، دکمه‌های «ضبط دوباره» و
+    // «ذخیره» همچنان نمایش داده شوند (کاربر می‌تواند متن را تایپ کند
+    // یا دوباره ضبط را امتحان کند). عنوان و متن ویرایش نیز حفظ می‌شود.
     if (!isReachable) {
         document.getElementById('modalOverlay').classList.add('active');
         document.getElementById('recordingSection').style.display = 'none';
         document.getElementById('formSection').style.display = 'block';
-        document.getElementById('modalTitle').textContent = 'یادآور جدید';
+        // 🔧 حفظ عنوان (ویرایش یا جدید) و نمایش دکمه‌ها
+        const isEditing = !!editTaskId;
+        document.getElementById('modalTitle').textContent = isEditing ? 'ویرایش یادآور' : 'یادآور جدید';
+        const saveBtn = document.getElementById('saveBtn');
+        if (saveBtn) saveBtn.textContent = isEditing ? 'ثبت ویرایش' : 'ذخیره';
+        document.getElementById('reRecordBtn').style.display = '';
+        document.getElementById('saveBtn').style.display = '';
         if (!document.getElementById('itemDeadline').value) setQuickDeadline(1);
         else updateDeadlineDisplay(document.getElementById('itemDeadline').value);
-        showToast('اینترنت در دسترس نیست. متن را تایپ کنید.');
+        showToast('اینترنت در دسترس نیست. ضبط صوت کار نمی‌کند. متن را تایپ کنید.');
         setTimeout(() => document.getElementById('itemText').focus(), 100);
         return;
     }
@@ -6108,7 +6117,12 @@ function startAdding(prefilledDeadline, prefilledText) {
     if (isEditing) {
         document.getElementById('recordingSection').style.display = 'none';
         document.getElementById('formSection').style.display = 'block';
+        // 🔧 نمایش دکمه‌های «ضبط دوباره» و «ذخیره» در حالت ویرایش
+        // (بدون این خط، فقط دکمهٔ «انصراف» دیده می‌شد)
+        document.getElementById('reRecordBtn').style.display = '';
+        document.getElementById('saveBtn').style.display = '';
         if (!prefilledDeadline) setQuickDeadline(1);
+        else updateDeadlineDisplay(prefilledDeadline);
         // Focus the textarea so user can immediately edit the text
         setTimeout(() => {
             const textArea = document.getElementById('itemText');
@@ -6124,20 +6138,28 @@ function startAdding(prefilledDeadline, prefilledText) {
         // Direct manual mode
         document.getElementById('recordingSection').style.display = 'none';
         document.getElementById('formSection').style.display = 'block';
+        // 🔧 نمایش دکمهٔ «ذخیره» (و پنهان کردن «ضبط دوباره» چون ضبط پشتیبانی نمی‌شود)
+        document.getElementById('reRecordBtn').style.display = 'none';
+        document.getElementById('saveBtn').style.display = '';
         if (!prefilledDeadline) setQuickDeadline(1);
         showToast('مرورگر از ضبط پشتیبانی نمی‌کند. متن را تایپ کنید.');
         setTimeout(() => document.getElementById('itemText').focus(), 100);
         return;
     }
     // If the header is flashing blue-yellow (offline / no real internet),
-    // skip recording and go directly to manual typing — don't attempt
-    // voice recognition at all (it would fail or hang without real
-    // connectivity).
+    // skip auto-recording and go directly to manual typing.
+    // 🔧 طبق درخواست کاربر: در حالت آفلاین همهٔ کلیدها (انصراف، ضبط دوباره،
+    // ذخیره) کامل نمایش داده شوند، اما ضبط صوت کار نکند. اگر کاربر روی
+    // «ضبط دوباره» کلیک کند، startRecording() آفلاین بودن را تشخیص داده و
+    // پیام مناسب نمایش می‌دهد.
     if (!isReachable) {
         document.getElementById('recordingSection').style.display = 'none';
         document.getElementById('formSection').style.display = 'block';
+        // 🔧 نمایش همهٔ دکمه‌ها در حالت آفلاین
+        document.getElementById('reRecordBtn').style.display = '';
+        document.getElementById('saveBtn').style.display = '';
         if (!prefilledDeadline) setQuickDeadline(1);
-        showToast('اینترنت در دسترس نیست. متن را تایپ کنید.');
+        showToast('اینترنت در دسترس نیست. متن را تایپ کنید یا ضبط را امتحان کنید.');
         setTimeout(() => document.getElementById('itemText').focus(), 100);
         return;
     }
@@ -6279,7 +6301,11 @@ function showManualMode(message) {
 function showFormSection(forceFocus) {
     document.getElementById('recordingSection').style.display = 'none';
     document.getElementById('formSection').style.display = 'block';
-    document.getElementById('modalTitle').textContent = 'یادآور جدید';
+    // 🔧 حفظ عنوان و متن دکمهٔ ذخیره در حالت ویرایش
+    const isEditing = !!editTaskId;
+    document.getElementById('modalTitle').textContent = isEditing ? 'ویرایش یادآور' : 'یادآور جدید';
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) saveBtn.textContent = isEditing ? 'ثبت ویرایش' : 'ذخیره';
     // 🔧 نمایش دکمه‌های «ضبط دوباره» و «ذخیره» (در حالت فرم)
     document.getElementById('reRecordBtn').style.display = '';
     document.getElementById('saveBtn').style.display = '';
