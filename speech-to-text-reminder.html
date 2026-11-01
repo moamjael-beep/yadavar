@@ -1538,7 +1538,11 @@ body { padding-bottom: 30px; }
        نه روی کل viewport. بدون این، ::before با position: absolute نسبت به
        viewport قرار می‌گیرد و یک لایهٔ خاکستری روی کل صفحه می‌اندازد. */
     position: relative;
-    overflow: hidden;
+    /* 🔧 overflow-y: visible تا منوی همبرگری (که با position: absolute زیر هدر
+       باز می‌شود) بریده نشود و قابل مشاهده باشد. overflow-x: hidden برای جلوگیری
+       از سرریز افقی لایهٔ تیرهٔ عکس. */
+    overflow-x: hidden;
+    overflow-y: visible;
     /* 🔧 همان استایل گروه‌های صفحهٔ اصلی (group-item) برای یکپارچگی ظاهری */
     transition: transform 0.2s;
     -webkit-user-select: none;
@@ -1799,10 +1803,11 @@ body.locked .header-actions button {
     margin-top: 6px;
     background: white;
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     min-width: 240px;
     max-width: 280px;
-    z-index: 100;
+    /* 🔧 z-index بالا تا منو روی تسک‌ها و سایر محتوا قرار گیرد */
+    z-index: 1000;
     overflow: hidden;
     display: none;
     direction: rtl;
@@ -3312,7 +3317,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v75-2026-10-31-scroll-to-top-on-group-open-prominent-header';
+const APP_VERSION = 'v76-2026-10-31-fix-hamburger-menu-visibility-in-group-header';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
