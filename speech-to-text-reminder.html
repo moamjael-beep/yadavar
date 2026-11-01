@@ -488,14 +488,14 @@ body { padding-bottom: 30px; }
 .task-pin-btn:active {
     transform: scale(0.85);
 }
-/* وقتی تسک پین شده است */
+/* وقتی تسک پین شده است — دایره زیر آن سفید می‌شود */
 .task-pin-btn.pinned {
     opacity: 1;  /* پررنگ */
-    background: rgba(33, 150, 243, 0.2);  /* دایره آبی روشن */
+    background: rgba(255, 255, 255, 0.9);  /* دایره سفید */
     transform: rotate(-40deg);  /* چرخش آیکون پین */
 }
 .task-pin-btn.pinned:hover {
-    background: rgba(33, 150, 243, 0.35);
+    background: rgba(255, 255, 255, 1);  /* سفید کامل در hover */
 }
 /* نشانگر پین شده بودن تسک — یک نوار آبی در سمت راست تسک.
    🔧 رنگ آبی (نه زرد) و سمت راست (نه چپ) انتخاب شده تا با نشانگر فوری
@@ -3305,7 +3305,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v81-2026-10-31-close-hamburger-menu-on-back-button';
+const APP_VERSION = 'v82-2026-10-31-pin-button-white-circle-when-pinned';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
