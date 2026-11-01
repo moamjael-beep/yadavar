@@ -1534,15 +1534,7 @@ body { padding-bottom: 30px; }
     gap: 12px;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
     min-height: 60px;
-    /* 🔧 position: relative تا ::before (لایهٔ تیرهٔ عکس) فقط روی هدر قرار بگیرد،
-       نه روی کل viewport. بدون این، ::before با position: absolute نسبت به
-       viewport قرار می‌گیرد و یک لایهٔ خاکستری روی کل صفحه می‌اندازد. */
     position: relative;
-    /* 🔧 overflow حذف شد — طبق مشخصات CSS، اگر overflow-x: hidden و
-       overflow-y: visible باشند، مرورگر overflow-y را به auto تبدیل می‌کند
-       که باعث بریده شدن منوی همبرگری می‌شود. به‌جای overflow، لایهٔ تیرهٔ
-       عکس با border-radius و position: absolute کنترل می‌شود. */
-    /* 🔧 همان استایل گروه‌های صفحهٔ اصلی (group-item) برای یکپارچگی ظاهری */
     transition: transform 0.2s;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -1550,7 +1542,6 @@ body { padding-bottom: 30px; }
     user-select: none;
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
-    /* 🔧 حاشیهٔ نازک برای برجستگی بیشتر هدر */
     border: 1px solid rgba(255,255,255,0.15);
 }
 .back-btn {
@@ -1794,19 +1785,16 @@ body.locked .header-actions button {
 .group-menu-btn:hover { background: rgba(255,255,255,0.4); }
 .group-menu-btn:active { transform: scale(0.92); }
 
-/* منوی کشویی همبرگر */
+/* منوی کشویی همبرگری — position: fixed تا مستقل از هدر باشد و بریده نشود.
+   موقعیت با جاوا اسکریپت (getBoundingClientRect) دقیقاً زیر هدر تنظیم می‌شود. */
 .group-menu-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 6px;
+    position: fixed;
     background: white;
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     min-width: 240px;
     max-width: 280px;
-    /* 🔧 z-index بالا تا منو روی تسک‌ها و سایر محتوا قرار گیرد */
-    z-index: 1000;
+    z-index: 10000;
     overflow: hidden;
     display: none;
     direction: rtl;
@@ -3316,7 +3304,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v77-2026-10-31-fix-hamburger-menu-overflow-completely';
+const APP_VERSION = 'v78-2026-10-31-hamburger-menu-fixed-position-clean-solution';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5231,6 +5219,22 @@ function toggleGroupMenu(groupId, btnEl) {
     if (_activeGroupMenu) {
         _activeGroupMenu.classList.remove('active');
         _activeGroupMenu = null;
+    }
+
+    // 🔧 موقعیت‌دهی منو با position: fixed — دقیقاً زیر دکمه همبرگر
+    // از getBoundingClientRect برای محاسبهٔ موقعیت دکمه استفاده می‌کنیم.
+    // این روش مستقل از overflow هدر است و منو همیشه قابل مشاهده است.
+    if (btnEl) {
+        const rect = btnEl.getBoundingClientRect();
+        const menuWidth = 260;  // عرض تقریبی منو
+        // در RTL، منو باید به سمت چپ دکمه باز شود (نه راست)
+        let leftPos = rect.right - menuWidth;
+        // اگر منو از سمت چپ صفحه بیرون می‌زد، آن را به لبهٔ چپ بچسبان
+        if (leftPos < 8) leftPos = 8;
+        // موقعیت عمودی: ۶px زیر دکمه
+        const topPos = rect.bottom + 6;
+        menu.style.left = leftPos + 'px';
+        menu.style.top = topPos + 'px';
     }
 
     // باز کردن این منو
@@ -8111,9 +8115,10 @@ function renderTasksView(groupId) {
     countHtml += `<span class="group-task-count">${toPersianNumber(notDoneCount)}</span>`;
 
     // چیدمان: back → icon → title (flex:1) → menu → count
-    // 🔧 منوی کشویی (dropdownHtml) خارج از wrapper داخلی و مستقیماً در هدر
-    // قرار می‌گیرد تا از محدودیت overflow wrapper خارج باشد.
-    header.innerHTML = `<div style="position: relative; display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div>${dropdownHtml}`;
+    // 🔧 منوی کشویی (dropdownHtml) مستقیماً در هدر قرار می‌گیرد (نه داخل
+    // wrapper داخلی). چون منو position: fixed دارد، موقعیت آن مستقل از
+    // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
+    header.innerHTML = `<div style="display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div>${dropdownHtml}`;
     container.appendChild(header);
 
     if (items.length === 0) {
