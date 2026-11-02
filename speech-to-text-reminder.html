@@ -1504,6 +1504,20 @@ body { padding-bottom: 30px; }
     cursor: pointer;
     /* 🔧 بوردر مشکی ضخیم برای گروه‌های «همه کارها» و «کارهای فوری» */
     border: 3px solid #000 !important;
+    /* 🔧 طبق درخواست کاربر: این گروه‌ها در جای خود فیکس می‌شوند (sticky)
+       و با اسکرول حرکت نمی‌کنند. */
+    position: sticky;
+    position: -webkit-sticky;
+    top: 0;
+    z-index: 50;
+}
+/* 🔧 گروه «کارهای فوری» زیر «همه کارها» فیکس می‌شود.
+   ارتفاع هر group-item: padding(16+16) + min-height(60) + border(3+3) = 98px
+   + gap (6px) = 104px. ولی چون margin-bottom صفر شده، 98px کافی است.
+   مقدار کمی بیشتر (4px) برای فاصلهٔ استاندارد. */
+.group-item-fixed.group-urgent {
+    top: 102px;
+    z-index: 49;
 }
 /* 🔧 پس‌زمینهٔ کمی مات برای خوانایی */
 .group-item-fixed {
@@ -1525,16 +1539,19 @@ body { padding-bottom: 30px; }
     line-height: 1;
 }
 .group-tasks-header {
-    padding: 16px 20px;
+    padding: 10px 16px;
     border-radius: 12px;
     color: white;
     margin-bottom: 10px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
-    min-height: 60px;
-    position: relative;
+    min-height: 50px;
+    position: sticky;
+    position: -webkit-sticky;
+    top: 0;
+    z-index: 100;
     transition: transform 0.2s;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -1548,19 +1565,16 @@ body { padding-bottom: 30px; }
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    font-size: 18px;
+    font-size: 14px;
     cursor: pointer;
+    flex-shrink: 0;
 }
 .group-title {
-    font-size: 16px;
+    font-size: 11px;
     font-weight: 700;
-    /* flex: 1 pushes the edit/delete buttons AND the count pill to the LEFT
-       side (in RTL), matching the groups-list layout where the name is on
-       the right and the count badge is on the left. The edit/delete buttons
-       sit between the title and the count, close to the count (left side). */
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1611,11 +1625,11 @@ body { padding-bottom: 30px; }
    در کنار آن قرار می‌گیرند. */
 .group-task-count {
     background: rgba(255,255,255,0.25);
-    min-width: 32px;
-    height: 32px;
-    padding: 0 6px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 5px;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 10px;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
@@ -1769,10 +1783,10 @@ body.locked .header-actions button {
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    font-size: 20px;
+    font-size: 14px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2118,20 +2132,19 @@ body.locked .header-actions button {
 
 /* آیکون/تصویر هدر گروه (نمایش در هدر) */
 .group-header-icon {
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: rgba(255,255,255,0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    font-size: 14px;
     flex-shrink: 0;
-    margin-left: 12px;
+    margin-left: 8px;
     background-size: cover;
     background-position: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    /* 🔧 حاشیهٔ سفید برای خوانایی روی عکس پس‌زمینه */
     border: 2px solid rgba(255,255,255,0.3);
 }
 
@@ -3305,7 +3318,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v82-2026-10-31-pin-button-white-circle-when-pinned';
+const APP_VERSION = 'v83-2026-11-01-half-font-sticky-headers-repeat-numbering-report-html-pdf';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -6900,7 +6913,15 @@ function saveItem() {
                     //    day-of-month for monthly repeats and day-of-week
                     //    for weekly repeats).
                     var newChildren = generateRepeatedTasks(items[idx], formRepeatType, formRepeatValue, formRepeatEndDate);
+                    // 🔧 طبق درخواست کاربر: شماره‌گذاری تسک‌های تکرارشونده.
+                    // والد (کمترین تاریخ) = شماره ۱، فرزندان = ۲، ۳، ...
+                    var editBaseText = items[idx].text;
+                    // حذف شمارهٔ قبلی اگر وجود داشت (برای ویرایش مجدد)
+                    editBaseText = editBaseText.replace(/^[\d۰-۹]+\s*-\s*/, '');
+                    items[idx].text = '۱ - ' + editBaseText;
                     for (var ci = 0; ci < newChildren.length; ci++) {
+                        var editChildNum = toPersianNumber(ci + 2);
+                        newChildren[ci].text = editChildNum + ' - ' + editBaseText;
                         filteredItems.push(newChildren[ci]);
                     }
                     // 4. Replace items array (mutate in-place since 'items' is const)
@@ -7017,11 +7038,16 @@ function saveItem() {
             console.log('[saveItem] generated ' + repeats.length + ' repeat children');
             if (repeats.length > 0) {
                 newItem.repeat = { type: rType, value: parseInt(rVal, 10), endDate: rEnd };
-                // Use a plain for-loop instead of .apply() — some older
-                // Android WebViews have a bug where Function.prototype.apply
-                // with a large array throws "Maximum call stack exceeded"
-                // even when the array is small.
+                // 🔧 طبق درخواست کاربر: شماره‌گذاری تسک‌های تکرارشونده.
+                // والد (کمترین تاریخ) = شماره ۱، فرزندان = ۲، ۳، ...
+                // مثال: «۱ - قرارداد خونه»، «۲ - قرارداد خونه»، ...
+                var baseText = newItem.text;
+                // حذف شمارهٔ قبلی اگر وجود داشت (برای ویرایش)
+                baseText = baseText.replace(/^[\d۰-۹]+\s*-\s*/, '');
+                newItem.text = '۱ - ' + baseText;
                 for (var ri = 0; ri < repeats.length; ri++) {
+                    var childNum = toPersianNumber(ri + 2);  // فرزندان از ۲ شروع می‌شوند
+                    repeats[ri].text = childNum + ' - ' + baseText;
                     items.push(repeats[ri]);
                 }
                 showToast(repeats.length + 1 + ' تسک تکرارشونده ساخته شد');
@@ -9390,7 +9416,8 @@ function showContactReportResults(results, criteria) {
     html += '</div>';
 
     html += '<div class="report-actions">';
-    html += '<button class="report-action-btn" onclick="saveContactReport()">💾 ذخیره فایل</button>';
+    html += '<button class="report-action-btn" onclick="saveContactReportHTML()">💾 ذخیره HTML</button>';
+    html += '<button class="report-action-btn" onclick="saveContactReportPDF()">📄 ذخیره PDF</button>';
     html += '<button class="report-action-btn" onclick="shareContactReport()">📤 ارسال</button>';
     html += '<button class="report-action-btn" onclick="printContactReport()">🖨️ چاپ</button>';
     html += '</div>';
@@ -9453,75 +9480,114 @@ function closeContactReportResults() {
 
 // ─── ذخیره و ارسال گزارش ───
 
-function saveContactReport() {
+// 🔧 تابع کمکی: تولید محتوای HTML گزارش (مشترک بین چاپ، ذخیره HTML، و ارسال)
+function generateReportHTML() {
     const body = document.getElementById('contactReportResultsBody');
     const results = JSON.parse(body.dataset.reportData || '[]');
     const now = new Date();
+    const jalaliDate = toJalaliLong(now);
+
+    let html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8">';
+    html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+    html += '<title>گزارش اشpersons</title>';
+    html += '<style>';
+    html += 'body{font-family:Tahoma,Arial,sans-serif;padding:20px;direction:rtl;background:#fff;color:#333;}';
+    html += 'h1{text-align:center;color:#1976D2;margin-bottom:5px;font-size:18px;}';
+    html += '.report-date{text-align:center;color:#666;font-size:12px;margin-bottom:20px;}';
+    html += 'table{width:100%;border-collapse:collapse;font-size:11px;}';
+    html += 'th{background:#1976D2;color:white;padding:8px 6px;text-align:right;border:1px solid #1565C0;}';
+    html += 'td{border:1px solid #ddd;padding:6px;text-align:right;}';
+    html += 'tr:nth-child(even){background:#f9f9f9;}';
+    html += 'tr:hover{background:#e3f2fd;}';
+    html += '.phone-link{color:#1976D2;text-decoration:none;}';
+    html += '@media print{body{padding:0;}h1{font-size:14px;}table{font-size:10px;}}';
+    html += '</style></head><body>';
+    html += '<h1>📊 گزارش بانک اطلاعاتی اشخاص</h1>';
+    html += '<div class="report-date">تاریخ تولید: ' + jalaliDate + ' — تعداد: ' + toPersianNumber(results.length) + ' نفر</div>';
+    html += body.innerHTML;
+    html += '</body></html>';
+    return html;
+}
+
+// 🔧 ذخیره گزارش به صورت HTML
+function saveContactReportHTML() {
+    const now = new Date();
     const [jy, jm, jd] = toJalaliParts(now);
     const ts = '' + jy + pad2(jm) + pad2(jd) + pad2(now.getHours()) + pad2(now.getMinutes());
-
-    const reportContent = JSON.stringify({
-        type: 'contacts_report',
-        generatedAt: now.toISOString(),
-        count: results.length,
-        contacts: results
-    }, null, 2);
-
-    const blob = new Blob([reportContent], { type: 'application/json' });
+    const html = generateReportHTML();
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'ContactsReport_' + ts + '.json';
+    a.download = 'ContactsReport_' + ts + '.html';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast('گزارش ذخیره شد ✓');
+    showToast('گزارش HTML ذخیره شد ✓');
 }
 
-function shareContactReport() {
-    const body = document.getElementById('contactReportResultsBody');
-    const results = JSON.parse(body.dataset.reportData || '[]');
+// 🔧 ذخیره گزارش به صورت PDF (با استفاده از print → Save as PDF)
+function saveContactReportPDF() {
+    const html = generateReportHTML();
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+    // تاخیر کوتاه برای رندر شدن محتوا
+    setTimeout(() => {
+        printWindow.print();
+    }, 300);
+    showToast('برای ذخیره PDF، در پنجره چاپ «Save as PDF» را انتخاب کنید');
+}
 
-    // تولید متن گزارش برای اشتراک‌گذاری
-    let text = '📊 گزارش بانک اطلاعاتی اشخاص\n';
-    text += 'تعداد: ' + results.length + ' نفر\n\n';
-    results.forEach((c, idx) => {
-        text += (idx + 1) + '. ' + (c.name || '—');
-        if (c.company) text += ' (' + c.company + ')';
-        text += '\n';
-        if (c.position) text += '   سمت: ' + c.position + '\n';
-        if (c.phones && c.phones.length > 0) text += '   تلفن: ' + c.phones.join('، ') + '\n';
-        if (c.commissionAsked) text += '   اشانتیون خواسته: ' + c.commissionAsked + '\n';
-        if (c.commissionPaid) text += '   اشانتیون داده: ' + c.commissionPaid + '\n';
-        text += '\n';
-    });
+// 🔧 ذخیره فایل — هر دو فرمت HTML و PDF
+function saveContactReport() {
+    // طبق درخواست کاربر: هر دو فرمت HTML و PDF
+    // HTML ذخیره می‌شود، PDF با پنجره چاپ
+    saveContactReportHTML();
+}
+
+// 🔧 ارسال گزارش برای پیام‌رسان‌ها — همان فرمت HTML بخش چاپ
+function shareContactReport() {
+    const html = generateReportHTML();
+    const now = new Date();
+    const [jy, jm, jd] = toJalaliParts(now);
+    const ts = '' + jy + pad2(jm) + pad2(jd) + pad2(now.getHours()) + pad2(now.getMinutes());
+
+    // تولید Blob HTML و اشتراک‌گذاری آن به‌عنوان فایل
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const file = new File([blob], 'ContactsReport_' + ts + '.html', { type: 'text/html' });
 
     if (navigator.share) {
-        navigator.share({
-            title: 'گزارش اشخاص',
-            text: text
-        }).catch(() => {
-            // اگر اشتراک‌گذاری شکست خورد، فایل دانلود کن
-            saveContactReport();
-        });
+        // بررسی پشتیبانی از اشتراک‌گذاری فایل
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({
+                title: 'گزارش اشخاص',
+                text: '📊 گزارش بانک اطلاعاتی اشخاص',
+                files: [file]
+            }).catch(() => {
+                // اگر اشتراک‌گذاری شکست خورد، فایل HTML دانلود کن
+                saveContactReportHTML();
+            });
+        } else {
+            // مرورگر از اشتراک‌گذاری فایل پشتیبانی نمی‌کند — فایل HTML دانلود کن
+            saveContactReportHTML();
+        }
     } else {
-        // مرورگر از share پشتیبانی نمی‌کند — فایل دانلود کن
-        saveContactReport();
+        // مرورگر از share پشتیبانی نمی‌کند — فایل HTML دانلود کن
+        saveContactReportHTML();
     }
 }
 
 function printContactReport() {
-    const body = document.getElementById('contactReportResultsBody');
+    const html = generateReportHTML();
     const printWindow = window.open('', '_blank');
-    printWindow.document.write('<html dir="rtl"><head><title>گزارش اشخاص</title>');
-    printWindow.document.write('<style>body{font-family:Tahoma,sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;font-size:11px;}th,td{border:1px solid #ddd;padding:6px;text-align:right;}th{background:#1976D2;color:white;}</style>');
-    printWindow.document.write('</head><body>');
-    printWindow.document.write(body.innerHTML);
-    printWindow.document.write('</body></html>');
+    printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.print();
+    setTimeout(() => {
+        printWindow.print();
+    }, 300);
 }
 
 // ─── انتخاب تاریخ شمسی برای فیلدهای شخص ───
