@@ -3532,7 +3532,7 @@ body.locked .header-actions button {
 <!-- ════════════════════════════════════════════════════════════════════
      📋 مودال انتخاب فرمت گزارش (HTML / PDF / JSON)
      ════════════════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="reportFormatOverlay">
+<div class="modal-overlay" id="reportFormatOverlay" style="z-index: 12000;">
     <div class="modal report-format-modal">
         <h2 id="reportFormatTitle">💾 ذخیره گزارش</h2>
         <p style="text-align:center;color:#666;font-size:13px;margin-bottom:16px;">یک فرمت را انتخاب کنید:</p>
@@ -3607,7 +3607,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v93-2026-11-01-beautiful-report-format-modal';
+const APP_VERSION = 'v94-2026-11-01-fix-report-format-modal-z-index';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
