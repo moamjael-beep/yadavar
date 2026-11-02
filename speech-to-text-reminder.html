@@ -3449,7 +3449,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v87-2026-11-01-notes-continuous-recording-single-paragraph';
+const APP_VERSION = 'v88-2026-11-01-notes-fix-duplicate-text';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -9915,6 +9915,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // تمام متن‌های نهایی در حافظه جمع می‌شوند و فقط وقتی کاربر توقف می‌زند،
 // کل متن به‌عنوان یک پاراگراف (تاریخ - متن کامل) در بالای صفحه نوشته می‌شود.
 let _notesAccumulatedText = '';  // 🔧 متن جمع‌آوری‌شده در طول ضبط
+let _notesAddedIndices = new Set();  // 🔧 ایندکس‌های پردازش‌شده برای جلوگیری از تکرار
 
 function toggleNotesRecording() {
     if (_notesRecording) {
@@ -9947,8 +9948,9 @@ function toggleNotesRecording() {
         showToast('اینترنت در دسترس نیست. ضبط کار نمی‌کند.');
         return;
     }
-    // 🔧 ریست متن جمع‌آوری‌شده
+    // 🔧 ریست متن جمع‌آوری‌شده و ایندکس‌ها
     _notesAccumulatedText = '';
+    _notesAddedIndices = new Set();
     _notesStartRecognitionCycle();
     _notesRecording = true;
     document.getElementById('notesMicBtn').classList.add('recording');
@@ -9962,13 +9964,18 @@ function _notesStartRecognitionCycle() {
     _notesRecognition = new SpeechRecognition();
     _notesRecognition.lang = 'fa-IR';
     _notesRecognition.continuous = true;
-    _notesRecognition.interimResults = true;
+    // 🔧 interimResults = false تا فقط نتایج نهایی دریافت شوند (بدون تکرار)
+    _notesRecognition.interimResults = false;
+    // 🔧 ریست ایندکس‌های پردازش‌شده برای هر سیکل جدید
+    _notesAddedIndices = new Set();
 
     _notesRecognition.onresult = function(event) {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                // 🔧 متن نهایی را به حافظه اضافه کن (در صفحه ننویس)
+        // 🔧 فقط نتایج نهایی را پردازش کن — و فقط یک‌بار برای هر ایندکس
+        // (با استفاده از Set برای جلوگیری از تکرار)
+        for (let i = 0; i < event.results.length; i++) {
+            if (event.results[i].isFinal && !_notesAddedIndices.has(i)) {
                 _notesAccumulatedText += event.results[i][0].transcript + ' ';
+                _notesAddedIndices.add(i);
             }
         }
     };
@@ -9989,7 +9996,6 @@ function _notesStartRecognitionCycle() {
             setTimeout(function() {
                 if (_notesRecording) {
                     try { _notesRecognition.start(); } catch(e) {
-                        // اگر start فوراً صدا زده شد، کمی صبر کن و دوباره امتحان کن
                         setTimeout(function() {
                             if (_notesRecording) {
                                 try { _notesRecognition.start(); } catch(e2) {}
@@ -10005,7 +10011,6 @@ function _notesStartRecognitionCycle() {
         _notesRecognition.start();
     } catch(e) {
         console.error(e);
-        // تلاش مجدد پس از ۳۰۰ms
         setTimeout(function() {
             if (_notesRecording) {
                 try { _notesRecognition.start(); } catch(e2) {}
