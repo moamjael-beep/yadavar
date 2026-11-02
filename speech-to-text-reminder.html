@@ -2230,6 +2230,95 @@ body.locked .header-actions button {
     box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107, inset -4px 0 0 #2196F3;
 }
 
+/* ============ 📝 صفحه یادداشت ============ */
+.notes-overlay {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    direction: rtl;
+}
+.notes-overlay.active { display: flex; }
+.notes-header {
+    position: sticky;
+    top: 0;
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    padding: 14px 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.notes-header h2 { font-size: 17px; font-weight: 700; }
+.notes-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0;
+}
+/* 🔧 محتوای یادداشت: صفحه سفید با خطوط دفتر (خطوط افقی بی‌نهایت) */
+.notes-content {
+    min-height: 100%;
+    padding: 20px;
+    font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+    font-size: 15px;
+    line-height: 2.2;
+    color: #333;
+    outline: none;
+    /* خطوط دفتر: هر خط یک خط افقی */
+    background-image: linear-gradient(to bottom, transparent 0, transparent calc(2.2em - 1px), #e0e0e0 calc(2.2em - 1px), #e0e0e0 2.2em);
+    background-size: 100% 2.2em;
+    background-attachment: local;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.notes-content:empty::before {
+    content: 'اینجا بنویسید یا میکروفون را بزنید...';
+    color: #aaa;
+    pointer-events: none;
+}
+/* 🔧 میکروفون شناور — سمت چپ، وسط صفحه */
+.notes-mic-btn {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #FF9800;
+    color: white;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.2s;
+    border: 2px solid rgba(255,255,255,0.4);
+}
+.notes-mic-btn:active { transform: translateY(-50%) scale(0.92); }
+.notes-mic-btn.recording {
+    background: #f44336;
+    animation: notesMicPulse 1.2s infinite;
+}
+@keyframes notesMicPulse {
+    0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+    50% { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+}
+@media (max-width: 480px) {
+    .notes-mic-btn { width: 52px; height: 52px; font-size: 24px; left: 14px; }
+    .notes-content { font-size: 14px; padding: 14px; }
+}
+
 /* ============ 👥 بانک اطلاعاتی اشخاص (CRM) ============ */
 .contacts-overlay {
     position: fixed;
@@ -2759,6 +2848,7 @@ body.locked .header-actions button {
         <button class="icon-btn share-btn install-btn" id="installBtn" onclick="installApp()" title="نصب به عنوان اپلیکیشن" style="display:none;">⬇</button>
         <button class="icon-btn share-btn" id="calBtn" onclick="openCalendar()" title="تقویم شمسی">📅</button>
         <button class="icon-btn share-btn" id="contactsBtn" onclick="openContacts()" title="بانک اطلاعاتی اشخاص">👥</button>
+        <button class="icon-btn share-btn" id="notesBtn" onclick="openNotes()" title="یادداشت">📝</button>
         <!-- دکمه بازگردانی به هدر گروه‌ها منتقل شد (در منوی همبرگری هر گروه) -->
 <button class="icon-btn share-btn" id="resetOrderBtn" onclick="resetAllTaskPositions()" title="برگرداندن همه تسک‌ها به ترتیب اصلی" style="display:none;">↩</button>
         <button class="icon-btn share-btn" id="importBtn" onclick="importDatabase()" title="وارد کردن دیتابیس از فایل JSON">📥</button>
@@ -3045,6 +3135,25 @@ body.locked .header-actions button {
     </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════════
+     📝 صفحه یادداشت — یک صفحه سفید تمام‌صفحه با خطوط دفتر و میکروفون شناور
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="notes-overlay" id="notesOverlay">
+    <div class="notes-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <button class="contacts-back-btn" onclick="closeNotes()" title="بازگشت">◄</button>
+            <h2>📝 یادداشت</h2>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button class="contacts-action-btn" onclick="clearNotes()" title="پاک کردن همه">🗑 پاک</button>
+        </div>
+    </div>
+    <div class="notes-body">
+        <div id="notesContent" class="notes-content" contenteditable="true" spellcheck="false"></div>
+    </div>
+    <button class="notes-mic-btn" id="notesMicBtn" onclick="toggleNotesRecording()" title="ضبط صوت">🎤</button>
+</div>
+
 <!-- مودال جستجوی اشخاص -->
 <div class="modal-overlay" id="contactSearchOverlay">
     <div class="modal search-form-modal">
@@ -3318,7 +3427,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v84-2026-11-01-header-15x-sticky-fix-report-3-options';
+const APP_VERSION = 'v85-2026-11-01-fix-report-done-sort-notes-page';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7827,6 +7936,11 @@ window.addEventListener('popstate', (e) => {
         closePhoneActionMenu();
         return;
     }
+    if (document.getElementById('notesOverlay') &&
+        document.getElementById('notesOverlay').classList.contains('active')) {
+        closeNotes();
+        return;
+    }
     if (document.getElementById('contactsOverlay') &&
         document.getElementById('contactsOverlay').classList.contains('active')) {
         closeContacts();
@@ -8074,25 +8188,25 @@ function renderTasksView(groupId) {
     items.sort((a, b) => {
         // ۱. انجام‌شده‌ها در پایین
         if (a.done !== b.done) return a.done ? 1 : -1;
-        // ۲. پین‌ها اول
+        // ۲. اگر هر دو انجام‌شده هستند: نزدیک‌ترین deadline بالا، دورترین پایین
+        if (a.done && b.done) {
+            return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        }
+        // ۳. پین‌ها اول (فقط برای انجام‌نشده)
         const aPinned = a.pinned === true;
         const bPinned = b.pinned === true;
         if (aPinned && !bPinned) return -1;
         if (!aPinned && bPinned) return 1;
         if (aPinned && bPinned) {
-            // هر دو پین هستند — بر اساس pinnedOrder
             const aOrder = (typeof a.pinnedOrder === 'number') ? a.pinnedOrder : 999999;
             const bOrder = (typeof b.pinnedOrder === 'number') ? b.pinnedOrder : 999999;
             if (aOrder !== bOrder) return aOrder - bOrder;
-            // اگر pinnedOrder ندارند، بر اساس pinnedAt (نزولی)
             return (b.pinnedAt || 0) - (a.pinnedAt || 0);
         }
-        // ۳. تسک‌های غیرپین
+        // ۴. تسک‌های غیرپین (انجام‌نشده)
         if (groupId === 'all' || groupId === 'urgent') {
-            // در «همه کارها» و «کارهای فوری» فقط deadline (drag-drop ندارند)
             return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
         } else {
-            // در گروه‌های سفارشی: اول position (drag-drop)، بعد deadline
             const aPos = (typeof a.position === 'number') ? a.position : 999999;
             const bPos = (typeof b.position === 'number') ? b.position : 999999;
             if (aPos !== bPos) return aPos - bPos;
@@ -9597,40 +9711,36 @@ function saveContactReportJSON() {
 
 // 🔧 ذخیره فایل — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
 function saveContactReportPrompt() {
-    const choice = prompt(
-        '💾 ذخیره گزارش\n\n' +
-        'برای ذخیره، یکی از گزینه‌های زیر را وارد کنید:\n\n' +
-        '1 — ذخیره به صورت HTML\n' +
-        '2 — ذخیره به صورت PDF\n' +
-        '3 — ذخیره به صورت JSON (دیتابیس)\n'
-    );
-    if (choice === '1') {
+    // مرحله ۱: HTML یا ادامه؟
+    const isHTML = confirm('💾 ذخیره گزارش\n\nفرمت HTML؟\n\nبله = HTML\nخیر = ادامه (PDF یا JSON)');
+    if (isHTML) {
         saveContactReportHTML();
-    } else if (choice === '2') {
+        return;
+    }
+    // مرحله ۲: PDF یا JSON؟
+    const isPDF = confirm('💾 ذخیره گزارش\n\nفرمت PDF؟\n\nبله = PDF (پنجره چاپ)\nخیر = JSON (دیتابیس)');
+    if (isPDF) {
         saveContactReportPDF();
-    } else if (choice === '3') {
+    } else {
         saveContactReportJSON();
     }
-    // اگر انصراف زده یا مقدار نامعتبر، کاری نمی‌کنیم
 }
 
 // 🔧 ارسال گزارش برای پیام‌رسان‌ها — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
 function shareContactReportPrompt() {
-    const choice = prompt(
-        '📤 ارسال گزارش\n\n' +
-        'برای ارسال، یکی از گزینه‌های زیر را وارد کنید:\n\n' +
-        '1 — ارسال به صورت HTML\n' +
-        '2 — ارسال به صورت PDF (فایل HTML ارسال می‌شود)\n' +
-        '3 — ارسال به صورت JSON (دیتابیس)\n'
-    );
-    if (choice === '1') {
+    // مرحله ۱: HTML یا ادامه؟
+    const isHTML = confirm('📤 ارسال گزارش\n\nفرمت HTML؟\n\nبله = HTML\nخیر = ادامه (PDF یا JSON)');
+    if (isHTML) {
         shareContactReportFile('html');
-    } else if (choice === '2') {
+        return;
+    }
+    // مرحله ۲: PDF یا JSON؟
+    const isPDF = confirm('📤 ارسال گزارش\n\nفرمت PDF؟\n\nبله = PDF (فایل HTML ارسال می‌شود)\nخیر = JSON (دیتابیس)');
+    if (isPDF) {
         shareContactReportFile('pdf');
-    } else if (choice === '3') {
+    } else {
         shareContactReportFile('json');
     }
-    // اگر انصراف زده یا مقدار نامعتبر، کاری نمی‌کنیم
 }
 
 // 🔧 ارسال فایل گزارش برای پیام‌رسان‌ها
@@ -9701,6 +9811,142 @@ function printContactReport() {
     setTimeout(() => {
         printWindow.print();
     }, 300);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 📝 صفحه یادداشت — دفترچه یادداشت با خطوط دفتر و میکروفون شناور
+// ════════════════════════════════════════════════════════════════════
+const NOTES_KEY = 'yadavar_notes_v1';
+let _notesRecognition = null;
+let _notesRecording = false;
+
+// باز کردن صفحه یادداشت
+function openNotes() {
+    const content = document.getElementById('notesContent');
+    // بارگذاری یادداشت‌های ذخیره‌شده
+    const saved = localStorage.getItem(NOTES_KEY) || '';
+    content.innerHTML = saved;
+    document.getElementById('notesOverlay').classList.add('active');
+    history.pushState({ view: 'notes' }, '');
+    // اسکرول به بالا
+    setTimeout(() => {
+        const body = document.querySelector('.notes-body');
+        if (body) body.scrollTop = 0;
+        // فوکوس به محتوا
+        content.focus();
+    }, 100);
+}
+
+// بستن صفحه یادداشت
+function closeNotes() {
+    // ذخیره یادداشت‌ها
+    const content = document.getElementById('notesContent');
+    localStorage.setItem(NOTES_KEY, content.innerHTML);
+    // توقف ضبط اگر فعال است
+    if (_notesRecording) {
+        toggleNotesRecording();
+    }
+    document.getElementById('notesOverlay').classList.remove('active');
+}
+
+// پاک کردن همه یادداشت‌ها
+function clearNotes() {
+    if (!confirm('همه یادداشت‌ها پاک شوند؟')) return;
+    const content = document.getElementById('notesContent');
+    content.innerHTML = '';
+    localStorage.setItem(NOTES_KEY, '');
+    showToast('یادداشت‌ها پاک شد');
+}
+
+// ذخیره خودکار یادداشت‌ها هنگام تایپ
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        const content = document.getElementById('notesContent');
+        if (content) {
+            content.addEventListener('input', function() {
+                localStorage.setItem(NOTES_KEY, content.innerHTML);
+            });
+        }
+    }, 500);
+});
+
+// ضبط/توقف صوت برای یادداشت
+function toggleNotesRecording() {
+    if (_notesRecording) {
+        // توقف ضبط
+        _notesRecording = false;
+        document.getElementById('notesMicBtn').classList.remove('recording');
+        if (_notesRecognition) {
+            try { _notesRecognition.stop(); } catch(e) {}
+        }
+        return;
+    }
+    // شروع ضبط
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        showToast('مرورگر از تشخیص صوت پشتیبانی نمی‌کند');
+        return;
+    }
+    // بررسی اتصال اینترنت
+    if (typeof isReachable !== 'undefined' && !isReachable) {
+        showToast('اینترنت در دسترس نیست. ضبط کار نمی‌کند.');
+        return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    _notesRecognition = new SpeechRecognition();
+    _notesRecognition.lang = 'fa-IR';
+    _notesRecognition.continuous = true;
+    _notesRecognition.interimResults = true;
+
+    let finalText = '';
+
+    _notesRecognition.onresult = function(event) {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                finalText += event.results[i][0].transcript;
+            } else {
+                interim += event.results[i][0].transcript;
+            }
+        }
+        // به‌روزرسانی محتوای موقت (interim) بدون ذخیره
+        // وقتی متن نهایی شد، آن را با تاریخ به ابتدای صفحه اضافه می‌کنیم
+        if (finalText.trim()) {
+            const dateStr = toJalaliLong(new Date());
+            const newEntry = toPersianDigits(dateStr) + ' - ' + finalText.trim() + '\n';
+            const content = document.getElementById('notesContent');
+            // 🔧 متن جدید در بالای صفحه اضافه می‌شود (متن‌های قبلی یک خط پایین می‌روند)
+            const currentHTML = content.innerHTML;
+            content.innerHTML = newEntry.replace(/\n/g, '<br>') + currentHTML;
+            // ذخیره
+            localStorage.setItem(NOTES_KEY, content.innerHTML);
+            finalText = '';
+        }
+    };
+
+    _notesRecognition.onerror = function(event) {
+        console.error('Notes recognition error:', event.error);
+        if (event.error === 'network') {
+            showToast('خطای شبکه. اینترنت را بررسی کنید.');
+        }
+        _notesRecording = false;
+        document.getElementById('notesMicBtn').classList.remove('recording');
+    };
+
+    _notesRecognition.onend = function() {
+        _notesRecording = false;
+        document.getElementById('notesMicBtn').classList.remove('recording');
+    };
+
+    try {
+        _notesRecognition.start();
+        _notesRecording = true;
+        document.getElementById('notesMicBtn').classList.add('recording');
+        showToast('ضبط شروع شد — صحبت کنید');
+    } catch(e) {
+        console.error(e);
+        showToast('خطا در شروع ضبط');
+        _notesRecording = false;
+    }
 }
 
 // ─── انتخاب تاریخ شمسی برای فیلدهای شخص ───
