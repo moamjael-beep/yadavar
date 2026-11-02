@@ -1524,6 +1524,28 @@ body { padding-bottom: 30px; }
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
 }
+/* 🔧 دکمه یادداشت در هدر هر گروه */
+.group-notes-btn {
+    background: rgba(255,255,255,0.25);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.2s, transform 0.2s;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+.group-notes-btn:hover { background: rgba(255,255,255,0.4); }
+.group-notes-btn:active { transform: scale(0.92); }
+
 /* Visual hint that the group is being dragged */
 .group-item.sortable-ghost { opacity: 0.4; }
 .group-item.sortable-chosen { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
@@ -3427,7 +3449,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v85-2026-11-01-fix-report-done-sort-notes-page';
+const APP_VERSION = 'v87-2026-11-01-notes-continuous-recording-single-paragraph';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7373,7 +7395,7 @@ function initGroupsSortable(container) {
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
             // Don't drag the fixed "همه کارها" item or the "add new group" button.
-            filter: '.group-item-fixed, .add-group',
+            filter: '.group-item-fixed, .add-group, .group-notes-btn',
             preventOnFilter: false,  // allow clicks on filtered elements
             // Long-press on touch to start drag (so tap-to-open still works).
             // 300ms is a good balance — feels responsive but doesn't conflict with tap.
@@ -8077,22 +8099,17 @@ function renderGroupsView() {
     allDiv.className = 'group-item group-item-fixed';
     allDiv.dataset.groupId = 'all';
     allDiv.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
-    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems)}</div>`;
+    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems)}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('all')" title="یادداشت">📝</button></div>`;
     allDiv.onclick = () => openGroupView('all');
     container.appendChild(allDiv);
 
     // 🔧 "کارهای فوری" (yellow, second — NOT draggable, sticky)
-    // این گروه تسک‌هایی که علامت «فوری» خورده‌اند را نمایش می‌دهد
-    // 🔧 در هدر «کارهای فوری»، تمام تسک‌های فوری (از همهٔ گروه‌ها) شمرده
-    // می‌شوند — فارغ از اینکه گروهشان در «همه کارها» مخفی است یا نه.
-    // این با فیلتر گروه «کارهای فوری» در renderTasksView مطابقت دارد.
     const urgentItems = items.filter(i => i.urgent === true);
     const urgentDiv = document.createElement('div');
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
     urgentDiv.style.background = 'linear-gradient(135deg, #FFC107, #FF8F00)';
-    // 🔧 برای گروه «کارهای فوری»، badge فوری نشان داده نمی‌شود (زیرتکراری است)
-    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false })}</div>`;
+    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false })}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('urgent')" title="یادداشت">📝</button></div>`;
     urgentDiv.onclick = () => openGroupView('urgent');
     container.appendChild(urgentDiv);
 
@@ -8133,7 +8150,7 @@ function renderGroupsView() {
             div.style.background = `linear-gradient(135deg, ${group.color}, ${group.color}DD)`;
         }
         const iconHtml = getGroupIconHtml(group);
-        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span>${buildGroupBadges(groupItems)}</div>`;
+        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span>${buildGroupBadges(groupItems)}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('${group.id}')" title="یادداشت">📝</button></div>`;
         div.onclick = () => openGroupView(group.id);
         container.appendChild(div);
     });
@@ -9819,13 +9836,33 @@ function printContactReport() {
 const NOTES_KEY = 'yadavar_notes_v1';
 let _notesRecognition = null;
 let _notesRecording = false;
+let _notesTargetGroup = null;  // 🔧 گروه فعلی یادداشت (null = یادداشت عمومی)
 
-// باز کردن صفحه یادداشت
-function openNotes() {
+// 🔧 ساخت کلید localStorage برای یک گروه خاص
+function getNotesKey(groupId) {
+    if (!groupId) return NOTES_KEY;
+    return NOTES_KEY + '_' + groupId;
+}
+
+// باز کردن صفحه یادداشت — با groupId اختیاری
+function openNotes(groupId) {
+    _notesTargetGroup = groupId || null;
     const content = document.getElementById('notesContent');
-    // بارگذاری یادداشت‌های ذخیره‌شده
-    const saved = localStorage.getItem(NOTES_KEY) || '';
+    // بارگذاری یادداشت‌های ذخیره‌شده برای این گروه
+    const key = getNotesKey(_notesTargetGroup);
+    const saved = localStorage.getItem(key) || '';
     content.innerHTML = saved;
+    // 🔧 عنوان صفحه یادداشت بر اساس گروه
+    const titleEl = document.querySelector('.notes-header h2');
+    if (titleEl) {
+        if (_notesTargetGroup) {
+            const group = getGroupById(_notesTargetGroup);
+            const groupName = group ? group.name : 'گروه';
+            titleEl.textContent = '📝 یادداشت — ' + groupName;
+        } else {
+            titleEl.textContent = '📝 یادداشت';
+        }
+    }
     document.getElementById('notesOverlay').classList.add('active');
     history.pushState({ view: 'notes' }, '');
     // اسکرول به بالا
@@ -9839,9 +9876,10 @@ function openNotes() {
 
 // بستن صفحه یادداشت
 function closeNotes() {
-    // ذخیره یادداشت‌ها
+    // ذخیره یادداشت‌ها برای گروه فعلی
     const content = document.getElementById('notesContent');
-    localStorage.setItem(NOTES_KEY, content.innerHTML);
+    const key = getNotesKey(_notesTargetGroup);
+    localStorage.setItem(key, content.innerHTML);
     // توقف ضبط اگر فعال است
     if (_notesRecording) {
         toggleNotesRecording();
@@ -9851,10 +9889,11 @@ function closeNotes() {
 
 // پاک کردن همه یادداشت‌ها
 function clearNotes() {
-    if (!confirm('همه یادداشت‌ها پاک شوند؟')) return;
+    if (!confirm('همه یادداشت‌های این صفحه پاک شوند؟')) return;
     const content = document.getElementById('notesContent');
     content.innerHTML = '';
-    localStorage.setItem(NOTES_KEY, '');
+    const key = getNotesKey(_notesTargetGroup);
+    localStorage.setItem(key, '');
     showToast('یادداشت‌ها پاک شد');
 }
 
@@ -9864,20 +9903,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = document.getElementById('notesContent');
         if (content) {
             content.addEventListener('input', function() {
-                localStorage.setItem(NOTES_KEY, content.innerHTML);
+                const key = getNotesKey(_notesTargetGroup);
+                localStorage.setItem(key, content.innerHTML);
             });
         }
     }, 500);
 });
 
 // ضبط/توقف صوت برای یادداشت
+// 🔧 ضبط با سیکل‌های متوالی ادامه می‌یابد تا زمانی که کاربر دوباره میکروفون را لمس کند.
+// تمام متن‌های نهایی در حافظه جمع می‌شوند و فقط وقتی کاربر توقف می‌زند،
+// کل متن به‌عنوان یک پاراگراف (تاریخ - متن کامل) در بالای صفحه نوشته می‌شود.
+let _notesAccumulatedText = '';  // 🔧 متن جمع‌آوری‌شده در طول ضبط
+
 function toggleNotesRecording() {
     if (_notesRecording) {
-        // توقف ضبط
+        // 🔧 توقف ضبط — کل متن جمع‌آوری‌شده را به‌عنوان یک پاراگراف بنویس
         _notesRecording = false;
         document.getElementById('notesMicBtn').classList.remove('recording');
         if (_notesRecognition) {
             try { _notesRecognition.stop(); } catch(e) {}
+        }
+        // 🔧 اگر متنی جمع‌آوری شده، آن را به‌عنوان یک پاراگراف در بالای صفحه بنویس
+        if (_notesAccumulatedText.trim()) {
+            const dateStr = toJalaliLong(new Date());
+            const newEntry = toPersianDigits(dateStr) + ' - ' + _notesAccumulatedText.trim() + '\n';
+            const content = document.getElementById('notesContent');
+            const currentHTML = content.innerHTML;
+            content.innerHTML = newEntry.replace(/\n/g, '<br>') + currentHTML;
+            localStorage.setItem(getNotesKey(_notesTargetGroup), content.innerHTML);
+            _notesAccumulatedText = '';
+            showToast('یادداشت ثبت شد ✓');
         }
         return;
     }
@@ -9891,35 +9947,29 @@ function toggleNotesRecording() {
         showToast('اینترنت در دسترس نیست. ضبط کار نمی‌کند.');
         return;
     }
+    // 🔧 ریست متن جمع‌آوری‌شده
+    _notesAccumulatedText = '';
+    _notesStartRecognitionCycle();
+    _notesRecording = true;
+    document.getElementById('notesMicBtn').classList.add('recording');
+    showToast('ضبط شروع شد — صحبت کنید (برای پایان دوباره میکروفون را بزنید)');
+}
+
+// 🔧 یک سیکل تشخیص صوت را شروع می‌کند.
+// وقتی سیکل تمام می‌شود (onend)، اگر هنوز در حال ضبط هستیم، سیکل بعدی شروع می‌شود.
+function _notesStartRecognitionCycle() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     _notesRecognition = new SpeechRecognition();
     _notesRecognition.lang = 'fa-IR';
     _notesRecognition.continuous = true;
     _notesRecognition.interimResults = true;
 
-    let finalText = '';
-
     _notesRecognition.onresult = function(event) {
-        let interim = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
-                finalText += event.results[i][0].transcript;
-            } else {
-                interim += event.results[i][0].transcript;
+                // 🔧 متن نهایی را به حافظه اضافه کن (در صفحه ننویس)
+                _notesAccumulatedText += event.results[i][0].transcript + ' ';
             }
-        }
-        // به‌روزرسانی محتوای موقت (interim) بدون ذخیره
-        // وقتی متن نهایی شد، آن را با تاریخ به ابتدای صفحه اضافه می‌کنیم
-        if (finalText.trim()) {
-            const dateStr = toJalaliLong(new Date());
-            const newEntry = toPersianDigits(dateStr) + ' - ' + finalText.trim() + '\n';
-            const content = document.getElementById('notesContent');
-            // 🔧 متن جدید در بالای صفحه اضافه می‌شود (متن‌های قبلی یک خط پایین می‌روند)
-            const currentHTML = content.innerHTML;
-            content.innerHTML = newEntry.replace(/\n/g, '<br>') + currentHTML;
-            // ذخیره
-            localStorage.setItem(NOTES_KEY, content.innerHTML);
-            finalText = '';
         }
     };
 
@@ -9927,25 +9977,40 @@ function toggleNotesRecording() {
         console.error('Notes recognition error:', event.error);
         if (event.error === 'network') {
             showToast('خطای شبکه. اینترنت را بررسی کنید.');
+            _notesRecording = false;
+            document.getElementById('notesMicBtn').classList.remove('recording');
         }
-        _notesRecording = false;
-        document.getElementById('notesMicBtn').classList.remove('recording');
+        // خطاهای دیگر (no-speech، audio-capture) را نادیده می‌گیریم — سیکل بعدی ادامه می‌دهد
     };
 
     _notesRecognition.onend = function() {
-        _notesRecording = false;
-        document.getElementById('notesMicBtn').classList.remove('recording');
+        // 🔧 اگر هنوز در حال ضبط هستیم، سیکل بعدی را شروع کن (سیکل‌های متوالی)
+        if (_notesRecording) {
+            setTimeout(function() {
+                if (_notesRecording) {
+                    try { _notesRecognition.start(); } catch(e) {
+                        // اگر start فوراً صدا زده شد، کمی صبر کن و دوباره امتحان کن
+                        setTimeout(function() {
+                            if (_notesRecording) {
+                                try { _notesRecognition.start(); } catch(e2) {}
+                            }
+                        }, 300);
+                    }
+                }
+            }, 100);
+        }
     };
 
     try {
         _notesRecognition.start();
-        _notesRecording = true;
-        document.getElementById('notesMicBtn').classList.add('recording');
-        showToast('ضبط شروع شد — صحبت کنید');
     } catch(e) {
         console.error(e);
-        showToast('خطا در شروع ضبط');
-        _notesRecording = false;
+        // تلاش مجدد پس از ۳۰۰ms
+        setTimeout(function() {
+            if (_notesRecording) {
+                try { _notesRecognition.start(); } catch(e2) {}
+            }
+        }, 300);
     }
 }
 
