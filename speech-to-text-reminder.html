@@ -244,81 +244,115 @@ body { padding-bottom: 30px; }
    - ثابت (fixed) در وسط سمت چپ صفحه
    - فقط در حالت نمایش تسک‌های یک گروه (tasks view) ظاهر می‌شود
    - در حالت ضبط، قرمز و پالس می‌زند (مانند دکمهٔ هدر) */
+/* 🔧 دکمه شناور افزودن تسک — بزرگ‌تر با افکت تپنده زیبا همیشگی */
 .floating-add-btn {
     position: fixed;
     left: 20px;
-    bottom: 20px;
+    bottom: 24px;
     z-index: 9000;
-    width: 56px;
-    height: 56px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
-    background: var(--primary);
+    background: linear-gradient(135deg, #2196F3, #1976D2);
     color: white;
     border: none;
-    font-size: 32px;
+    font-size: 38px;
     font-weight: 300;
     line-height: 1;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    display: none;  /* به‌صورت پیش‌فرض مخفی — فقط در tasks view نمایش داده می‌شود */
+    box-shadow: 0 6px 20px rgba(33,150,243,0.4);
+    display: none;
     align-items: center;
     justify-content: center;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    /* 🔧 حاشیهٔ سفید نازک برای تمایز از پس‌زمینه */
-    border: 2px solid rgba(255,255,255,0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 3px solid rgba(255,255,255,0.5);
+    /* 🔧 افکت تپنده همیشگی — بزرگ و کوچک شدن با سایه متغیر */
+    animation: floatingIdle 2.5s ease-in-out infinite;
 }
 .floating-add-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
+    animation: none;
 }
 .floating-add-btn.recording {
-    background: var(--red);
-    color: white;
-    animation: floatingPulse 1.2s infinite;
+    background: linear-gradient(135deg, #f44336, #d32f2f);
+    box-shadow: 0 6px 20px rgba(244,67,54,0.5);
+    animation: floatingRecordPulse 1s ease-in-out infinite;
 }
 .floating-add-btn.disabled {
     opacity: 0.4;
     cursor: not-allowed;
     filter: grayscale(0.7);
     pointer-events: none;
+    animation: none;
 }
-@keyframes floatingPulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
-    50% { transform: scale(1.08); box-shadow: 0 0 0 12px rgba(244,67,54,0); }
+/* 🔧 افکت تپنده همیشگی — بزرگ‌تر و کوچک‌تر شدن با سایه رنگی */
+@keyframes floatingIdle {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 6px 20px rgba(33,150,243,0.4);
+    }
+    50% {
+        transform: scale(1.12);
+        box-shadow: 0 8px 28px rgba(33,150,243,0.6);
+    }
 }
-/* در صفحات کوچک، دکمه کمی کوچک‌تر */
+/* 🔧 افکت تپنده هنگام ضبط — قرمز با سرعت بیشتر */
+@keyframes floatingRecordPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 6px 20px rgba(244,67,54,0.5);
+    }
+    50% {
+        transform: scale(1.15);
+        box-shadow: 0 8px 30px rgba(244,67,54,0.7);
+    }
+}
+/* در صفحات کوچک */
 @media (max-width: 480px) {
-    .floating-add-btn { width: 48px; height: 48px; font-size: 26px; left: 14px; bottom: 14px; }
+    .floating-add-btn { width: 60px; height: 60px; font-size: 32px; left: 14px; bottom: 18px; }
 }
 
-/* 🔧 دکمهٔ شناور افزودن شخص جدید — در صفحه اشخاص نمایش داده می‌شود.
-   z-index بالاتر از contactsOverlay (10000) اما پایین‌تر از contactForm (10500)
-   تا وقتی فرم شخص باز می‌شود، زیر فرم قرار گیرد. */
+/* 🔧 دکمه شناور افزودن شخص — بزرگ‌تر با افکت تپنده زیبا همیشگی */
 .floating-contact-btn {
     position: fixed;
     left: 20px;
-    bottom: 20px;
+    bottom: 24px;
     z-index: 10050;
-    width: 56px;
-    height: 56px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
-    background: #4CAF50;
+    background: linear-gradient(135deg, #4CAF50, #388E3C);
     color: white;
     border: none;
-    font-size: 28px;
+    font-size: 34px;
     line-height: 1;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    display: none;  /* به‌صورت پیش‌فرض مخفی — فقط در صفحه اشخاص نمایش داده می‌شود */
+    box-shadow: 0 6px 20px rgba(76,175,80,0.4);
+    display: none;
     align-items: center;
     justify-content: center;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    border: 2px solid rgba(255,255,255,0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 3px solid rgba(255,255,255,0.5);
+    /* 🔧 افکت تپنده همیشگی */
+    animation: floatingContactIdle 2.5s ease-in-out infinite;
 }
 .floating-contact-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
+    animation: none;
+}
+/* 🔧 افکت تپنده همیشگی برای دکمه اشخاص */
+@keyframes floatingContactIdle {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 6px 20px rgba(76,175,80,0.4);
+    }
+    50% {
+        transform: scale(1.12);
+        box-shadow: 0 8px 28px rgba(76,175,80,0.6);
+    }
 }
 @media (max-width: 480px) {
-    .floating-contact-btn { width: 48px; height: 48px; font-size: 24px; left: 14px; bottom: 14px; }
+    .floating-contact-btn { width: 60px; height: 60px; font-size: 28px; left: 14px; bottom: 18px; }
 }
 /* Disabled state for the reset-order button (↩). Used on the groups list
    view AND inside the "همه کارها" group — there's no manual ordering to
@@ -1524,6 +1558,22 @@ body { padding-bottom: 30px; }
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
 }
+/* 🔧 wrapper دایره تعداد + آیکون یادداشت — به هم می‌چسبند */
+.group-count-notes-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+}
+.group-count-notes-wrapper .group-count {
+    border-radius: 50% 0 0 50%;  /* فقط سمت راست گرد (در RTL سمت چپ دایره) */
+    margin-right: -1px;  /* کمی هم‌پوشانی برای چسبیدن */
+}
+.group-count-notes-wrapper .group-notes-btn {
+    border-radius: 0 50% 50% 0;  /* فقط سمت چپ گرد (در RTL سمت راست دایره) */
+    margin-right: 0;
+    margin-left: 0;
+}
 /* 🔧 دکمه یادداشت در هدر هر گروه */
 .group-notes-btn {
     background: rgba(255,255,255,0.25);
@@ -1671,6 +1721,69 @@ body { padding-bottom: 30px; }
     cursor: pointer;
 }
 .group-selector option { background: #333; color: white; }
+
+/* ============ 📋 مودال انتخاب فرمت گزارش ============ */
+.report-format-modal { max-width: 400px; }
+.report-format-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.report-format-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 12px;
+    background: #f5f5f5;
+    border: 2px solid #e0e0e0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.report-format-option:active { transform: scale(0.98); }
+.report-format-option.selected {
+    background: #e3f2fd;
+    border-color: #2196F3;
+}
+.report-format-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+    width: 48px;
+    text-align: center;
+}
+.report-format-info { flex: 1; }
+.report-format-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+}
+.report-format-desc {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+}
+.report-format-check {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.report-format-option.selected .report-format-check {
+    background: #2196F3;
+    border-color: #2196F3;
+}
+.report-format-option.selected .report-format-check::after {
+    content: '✓';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+}
 
 /* ============ 🔒 صفحه قفل انقضا ============ */
 /* این استایل‌ها برای صفحه‌ای است که بعد از ۲۰ فروردین ۱۴۰۵ نمایش داده
@@ -3416,6 +3529,46 @@ body.locked .header-actions button {
     </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════════
+     📋 مودال انتخاب فرمت گزارش (HTML / PDF / JSON)
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="reportFormatOverlay">
+    <div class="modal report-format-modal">
+        <h2 id="reportFormatTitle">💾 ذخیره گزارش</h2>
+        <p style="text-align:center;color:#666;font-size:13px;margin-bottom:16px;">یک فرمت را انتخاب کنید:</p>
+        <div class="report-format-options">
+            <div class="report-format-option" data-format="html" onclick="selectReportFormat('html')">
+                <div class="report-format-icon">📄</div>
+                <div class="report-format-info">
+                    <div class="report-format-name">HTML</div>
+                    <div class="report-format-desc">صفحه وب قابل مشاهده در مرورگر</div>
+                </div>
+                <div class="report-format-check" id="reportFormatCheckHtml"></div>
+            </div>
+            <div class="report-format-option" data-format="pdf" onclick="selectReportFormat('pdf')">
+                <div class="report-format-icon">📑</div>
+                <div class="report-format-info">
+                    <div class="report-format-name">PDF</div>
+                    <div class="report-format-desc">فایل PDF (از طریق پنجره چاپ)</div>
+                </div>
+                <div class="report-format-check" id="reportFormatCheckPdf"></div>
+            </div>
+            <div class="report-format-option" data-format="json" onclick="selectReportFormat('json')">
+                <div class="report-format-icon">🗂️</div>
+                <div class="report-format-info">
+                    <div class="report-format-name">JSON</div>
+                    <div class="report-format-desc">دیتابیس کامل اشخاص (داده خام)</div>
+                </div>
+                <div class="report-format-check" id="reportFormatCheckJson"></div>
+            </div>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-secondary" onclick="cancelReportFormat()">انصراف</button>
+            <button class="btn btn-primary" id="reportFormatConfirmBtn" onclick="confirmReportFormat()" disabled>تأیید</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════════════════════
 // 🧩 بخش ۳: تنظیمات و متغیرهای عمومی JavaScript
@@ -3454,7 +3607,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v89-2026-11-01-notes-date-red';
+const APP_VERSION = 'v93-2026-11-01-beautiful-report-format-modal';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8074,9 +8227,10 @@ function renderGroupsView() {
     //   groupItems: آرایهٔ تسک‌های این گروه (قبل از فیلتر انجام‌شده)
     //   opts: { showUrgentBadge: bool } — برای گروه «کارهای فوری» که خودش
     //         فوری است، badge فوری نشان داده نمی‌شود (زیرتکراری است).
-    function buildGroupBadges(groupItems, opts) {
+    function buildGroupBadges(groupItems, opts, groupId) {
         const o = opts || {};
         const showUrgentBadge = o.showUrgentBadge !== false;
+        const gid = groupId || '';
         const notDone = groupItems.filter(i => !i.done);
         const notDoneCount = notDone.length;
         // 🔧 بررسی با == true برای پذیرش مقادیر قدیمی
@@ -8089,7 +8243,8 @@ function renderGroupsView() {
         if (showUrgentBadge && urgentCount > 0) {
             html += `<span class="group-badge-urgent">🚨${toPersianNumber(urgentCount)}</span>`;
         }
-        html += `<span class="group-count">${toPersianNumber(notDoneCount)}</span>`;
+        // 🔧 دایره تعداد تسک‌ها به آیکون یادداشت می‌چسبد — هر دو در یک wrapper
+        html += `<div class="group-count-notes-wrapper"><span class="group-count">${toPersianNumber(notDoneCount)}</span><button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('${gid}')" title="یادداشت">📝</button></div>`;
         return html;
     }
 
@@ -8104,7 +8259,7 @@ function renderGroupsView() {
     allDiv.className = 'group-item group-item-fixed';
     allDiv.dataset.groupId = 'all';
     allDiv.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
-    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems)}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('all')" title="یادداشت">📝</button></div>`;
+    allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems, {}, 'all')}</div>`;
     allDiv.onclick = () => openGroupView('all');
     container.appendChild(allDiv);
 
@@ -8114,7 +8269,7 @@ function renderGroupsView() {
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
     urgentDiv.style.background = 'linear-gradient(135deg, #FFC107, #FF8F00)';
-    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false })}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('urgent')" title="یادداشت">📝</button></div>`;
+    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false }, 'urgent')}</div>`;
     urgentDiv.onclick = () => openGroupView('urgent');
     container.appendChild(urgentDiv);
 
@@ -8155,7 +8310,7 @@ function renderGroupsView() {
             div.style.background = `linear-gradient(135deg, ${group.color}, ${group.color}DD)`;
         }
         const iconHtml = getGroupIconHtml(group);
-        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span>${buildGroupBadges(groupItems)}<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('${group.id}')" title="یادداشت">📝</button></div>`;
+        div.innerHTML = `<div class="group-item-row">${iconHtml}<span class="group-name">${escapeHtml(group.name)}</span>${buildGroupBadges(groupItems, {}, group.id)}</div>`;
         div.onclick = () => openGroupView(group.id);
         container.appendChild(div);
     });
@@ -8210,9 +8365,12 @@ function renderTasksView(groupId) {
     items.sort((a, b) => {
         // ۱. انجام‌شده‌ها در پایین
         if (a.done !== b.done) return a.done ? 1 : -1;
-        // ۲. اگر هر دو انجام‌شده هستند: نزدیک‌ترین deadline بالا، دورترین پایین
+        // ۲. اگر هر دو انجام‌شده هستند: بر اساس تاریخ و ساعت انجام شدن
+        //    جدیدترین انجام (بالا) ← قدیمی‌ترین انجام (پایین)
         if (a.done && b.done) {
-            return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+            const aCompleted = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+            const bCompleted = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+            return bCompleted - aCompleted;  // نزولی: جدیدترین بالا
         }
         // ۳. پین‌ها اول (فقط برای انجام‌نشده)
         const aPinned = a.pinned === true;
@@ -9731,38 +9889,75 @@ function saveContactReportJSON() {
     showToast('گزارش JSON ذخیره شد ✓');
 }
 
-// 🔧 ذخیره فایل — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
-function saveContactReportPrompt() {
-    // مرحله ۱: HTML یا ادامه؟
-    const isHTML = confirm('💾 ذخیره گزارش\n\nفرمت HTML؟\n\nبله = HTML\nخیر = ادامه (PDF یا JSON)');
-    if (isHTML) {
-        saveContactReportHTML();
-        return;
-    }
-    // مرحله ۲: PDF یا JSON؟
-    const isPDF = confirm('💾 ذخیره گزارش\n\nفرمت PDF؟\n\nبله = PDF (پنجره چاپ)\nخیر = JSON (دیتابیس)');
-    if (isPDF) {
-        saveContactReportPDF();
-    } else {
-        saveContactReportJSON();
+// 🔧 متغیرهای مودال انتخاب فرمت گزارش
+let _reportFormatMode = null;  // 'save' یا 'share'
+let _reportFormatSelected = null;  // 'html', 'pdf', 'json'
+
+// 🔧 باز کردن مودال انتخاب فرمت — زیبا با ۳ گزینه قابل کلیک
+function showReportFormatModal(mode) {
+    _reportFormatMode = mode;  // 'save' یا 'share'
+    _reportFormatSelected = null;
+    // عنوان مودال
+    document.getElementById('reportFormatTitle').textContent =
+        (mode === 'save') ? '💾 ذخیره گزارش' : '📤 ارسال گزارش';
+    // ریست انتخاب‌ها
+    document.querySelectorAll('.report-format-option').forEach(el => {
+        el.classList.remove('selected');
+    });
+    // غیرفعال کردن دکمه تأیید
+    document.getElementById('reportFormatConfirmBtn').disabled = true;
+    // نمایش مودال
+    document.getElementById('reportFormatOverlay').classList.add('active');
+}
+
+// 🔧 انتخاب یک فرمت — هایلایت می‌کند
+function selectReportFormat(format) {
+    _reportFormatSelected = format;
+    // حذف selected از همه
+    document.querySelectorAll('.report-format-option').forEach(el => {
+        el.classList.remove('selected');
+    });
+    // اضافه کردن selected به گزینه انتخاب‌شده
+    const selected = document.querySelector('.report-format-option[data-format="' + format + '"]');
+    if (selected) selected.classList.add('selected');
+    // فعال کردن دکمه تأیید
+    document.getElementById('reportFormatConfirmBtn').disabled = false;
+}
+
+// 🔧 تأیید انتخاب — اجرای عملیات
+function confirmReportFormat() {
+    if (!_reportFormatSelected) return;
+    const format = _reportFormatSelected;
+    const mode = _reportFormatMode;
+    // بستن مودال
+    document.getElementById('reportFormatOverlay').classList.remove('active');
+    _reportFormatSelected = null;
+    _reportFormatMode = null;
+    // اجرای عملیات
+    if (mode === 'save') {
+        if (format === 'html') saveContactReportHTML();
+        else if (format === 'pdf') saveContactReportPDF();
+        else if (format === 'json') saveContactReportJSON();
+    } else if (mode === 'share') {
+        shareContactReportFile(format);
     }
 }
 
-// 🔧 ارسال گزارش برای پیام‌رسان‌ها — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
+// 🔧 انصراف از مودال
+function cancelReportFormat() {
+    document.getElementById('reportFormatOverlay').classList.remove('active');
+    _reportFormatSelected = null;
+    _reportFormatMode = null;
+}
+
+// 🔧 ذخیره فایل — مودال زیبا
+function saveContactReportPrompt() {
+    showReportFormatModal('save');
+}
+
+// 🔧 ارسال گزارش — مودال زیبا
 function shareContactReportPrompt() {
-    // مرحله ۱: HTML یا ادامه؟
-    const isHTML = confirm('📤 ارسال گزارش\n\nفرمت HTML؟\n\nبله = HTML\nخیر = ادامه (PDF یا JSON)');
-    if (isHTML) {
-        shareContactReportFile('html');
-        return;
-    }
-    // مرحله ۲: PDF یا JSON؟
-    const isPDF = confirm('📤 ارسال گزارش\n\nفرمت PDF؟\n\nبله = PDF (فایل HTML ارسال می‌شود)\nخیر = JSON (دیتابیس)');
-    if (isPDF) {
-        shareContactReportFile('pdf');
-    } else {
-        shareContactReportFile('json');
-    }
+    showReportFormatModal('share');
 }
 
 // 🔧 ارسال فایل گزارش برای پیام‌رسان‌ها
