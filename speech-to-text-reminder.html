@@ -2305,6 +2305,11 @@ body.locked .header-actions button {
     color: #aaa;
     pointer-events: none;
 }
+/* 🔧 تاریخ و ساعت اول هر پاراگراف — قرمز */
+.notes-date {
+    color: #d32f2f;
+    font-weight: 700;
+}
 /* 🔧 میکروفون شناور — سمت چپ، وسط صفحه */
 .notes-mic-btn {
     position: fixed;
@@ -3449,7 +3454,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v88-2026-11-01-notes-fix-duplicate-text';
+const APP_VERSION = 'v89-2026-11-01-notes-date-red';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -9928,7 +9933,9 @@ function toggleNotesRecording() {
         // 🔧 اگر متنی جمع‌آوری شده، آن را به‌عنوان یک پاراگراف در بالای صفحه بنویس
         if (_notesAccumulatedText.trim()) {
             const dateStr = toJalaliLong(new Date());
-            const newEntry = toPersianDigits(dateStr) + ' - ' + _notesAccumulatedText.trim() + '\n';
+            const persianDate = toPersianDigits(dateStr);
+            // 🔧 تاریخ و ساعت قرمز، متن عادی
+            const newEntry = '<span class="notes-date">' + persianDate + ' - </span>' + _notesAccumulatedText.trim() + '\n';
             const content = document.getElementById('notesContent');
             const currentHTML = content.innerHTML;
             content.innerHTML = newEntry.replace(/\n/g, '<br>') + currentHTML;
