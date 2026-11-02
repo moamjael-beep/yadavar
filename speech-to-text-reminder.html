@@ -1539,15 +1539,15 @@ body { padding-bottom: 30px; }
     line-height: 1;
 }
 .group-tasks-header {
-    padding: 10px 16px;
+    padding: 24px 30px;
     border-radius: 12px;
     color: white;
     margin-bottom: 10px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 18px;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
-    min-height: 50px;
+    min-height: 90px;
     position: sticky;
     position: -webkit-sticky;
     top: 0;
@@ -3318,7 +3318,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v83-2026-11-01-half-font-sticky-headers-repeat-numbering-report-html-pdf';
+const APP_VERSION = 'v84-2026-11-01-header-15x-sticky-fix-report-3-options';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7982,6 +7982,19 @@ function renderGroupsView() {
     urgentDiv.onclick = () => openGroupView('urgent');
     container.appendChild(urgentDiv);
 
+    // 🔧 فیکس کردن «همه کارها» و «کارهای فوری» زیر هدر اصلی برنامه.
+    // ارتفاع هدر اصلی را محاسبه می‌کنیم و top این دو گروه را تنظیم می‌کنیم.
+    // «همه کارها» در top = ارتفاع هدر اصلی، «کارهای فوری» در top = ارتفاع هدر اصلی + ارتفاع «همه کارها».
+    const mainHeader = document.querySelector('.header');
+    if (mainHeader) {
+        const headerHeight = mainHeader.offsetHeight;
+        allDiv.style.top = headerHeight + 'px';
+        // ارتفاع «همه کارها»: padding(16+16) + min-height(60) + border(3+3) = 98px + gap(6px) = 104px
+        // اما برای دقت بیشتر، offsetHeight «همه کارها» را محاسبه می‌کنیم
+        const allHeight = allDiv.offsetHeight;
+        urgentDiv.style.top = (headerHeight + allHeight + 6) + 'px';  // ۶px فاصله-gap
+    }
+
     // Other groups — draggable (re-orderable). The SortableJS instance
     // (initGroupsSortable, called from fullRender when currentView==='groups')
     // saves the new order to localStorage on drag-end.
@@ -8166,6 +8179,14 @@ function renderTasksView(groupId) {
     // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
     header.innerHTML = `<div style="display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div>${dropdownHtml}`;
     container.appendChild(header);
+
+    // 🔧 فیکس کردن هدر داخلی زیر هدر اصلی برنامه.
+    // ارتفاع هدر اصلی را محاسبه می‌کنیم و top هدر داخلی را برابر آن تنظیم می‌کنیم.
+    const mainHeader = document.querySelector('.header');
+    if (mainHeader) {
+        const headerHeight = mainHeader.offsetHeight;
+        header.style.top = headerHeight + 'px';
+    }
 
     if (items.length === 0) {
         container.innerHTML += '<div class="empty"><div class="empty-icon">📝</div><div>هیچ کاری در این گروه نیست<br>دکمه + را بزنید</div></div>';
@@ -9416,9 +9437,8 @@ function showContactReportResults(results, criteria) {
     html += '</div>';
 
     html += '<div class="report-actions">';
-    html += '<button class="report-action-btn" onclick="saveContactReportHTML()">💾 ذخیره HTML</button>';
-    html += '<button class="report-action-btn" onclick="saveContactReportPDF()">📄 ذخیره PDF</button>';
-    html += '<button class="report-action-btn" onclick="shareContactReport()">📤 ارسال</button>';
+    html += '<button class="report-action-btn" onclick="saveContactReportPrompt()">💾 ذخیره</button>';
+    html += '<button class="report-action-btn" onclick="shareContactReportPrompt()">📤 ارسال</button>';
     html += '<button class="report-action-btn" onclick="printContactReport()">🖨️ چاپ</button>';
     html += '</div>';
 
@@ -9489,7 +9509,7 @@ function generateReportHTML() {
 
     let html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8">';
     html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-    html += '<title>گزارش اشpersons</title>';
+    html += '<title>گزارش اشخاص</title>';
     html += '<style>';
     html += 'body{font-family:Tahoma,Arial,sans-serif;padding:20px;direction:rtl;background:#fff;color:#333;}';
     html += 'h1{text-align:center;color:#1976D2;margin-bottom:5px;font-size:18px;}';
@@ -9509,11 +9529,29 @@ function generateReportHTML() {
     return html;
 }
 
-// 🔧 ذخیره گزارش به صورت HTML
-function saveContactReportHTML() {
+// 🔧 تابع کمکی: تولید محتوای JSON گزارش
+function generateReportJSON() {
+    const body = document.getElementById('contactReportResultsBody');
+    const results = JSON.parse(body.dataset.reportData || '[]');
+    const now = new Date();
+    return JSON.stringify({
+        type: 'contacts_report',
+        generatedAt: now.toISOString(),
+        count: results.length,
+        contacts: results
+    }, null, 2);
+}
+
+// 🔧 تابع کمکی: دریافت timestamp برای نام فایل
+function getReportTimestamp() {
     const now = new Date();
     const [jy, jm, jd] = toJalaliParts(now);
-    const ts = '' + jy + pad2(jm) + pad2(jd) + pad2(now.getHours()) + pad2(now.getMinutes());
+    return '' + jy + pad2(jm) + pad2(jd) + pad2(now.getHours()) + pad2(now.getMinutes());
+}
+
+// 🔧 ذخیره گزارش به صورت HTML
+function saveContactReportHTML() {
+    const ts = getReportTimestamp();
     const html = generateReportHTML();
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -9534,50 +9572,125 @@ function saveContactReportPDF() {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
-    // تاخیر کوتاه برای رندر شدن محتوا
     setTimeout(() => {
         printWindow.print();
     }, 300);
     showToast('برای ذخیره PDF، در پنجره چاپ «Save as PDF» را انتخاب کنید');
 }
 
-// 🔧 ذخیره فایل — هر دو فرمت HTML و PDF
-function saveContactReport() {
-    // طبق درخواست کاربر: هر دو فرمت HTML و PDF
-    // HTML ذخیره می‌شود، PDF با پنجره چاپ
-    saveContactReportHTML();
+// 🔧 ذخیره گزارش به صورت JSON (دیتابیس قبلی)
+function saveContactReportJSON() {
+    const ts = getReportTimestamp();
+    const json = generateReportJSON();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ContactsReport_' + ts + '.json';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('گزارش JSON ذخیره شد ✓');
 }
 
-// 🔧 ارسال گزارش برای پیام‌رسان‌ها — همان فرمت HTML بخش چاپ
-function shareContactReport() {
-    const html = generateReportHTML();
-    const now = new Date();
-    const [jy, jm, jd] = toJalaliParts(now);
-    const ts = '' + jy + pad2(jm) + pad2(jd) + pad2(now.getHours()) + pad2(now.getMinutes());
+// 🔧 ذخیره فایل — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
+function saveContactReportPrompt() {
+    const choice = prompt(
+        '💾 ذخیره گزارش\n\n' +
+        'برای ذخیره، یکی از گزینه‌های زیر را وارد کنید:\n\n' +
+        '1 — ذخیره به صورت HTML\n' +
+        '2 — ذخیره به صورت PDF\n' +
+        '3 — ذخیره به صورت JSON (دیتابیس)\n'
+    );
+    if (choice === '1') {
+        saveContactReportHTML();
+    } else if (choice === '2') {
+        saveContactReportPDF();
+    } else if (choice === '3') {
+        saveContactReportJSON();
+    }
+    // اگر انصراف زده یا مقدار نامعتبر، کاری نمی‌کنیم
+}
 
-    // تولید Blob HTML و اشتراک‌گذاری آن به‌عنوان فایل
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const file = new File([blob], 'ContactsReport_' + ts + '.html', { type: 'text/html' });
+// 🔧 ارسال گزارش برای پیام‌رسان‌ها — از کاربر ۳ حالت را می‌پرسد: HTML, PDF, JSON
+function shareContactReportPrompt() {
+    const choice = prompt(
+        '📤 ارسال گزارش\n\n' +
+        'برای ارسال، یکی از گزینه‌های زیر را وارد کنید:\n\n' +
+        '1 — ارسال به صورت HTML\n' +
+        '2 — ارسال به صورت PDF (فایل HTML ارسال می‌شود)\n' +
+        '3 — ارسال به صورت JSON (دیتابیس)\n'
+    );
+    if (choice === '1') {
+        shareContactReportFile('html');
+    } else if (choice === '2') {
+        shareContactReportFile('pdf');
+    } else if (choice === '3') {
+        shareContactReportFile('json');
+    }
+    // اگر انصراف زده یا مقدار نامعتبر، کاری نمی‌کنیم
+}
+
+// 🔧 ارسال فایل گزارش برای پیام‌رسان‌ها
+function shareContactReportFile(format) {
+    const ts = getReportTimestamp();
+    let blob, fileName, mimeType;
+
+    if (format === 'html') {
+        const html = generateReportHTML();
+        blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        fileName = 'ContactsReport_' + ts + '.html';
+        mimeType = 'text/html';
+    } else if (format === 'pdf') {
+        // PDF با پنجره چاپ تولید می‌شود — اینجا فایل HTML می‌فرستیم اما نام آن PDF است
+        // (چون تولید PDF واقعی نیاز به کتابخانه دارد)
+        const html = generateReportHTML();
+        blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        fileName = 'ContactsReport_' + ts + '.html';
+        mimeType = 'text/html';
+        showToast('برای PDF، فایل HTML ارسال می‌شود — گیرنده می‌تواند آن را چاپ و PDF کند');
+    } else if (format === 'json') {
+        const json = generateReportJSON();
+        blob = new Blob([json], { type: 'application/json' });
+        fileName = 'ContactsReport_' + ts + '.json';
+        mimeType = 'application/json';
+    }
+
+    const file = new File([blob], fileName, { type: mimeType });
 
     if (navigator.share) {
-        // بررسی پشتیبانی از اشتراک‌گذاری فایل
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             navigator.share({
                 title: 'گزارش اشخاص',
                 text: '📊 گزارش بانک اطلاعاتی اشخاص',
                 files: [file]
             }).catch(() => {
-                // اگر اشتراک‌گذاری شکست خورد، فایل HTML دانلود کن
-                saveContactReportHTML();
+                // اگر اشتراک‌گذاری شکست خورد، فایل دانلود کن
+                downloadBlob(blob, fileName);
             });
         } else {
-            // مرورگر از اشتراک‌گذاری فایل پشتیبانی نمی‌کند — فایل HTML دانلود کن
-            saveContactReportHTML();
+            // مرورگر از اشتراک‌گذاری فایل پشتیبانی نمی‌کند — فایل دانلود کن
+            downloadBlob(blob, fileName);
         }
     } else {
-        // مرورگر از share پشتیبانی نمی‌کند — فایل HTML دانلود کن
-        saveContactReportHTML();
+        // مرورگر از share پشتیبانی نمی‌کند — فایل دانلود کن
+        downloadBlob(blob, fileName);
     }
+}
+
+// 🔧 تابع کمکی: دانلود Blob
+function downloadBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 function printContactReport() {
