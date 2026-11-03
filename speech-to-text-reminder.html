@@ -679,11 +679,11 @@ body { padding-bottom: 30px; }
 .action-btn:active { transform: scale(0.95); }
 
 /* On very small screens, buttons wrap to 2 per row */
-@media (max-width: 380px) {
+@media (max-width: 480px) {
     .action-btn {
         flex: 0 0 calc(50% - 4px);
         font-size: 12px;
-        padding: 12px 6px;
+        padding: 12px 4px;
     }
 }
 
@@ -3632,7 +3632,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v110-2026-11-01-back-btn-original-size-invisible-touch-area';
+const APP_VERSION = 'v112-2026-11-01-fix-read-btn-visibility-wrap-480';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8650,7 +8650,7 @@ function renderTasksView(groupId) {
             ${item.completedAt ? `<div class="detail-row"><span class="detail-label">روز انجام:</span><span class="detail-value">${toJalaliLong(item.completedAt)}</span></div>` : ''}
             <div class="detail-row group-selector-row"><span class="detail-label">گروه:</span><select class="group-selector" onchange="changeTaskGroup('${item.id}', this.value)">${groupOpts}</select></div>
             <div class="detail-row urgent-toggle-row"><span class="detail-label">🚨 فوری:</span><label class="urgent-checkbox-label"><input type="checkbox" class="urgent-checkbox" ${item.urgent ? 'checked' : ''} onchange="toggleTaskUrgent('${item.id}')"> <span>این تسک در گروه «کارهای فوری» نمایش داده شود</span></label></div>
-            <div class="item-actions"><button class="action-btn" data-action="edit">✏️ ویرایش</button><button class="action-btn" data-action="toggle">${item.done ? '↩ بازگردانی' : '✓ انجام شد'}</button><button class="action-btn danger" data-action="delete">🗑 حذف</button><button class="action-btn secondary" data-action="cancel">✕ انصراف</button></div>
+            <div class="item-actions"><button class="action-btn" data-action="read">🔊 بخوان</button><button class="action-btn" data-action="edit">✏️ ویرایش</button><button class="action-btn" data-action="toggle">${item.done ? '↩ بازگردانی' : '✓ انجام شد'}</button><button class="action-btn danger" data-action="delete">🗑 حذف</button><button class="action-btn secondary" data-action="cancel">✕ انصراف</button></div>
         `;
         div.appendChild(row);
         div.appendChild(details);
@@ -8659,6 +8659,8 @@ function renderTasksView(groupId) {
             if (action === 'toggle') { e.stopPropagation(); toggleDone(item.id); return; }
             if (action === 'delete') { e.stopPropagation(); deleteItem(item.id); return; }
             if (action === 'edit') { e.stopPropagation(); editTask(item.id); return; }
+            // 🔧 دکمه «🔊 بخوان» — متن تسک را با صدا می‌خواند
+            if (action === 'read') { e.stopPropagation(); readTaskAloud(item.text, e.target); return; }
             // 🔧 دکمه «انصراف» — جزئیات تسک را می‌بندد (مانند کلیک روی تسک)
             if (action === 'cancel') { e.stopPropagation(); toggleExpand(item.id); return; }
             if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox')) return;
@@ -8729,6 +8731,90 @@ function _scrollTaskBelowHeader(taskId) {
             window.scrollBy({ top: offset, behavior: 'smooth' });
         }
     }, 150);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🔊 خواندن متن تسک با صدا (Text-to-Speech)
+// ════════════════════════════════════════════════════════════════════
+// از Web Speech API (speechSynthesis) استفاده می‌کند.
+// زبان فارسی (fa-IR) با بهترین صدای موجود.
+// 🔧 تلاش می‌کند بهترین صدای فارسی را پیدا کند — ترجیحاً Google یا سیستم.
+let _ttsSpeaking = false;
+
+function readTaskAloud(text, btnEl) {
+    // اگر در حال خواندن است، توقف کن
+    if (_ttsSpeaking) {
+        window.speechSynthesis.cancel();
+        _ttsSpeaking = false;
+        if (btnEl) {
+            btnEl.textContent = '🔊 بخوان';
+            btnEl.classList.remove('danger');
+        }
+        return;
+    }
+    if (!text || !text.trim()) {
+        showToast('متن خالی است');
+        return;
+    }
+    if (!('speechSynthesis' in window)) {
+        showToast('مرورگر از خواندن صوتی پشتیبانی نمی‌کند');
+        return;
+    }
+    // توقف هر خواندن قبلی
+    window.speechSynthesis.cancel();
+
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'fa-IR';
+    utter.rate = 0.9;   // کمی آرام‌تر برای وضوح
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+
+    // 🔧 تلاش برای پیدا کردن بهترین صدای فارسی
+    const voices = window.speechSynthesis.getVoices();
+    // اولویت ۱: صدای Google فارسی
+    let bestVoice = voices.find(v => v.lang === 'fa-IR' && v.name.toLowerCase().includes('google'));
+    // اولویت ۲: هر صدای fa-IR
+    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'fa-IR');
+    // اولویت ۳: هر صدای fa
+    if (!bestVoice) bestVoice = voices.find(v => v.lang && v.lang.startsWith('fa'));
+    if (bestVoice) {
+        utter.voice = bestVoice;
+        console.log('[TTS] Using voice:', bestVoice.name, bestVoice.lang);
+    } else {
+        console.log('[TTS] No Persian voice found, using default');
+    }
+
+    // تغییر دکمه هنگام خواندن
+    _ttsSpeaking = true;
+    if (btnEl) {
+        btnEl.textContent = '⏹ توقف';
+        btnEl.classList.add('danger');
+    }
+
+    utter.onend = function() {
+        _ttsSpeaking = false;
+        if (btnEl) {
+            btnEl.textContent = '🔊 بخوان';
+            btnEl.classList.remove('danger');
+        }
+    };
+    utter.onerror = function() {
+        _ttsSpeaking = false;
+        if (btnEl) {
+            btnEl.textContent = '🔊 بخوان';
+            btnEl.classList.remove('danger');
+        }
+        showToast('خطا در خواندن صوتی');
+    };
+
+    window.speechSynthesis.speak(utter);
+}
+
+// 🔧 بارگذاری اولیه صداها — برخی مرورگرها async بارگذاری می‌کنند
+if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = function() {
+        window.speechSynthesis.getVoices();
+    };
 }
 
 function toggleDone(id) {
