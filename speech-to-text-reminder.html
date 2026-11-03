@@ -3647,7 +3647,16 @@ body.locked .header-actions button {
 //         The audio is played via an <audio> element. ResponsiveVoice is kept
 //         only as a last-resort fallback. This finally makes "🔊 بخوان" work
 //         on Android devices without Persian installed.
-const APP_VERSION = 'v117-2026-11-03-google-tts-fallback';
+//   v118 - LINEAR TTS FALLBACK: v117 skipped Web Speech API when no Persian
+//         system voice was found, going straight to Google TTS (which may be
+//         blocked in some regions). Now ALWAYS tries Web Speech API FIRST —
+//         many Android devices with Google TTS engine CAN speak Persian even
+//         if no Persian voice appears in getVoices(). Falls back linearly:
+//         Web Speech → Google TTS → ResponsiveVoice → error message.
+//         Uses a Set to prevent infinite fallback loops. Adds quick-end
+//         detection (if speech ends in <500ms for long text, it's a silent
+//         failure → try next engine).
+const APP_VERSION = 'v118-2026-11-03-tts-linear-fallback';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8770,6 +8779,8 @@ let _ttsAvailableVoices = [];
 let _ttsCurrentBtn = null;   // دکمه فعلی (برای ریست در توقف)
 let _ttsEngine = null;       // 'web' | 'google' | 'responsive' | null
 let _ttsAudio = null;        // عنصر Audio برای Google Translate TTS
+let _ttsTriedEngines = null; // Set برای جلوگیری از لوپ بی‌نهایت در fallback
+let _ttsStartTime = 0;       // زمان شروع خواندن (برای تشخیص شکست بی‌صدا)
 
 // 🔧 بارگذاری صداها — در برخی مرورگرها async است و چند بار باید صدا زده شود
 function _loadTTSVoices() {
@@ -8800,19 +8811,18 @@ if ('speechSynthesis' in window) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🎯 تابع اصلی خواندن صوتی — استراتژی دو‌موتوریه
+// 🎯 تابع اصلی خواندن صوتی — استراتژی زنجیره‌ای (v118)
 // ════════════════════════════════════════════════════════════════════
-// این تابع متن تسک را با صدا می‌خواند. اگر کاربر دوباره دکمه را بزند،
-// خواندن متوقف می‌شود.
+// ترتیب امتحان کردن موتورها (خطی، بدون لوپ):
+//   ۱) Web Speech API — همیشه اول امتحان می‌شود (حتی اگر صدای فارسی نباشد)
+//      بسیاری از دستگاه‌های اندروید با Google TTS engine می‌توانند فارسی
+//      صحبت کنند حتی اگر در getVoices() صدای فارسی لیست نشده باشد.
+//   ۲) Google Translate TTS — اگر Web Speech شکست خورد (آنلاین، رایگان)
+//   ۳) ResponsiveVoice — fallback نهایی
+//   ۴) پیام خطا — اگر همه شکست خوردند
 //
-// ترتیب اولویت موتورهای TTS:
-//   ۱) Web Speech API — اگر صدای فارسی سیستمی موجود باشد (سریع، آفلاین)
-//   ۲) ResponsiveVoice — اگر صدای سیستمی نباشد (آنلاین، صدای فارسی داخلی)
-//   ۳) پیام خطای مناسب — اگر هیچک کار نکرد
-//
-// 🔧 این روش مشکل کاربرانی را حل می‌کند که اندرویدشان در لیست زبان‌ها
-// فارسی ندارد. ResponsiveVoice صدای فارسی خودش را دارد و نیازی به نصب
-// روی دستگاه نیست.
+// 🔧 از Set استفاده می‌کنیم تا جلوگیری کنیم از لوپ بی‌نهایت:
+//    اگر یک موتور قبلاً امتحان شده، دوباره امتحان نمی‌شود.
 function readTaskAloud(text, btnEl) {
     // اگر در حال خواندن است، توقف کن
     if (_ttsSpeaking) {
@@ -8824,57 +8834,133 @@ function readTaskAloud(text, btnEl) {
         return;
     }
 
-    // ذخیره دکمه فعلی برای ریست بعدی
+    // ذخیره دکمه فعلی و ریست Set موتورهای امتحان‌شده
     _ttsCurrentBtn = btnEl;
     _ttsSpeaking = true;
+    _ttsTriedEngines = new Set();
+    _ttsStartTime = Date.now();
+
     if (btnEl) {
         btnEl.textContent = '⏹ توقف';
         btnEl.classList.add('danger');
     }
 
-    // ─── بررسی: آیا صدای فارسی سیستمی موجود است؟ ───
-    _loadTTSVoices();
-    const hasPersianSystemVoice = _ttsAvailableVoices.some(function(v) {
-        return v.lang && (v.lang === 'fa-IR' || v.lang.indexOf('fa') === 0);
-    });
-
-    if (hasPersianSystemVoice && ('speechSynthesis' in window)) {
-        // ─── مسیر ۱: Web Speech API با صدای فارسی سیستمی ───
-        console.log('[TTS] Persian system voice found → using Web Speech API');
-        _speakWithWebSpeech(text);
-    } else {
-        // ─── مسیر ۲: Google Translate TTS (رایگان، بدون کلید، صدای فارسی واقعی) ───
-        console.log('[TTS] No Persian system voice → using Google Translate TTS');
-        _speakWithGoogleTranslateTTS(text);
-    }
+    // ─── همیشه از Web Speech API شروع کن ───
+    console.log('[TTS] Starting with Web Speech API');
+    _speakWithWebSpeech(text);
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۱: Google Translate TTS — رایگان، بدون کلید، صدای فارسی واقعی
+// 🗣️ موتور ۱: Web Speech API — همیشه اول امتحان می‌شود
 // ════════════════════════════════════════════════════════════════════
-// این موتور از endpoint غیررسمی Google Translate TTS استفاده می‌کند.
-// یک URL ساده می‌سازد که Google یک فایل MP3 برمی‌گرداند و آن را با <audio> پخش می‌کند.
-//
-// مزایا:
-//   - نیاز به کلید API ندارد (برخلاف ResponsiveVoice)
-//   - صدای فارسی واقعی و با کیفیت
-//   - روی همه مرورگرها و دستگاه‌ها کار می‌کند
-//   - رایگان است
-//
-// محدودیت‌ها:
-//   - متن باید کوتاه باشد (حداکثر ~۲۰۰ کاراکتر)
-//   - به اینترنت نیاز دارد
-//   - endpoint غیررسمی است (ولی سال‌هاست پایدار کار می‌کند)
+// حتی اگر صدای فارسی در getVoices() نباشد، امتحان می‌کنیم چون بسیاری از
+// دستگاه‌های اندروید با Google TTS engine می‌توانند فارسی صحبت کنند.
+function _speakWithWebSpeech(text) {
+    // اگر قبلاً امتحان شده، به موتور بعدی برو
+    if (_ttsTriedEngines.has('web')) {
+        console.log('[TTS] Web Speech already tried, going to Google TTS');
+        _speakWithGoogleTranslateTTS(text);
+        return;
+    }
+    _ttsTriedEngines.add('web');
+    _ttsEngine = 'web';
+
+    if (!('speechSynthesis' in window)) {
+        console.warn('[TTS] speechSynthesis not available, going to Google TTS');
+        _speakWithGoogleTranslateTTS(text);
+        return;
+    }
+
+    // توقف هر خواندن قبلی
+    window.speechSynthesis.cancel();
+
+    // صداها را بارگذاری کن (شاید الان اضافه شده باشند)
+    _loadTTSVoices();
+
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'fa-IR';
+    utter.rate = 0.9;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+
+    // جستجوی صدای فارسی (اما حتی اگر نباشد، باز هم امتحان می‌کنیم)
+    if (_ttsAvailableVoices.length > 0) {
+        var bestVoice = null;
+        for (var i = 0; i < _ttsAvailableVoices.length; i++) {
+            var v = _ttsAvailableVoices[i];
+            if (v.lang === 'fa-IR') { bestVoice = v; break; }
+        }
+        if (!bestVoice) {
+            for (var i = 0; i < _ttsAvailableVoices.length; i++) {
+                var v = _ttsAvailableVoices[i];
+                if (v.lang && v.lang.indexOf('fa') === 0) { bestVoice = v; break; }
+            }
+        }
+        if (bestVoice) {
+            utter.voice = bestVoice;
+            console.log('[TTS] Using Persian system voice:', bestVoice.name);
+        } else {
+            console.log('[TTS] No Persian voice in list, but trying anyway with lang=fa-IR');
+        }
+    }
+
+    var speakStartTime = Date.now();
+
+    utter.onstart = function() {
+        console.log('[TTS] Web Speech started');
+        _ttsStartTime = Date.now();
+    };
+
+    utter.onend = function() {
+        var elapsed = Date.now() - (_ttsStartTime || speakStartTime);
+        console.log('[TTS] Web Speech ended after', elapsed, 'ms');
+        // 🔧 تشخیص شکست بی‌صدا: اگر در کمتر از ۵۰۰ms تمام شد
+        // و متن بلند است، احتمالاً واقعاً صحبت نکرده
+        if (elapsed < 500 && text.length > 10) {
+            console.warn('[TTS] Web Speech ended too quickly — likely silent failure');
+            _speakWithGoogleTranslateTTS(text);
+        } else {
+            _resetTTSButton();
+        }
+    };
+
+    utter.onerror = function(e) {
+        console.warn('[TTS] Web Speech error:', e);
+        // به موتور بعدی برو
+        _speakWithGoogleTranslateTTS(text);
+    };
+
+    // تاخیر کوتاه قبل از speak
+    setTimeout(function() {
+        try {
+            window.speechSynthesis.speak(utter);
+            console.log('[TTS] speak() called');
+        } catch(e) {
+            console.warn('[TTS] speak() threw:', e);
+            _speakWithGoogleTranslateTTS(text);
+        }
+    }, 150);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🗣️ موتور ۲: Google Translate TTS — رایگان، بدون کلید API
+// ════════════════════════════════════════════════════════════════════
+// از endpoint غیررسمی Google Translate TTS استفاده می‌کند.
+// یک URL ساده می‌سازد که Google یک فایل MP3 برمی‌گرداند.
+// ⚠️  اگر Google در منطقه شما فیلتر باشد، این کار نمی‌کند.
 function _speakWithGoogleTranslateTTS(text) {
+    if (_ttsTriedEngines.has('google')) {
+        console.log('[TTS] Google TTS already tried, going to ResponsiveVoice');
+        _speakWithResponsiveVoice(text);
+        return;
+    }
+    _ttsTriedEngines.add('google');
     _ttsEngine = 'google';
     console.log('[TTS] Using Google Translate TTS (tl=fa)');
 
-    // Google Translate TTS محدودیت طول دارد (~۲۰۰ کاراکتر)
-    // اگر متن طولانی‌تر است، آن را کوتاه کن
+    // محدودیت طول: ~۲۰۰ کاراکتر
     var maxLen = 200;
     var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
-
-    // ساخت URL — پارامتر tl=fa یعنی زبان فارسی
     var ttsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodeURIComponent(textToSpeak);
     console.log('[TTS] Google TTS URL:', ttsUrl);
 
@@ -8884,11 +8970,11 @@ function _speakWithGoogleTranslateTTS(text) {
         _ttsAudio = null;
     }
 
-    // ساخت عنصر Audio و پخش آن
     _ttsAudio = new Audio(ttsUrl);
 
     _ttsAudio.onplaying = function() {
         console.log('[TTS] Google TTS started playing');
+        _ttsStartTime = Date.now();
     };
 
     _ttsAudio.onended = function() {
@@ -8898,130 +8984,80 @@ function _speakWithGoogleTranslateTTS(text) {
     };
 
     _ttsAudio.onerror = function(e) {
-        console.warn('[TTS] Google TTS error, trying ResponsiveVoice:', e);
+        console.warn('[TTS] Google TTS error, going to ResponsiveVoice:', e);
         _ttsAudio = null;
         _speakWithResponsiveVoice(text);
     };
 
-    // play() یک Promise برمی‌گرداند — اگر شکست خورد، fallback کن
     var playPromise = _ttsAudio.play();
     if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(function(e) {
-            console.warn('[TTS] Google TTS play() rejected, trying ResponsiveVoice:', e);
+            console.warn('[TTS] Google TTS play() rejected, going to ResponsiveVoice:', e);
             _ttsAudio = null;
             _speakWithResponsiveVoice(text);
         });
     }
+
+    // 🔧 تایم‌اوت: اگر در ۵ ثانیه صدا شروع نشد، به موتور بعدی برو
+    setTimeout(function() {
+        if (_ttsEngine === 'google' && _ttsAudio && _ttsAudio.readyState < 2) {
+            console.warn('[TTS] Google TTS timeout (5s), going to ResponsiveVoice');
+            try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {}
+            _ttsAudio = null;
+            _speakWithResponsiveVoice(text);
+        }
+    }, 5000);
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۲: ResponsiveVoice — fallback نهایی (ممکن است با FREE-KEY کار نکند)
+// 🗣️ موتور ۳: ResponsiveVoice — fallback نهایی
 // ════════════════════════════════════════════════════════════════════
-// ResponsiveVoice یک کتابخانه TTS است که صدای فارسی خودش را از سرور
-// می‌آورد. نیازی به نصب هیچ چیزی روی اندروید ندارد. فقط به اینترنت نیاز دارد.
-//
-// صدای فارسی در ResponsiveVoice با نام 'persian_female' شناخته می‌شود.
-// ⚠️  توجه: با کلید FREE-KEY ممکن است کار نکند — به‌عنوان fallback آخر استفاده می‌شود.
+// ⚠️  با کلید FREE-KEY ممکن است کار نکند. فقط به‌عنوان fallback آخر استفاده می‌شود.
 function _speakWithResponsiveVoice(text) {
-    // بررسی وجود ResponsiveVoice
-    if (typeof responsiveVoice === 'undefined' || !responsiveVoice.voiceSupport()) {
-        console.warn('[TTS] ResponsiveVoice not available, falling back to Web Speech API');
-        _speakWithWebSpeech(text);
+    if (_ttsTriedEngines.has('responsive')) {
+        // همه موتورها امتحان شدند — پیام خطا نشان بده
+        console.error('[TTS] All engines failed');
+        _resetTTSButton();
+        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید یا صدای فارسی روی دستگاه نصب کنید.');
         return;
     }
+    _ttsTriedEngines.add('responsive');
     _ttsEngine = 'responsive';
     console.log('[TTS] Using ResponsiveVoice (persian_female)');
+
+    if (typeof responsiveVoice === 'undefined' || !responsiveVoice.voiceSupport()) {
+        console.warn('[TTS] ResponsiveVoice not available');
+        _resetTTSButton();
+        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
+        return;
+    }
+
     try {
         responsiveVoice.speak(text, 'persian_female', {
             onstart: function() {
                 console.log('[TTS] ResponsiveVoice started');
+                _ttsStartTime = Date.now();
             },
             onend: function() {
                 console.log('[TTS] ResponsiveVoice ended');
                 _resetTTSButton();
             },
             onerror: function(e) {
-                console.warn('[TTS] ResponsiveVoice error, trying Web Speech API:', e);
-                // اگر ResponsiveVoice شکست خورد، Web Speech API را امتحان کن
-                _speakWithWebSpeech(text);
+                console.warn('[TTS] ResponsiveVoice error:', e);
+                _resetTTSButton();
+                showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
             }
         });
     } catch(e) {
-        console.warn('[TTS] ResponsiveVoice threw exception, trying Web Speech API:', e);
-        _speakWithWebSpeech(text);
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۲: Web Speech API — صدای سیستمی (سریع، آفلاین)
-// ════════════════════════════════════════════════════════════════════
-// از speechSynthesis مرورگر استفاده می‌کند. فقط اگر صدای فارسی روی دستگاه
-// نصب باشد کار می‌کند.
-function _speakWithWebSpeech(text) {
-    if (!('speechSynthesis' in window)) {
+        console.warn('[TTS] ResponsiveVoice threw:', e);
         _resetTTSButton();
-        showToast('مرورگر از خواندن صوتی پشتیبانی نمی‌کند');
-        return;
+        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
     }
-    _ttsEngine = 'web';
-    window.speechSynthesis.cancel();
-
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'fa-IR';
-    utter.rate = 0.9;
-    utter.pitch = 1.0;
-    utter.volume = 1.0;
-
-    // جستجوی صدای فارسی با اولویت‌های مختلف
-    if (_ttsAvailableVoices.length > 0) {
-        let bestVoice = _ttsAvailableVoices.find(function(v) { return v.lang === 'fa-IR' && v.name.toLowerCase().includes('google'); });
-        if (!bestVoice) bestVoice = _ttsAvailableVoices.find(function(v) { return v.lang === 'fa-IR'; });
-        if (!bestVoice) bestVoice = _ttsAvailableVoices.find(function(v) { return v.lang && v.lang.indexOf('fa') === 0; });
-        if (bestVoice) {
-            utter.voice = bestVoice;
-            console.log('[TTS] Using system voice:', bestVoice.name, bestVoice.lang);
-        }
-    }
-
-    utter.onend = function() {
-        console.log('[TTS] Web Speech ended');
-        _resetTTSButton();
-    };
-    utter.onerror = function(e) {
-        console.error('[TTS] Web Speech error:', e);
-        _resetTTSButton();
-        // اگر Web Speech شکست خورد و ResponsiveVoice هنوز امتحان نشده، امتحان کن
-        if (_ttsEngine === 'web' && typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
-            console.log('[TTS] Web Speech failed, trying ResponsiveVoice as fallback');
-            _speakWithResponsiveVoice(text);
-        } else {
-            showToast('خطا در خواندن صوتی — اینترنت را بررسی کنید');
-        }
-    };
-
-    // تاخیر کوتاه قبل از speak — برخی مرورگرها نیاز دارند
-    setTimeout(function() {
-        try {
-            window.speechSynthesis.speak(utter);
-        } catch(e) {
-            console.error('[TTS] speak() failed:', e);
-            _resetTTSButton();
-            // اگر Web Speech شکست خورد، ResponsiveVoice را امتحان کن
-            if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
-                console.log('[TTS] speak() threw, trying ResponsiveVoice');
-                _speakWithResponsiveVoice(text);
-            } else {
-                showToast('خطا در خواندن صوتی');
-            }
-        }
-    }, 100);
 }
 
 // ════════════════════════════════════════════════════════════════════
 // ⏹ توقف همه موتورهای TTS
 // ════════════════════════════════════════════════════════════════════
-// این تابع هر دو موتور (ResponsiveVoice و Web Speech API) را متوقف می‌کند.
-// وقتی کاربر دوباره دکمه «⏹ توقف» را می‌زند، صدا قطع می‌شود.
 function _stopAllTTS() {
     // توقف Google Translate TTS (عنصر Audio)
     if (_ttsAudio) {
@@ -9042,10 +9078,10 @@ function _stopAllTTS() {
 // ════════════════════════════════════════════════════════════════════
 // 🔄 ریست دکمه به حالت عادی
 // ════════════════════════════════════════════════════════════════════
-// بعد از پایان یا توقف خواندن، دکمه را به حالت «🔊 بخوان» برمی‌گرداند.
 function _resetTTSButton() {
     _ttsSpeaking = false;
     _ttsEngine = null;
+    _ttsTriedEngines = null;
     if (_ttsCurrentBtn) {
         _ttsCurrentBtn.textContent = '🔊 بخوان';
         _ttsCurrentBtn.classList.remove('danger');
