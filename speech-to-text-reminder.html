@@ -3656,7 +3656,19 @@ body.locked .header-actions button {
 //         Uses a Set to prevent infinite fallback loops. Adds quick-end
 //         detection (if speech ends in <500ms for long text, it's a silent
 //         failure → try next engine).
-const APP_VERSION = 'v118-2026-11-03-tts-linear-fallback';
+//   v119 - CORS PROXY TTS: v118's Google TTS via <audio> element failed
+//         silently (CORS or regional block). Now uses fetch() + blob approach
+//         with MULTIPLE fallback URLs:
+//         1) Direct Google Translate TTS
+//         2) corsproxy.io CORS proxy
+//         3) allorigins.win CORS proxy
+//         4) codetabs.com CORS proxy
+//         5) StreamElements TTS (different service, different servers)
+//         If one URL fails, automatically tries the next. The CORS proxies
+//         fetch the audio from their servers (which can reach Google) and
+//         return it with CORS headers, bypassing both CORS and regional
+//         blocks.
+const APP_VERSION = 'v119-2026-11-03-tts-cors-proxy';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8943,26 +8955,47 @@ function _speakWithWebSpeech(text) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۲: Google Translate TTS — رایگان، بدون کلید API
+// 🗣️ موتور ۲: Google Translate TTS + StreamElements + پروکسی‌های CORS
 // ════════════════════════════════════════════════════════════════════
-// از endpoint غیررسمی Google Translate TTS استفاده می‌کند.
-// یک URL ساده می‌سازد که Google یک فایل MP3 برمی‌گرداند.
-// ⚠️  اگر Google در منطقه شما فیلتر باشد، این کار نمی‌کند.
+// این موتور چند URL مختلف را امتحان می‌کند:
+//   ۱) Google Translate TTS مستقیم
+//   ۲) از طریق پروکسی CORS (corsproxy.io) — اگر مستقیم فیلتر باشد
+//   ۳) از طریق پروکسی allorigins.win
+//   ۴) StreamElements TTS — سرویس جایگزین (سرورهای متفاوت)
+//
+// از fetch + blob استفاده می‌کند (به‌جای <audio> مستقیم) تا خطاها بهتر
+// مدیریت شوند و پروکسی‌ها کار کنند.
 function _speakWithGoogleTranslateTTS(text) {
     if (_ttsTriedEngines.has('google')) {
-        console.log('[TTS] Google TTS already tried, going to ResponsiveVoice');
+        console.log('[TTS] Already tried, going to ResponsiveVoice');
         _speakWithResponsiveVoice(text);
         return;
     }
     _ttsTriedEngines.add('google');
     _ttsEngine = 'google';
-    console.log('[TTS] Using Google Translate TTS (tl=fa)');
+    console.log('[TTS] Using online TTS with CORS proxies');
 
     // محدودیت طول: ~۲۰۰ کاراکتر
     var maxLen = 200;
     var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
-    var ttsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodeURIComponent(textToSpeak);
-    console.log('[TTS] Google TTS URL:', ttsUrl);
+    var encodedText = encodeURIComponent(textToSpeak);
+
+    // URL پایه Google Translate TTS
+    var googleTtsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodedText;
+
+    // لیست URL‌هایی که امتحان می‌شوند (به ترتیب):
+    //   ۱) مستقیم Google TTS
+    //   ۲) از طریق corsproxy.io
+    //   ۳) از طریق allorigins.win
+    //   ۴) از طریق codetabs.com
+    //   ۵) StreamElements TTS (سرویس جایگزین)
+    var urls = [
+        googleTtsUrl,
+        'https://corsproxy.io/?url=' + encodeURIComponent(googleTtsUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(googleTtsUrl),
+        'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(googleTtsUrl),
+        'https://api.streamelements.com/kappa/v2/speech?voice=fa-IR&text=' + encodedText,
+    ];
 
     // توقف هر صدا قبلی
     if (_ttsAudio) {
@@ -8970,43 +9003,81 @@ function _speakWithGoogleTranslateTTS(text) {
         _ttsAudio = null;
     }
 
-    _ttsAudio = new Audio(ttsUrl);
-
-    _ttsAudio.onplaying = function() {
-        console.log('[TTS] Google TTS started playing');
-        _ttsStartTime = Date.now();
-    };
-
-    _ttsAudio.onended = function() {
-        console.log('[TTS] Google TTS ended');
-        _ttsAudio = null;
-        _resetTTSButton();
-    };
-
-    _ttsAudio.onerror = function(e) {
-        console.warn('[TTS] Google TTS error, going to ResponsiveVoice:', e);
-        _ttsAudio = null;
-        _speakWithResponsiveVoice(text);
-    };
-
-    var playPromise = _ttsAudio.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(function(e) {
-            console.warn('[TTS] Google TTS play() rejected, going to ResponsiveVoice:', e);
-            _ttsAudio = null;
+    // تابع کمکی: URL بعدی را امتحان کن
+    function tryUrl(index) {
+        if (index >= urls.length) {
+            // همه URL‌ها شکست خوردند
+            console.warn('[TTS] All online TTS URLs failed');
             _speakWithResponsiveVoice(text);
-        });
+            return;
+        }
+
+        var url = urls[index];
+        var shortUrl = url.length > 70 ? url.substring(0, 70) + '...' : url;
+        console.log('[TTS] Trying URL', index + 1, '/', urls.length, ':', shortUrl);
+
+        fetch(url)
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.blob();
+            })
+            .then(function(blob) {
+                console.log('[TTS] Got audio blob:', blob.size, 'bytes, type:', blob.type);
+                if (blob.size < 100) {
+                    // فایل خیلی کوچک — احتمالاً خطاست نه صدا
+                    throw new Error('Response too small (' + blob.size + ' bytes)');
+                }
+                var audioUrl = URL.createObjectURL(blob);
+                _ttsAudio = new Audio(audioUrl);
+
+                _ttsAudio.onplaying = function() {
+                    console.log('[TTS] Audio started playing from URL', index + 1);
+                    _ttsStartTime = Date.now();
+                };
+
+                _ttsAudio.onended = function() {
+                    console.log('[TTS] Audio ended');
+                    URL.revokeObjectURL(audioUrl);
+                    _ttsAudio = null;
+                    _resetTTSButton();
+                };
+
+                _ttsAudio.onerror = function(e) {
+                    console.warn('[TTS] Audio element error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                    _ttsAudio = null;
+                    tryUrl(index + 1);
+                };
+
+                // پخش صدا
+                var playPromise = _ttsAudio.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(function(e) {
+                        console.warn('[TTS] play() rejected:', e);
+                        URL.revokeObjectURL(audioUrl);
+                        _ttsAudio = null;
+                        tryUrl(index + 1);
+                    });
+                }
+            })
+            .catch(function(e) {
+                console.warn('[TTS] URL', index + 1, 'failed:', e.message || e);
+                tryUrl(index + 1);
+            });
     }
 
-    // 🔧 تایم‌اوت: اگر در ۵ ثانیه صدا شروع نشد، به موتور بعدی برو
+    // شروع از URL اول
+    tryUrl(0);
+
+    // تایم‌اوت: اگر در ۱۵ ثانیه هیچ صدایی پخش نشد، به ResponsiveVoice برو
     setTimeout(function() {
-        if (_ttsEngine === 'google' && _ttsAudio && _ttsAudio.readyState < 2) {
-            console.warn('[TTS] Google TTS timeout (5s), going to ResponsiveVoice');
-            try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {}
-            _ttsAudio = null;
+        if (_ttsEngine === 'google' && !_ttsAudio) {
+            console.warn('[TTS] Online TTS timeout (15s), going to ResponsiveVoice');
             _speakWithResponsiveVoice(text);
         }
-    }, 5000);
+    }, 15000);
 }
 
 // ════════════════════════════════════════════════════════════════════
