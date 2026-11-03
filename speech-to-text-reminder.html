@@ -3639,7 +3639,15 @@ body.locked .header-actions button {
 //         the user's problem where their Android didn't have Persian in the
 //         language list and the old code only said "install Persian in
 //         Android settings" — now it just works, no installation needed.
-const APP_VERSION = 'v116-2026-11-03-responsivevoice-tts-fallback';
+//   v117 - GOOGLE TRANSLATE TTS: v116 didn't work because ResponsiveVoice with
+//         FREE-KEY fails after 1 second (no valid key). Now uses Google Translate
+//         TTS as the PRIMARY online method — it's free, needs NO API key, and
+//         returns real Persian MP3 audio via a simple URL:
+//         translate.google.com/translate_tts?tl=fa&q=TEXT
+//         The audio is played via an <audio> element. ResponsiveVoice is kept
+//         only as a last-resort fallback. This finally makes "🔊 بخوان" work
+//         on Android devices without Persian installed.
+const APP_VERSION = 'v117-2026-11-03-google-tts-fallback';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8746,20 +8754,22 @@ function _scrollTaskBelowHeader(taskId) {
 // ════════════════════════════════════════════════════════════════════
 // 🔊 خواندن متن تسک با صدا (Text-to-Speech)
 // ════════════════════════════════════════════════════════════════════
-// 🔧 استراتژی دو‌موتوریه (v116):
+// 🔧 استراتژی سه‌موتوریه (v117):
 //   ۱) اگر صدای فارسی سیستمی موجود است → Web Speech API (سریع، آفلاین)
-//   ۲) اگر صدای فارسی سیستمی نیست → ResponsiveVoice (آنلاین، صدای فارسی خودش را دارد)
-//   ۳) Fallback: اگر هر دو شکست خوردند، پیام مناسب نشان بده
+//   ۲) اگر نبود → Google Translate TTS (آنلاین، رایگان، بدون کلید API، صدای فارسی واقعی)
+//   ۳) اگر Google TTS هم شکست خورد → ResponsiveVoice (fallback نهایی)
+//   ۴) پیام خطای مناسب — اگر هیچک کار نکرد
 //
-// این روش مشکل کاربرانی را حل می‌کند که اندرویدشان فارسی در لیست زبان‌ها ندارد —
-// ResponsiveVoice نیازی به نصب صدای فارسی روی دستگاه ندارد و صدای فارسی خودش
-// را از سرور خودش می‌آورد.
+// 🔧 این روش مشکل اصلی را حل می‌کند: ResponsiveVoice با کلید FREE-KEY کار نمی‌کند
+// و بعد از ۱ ثانیه خطا می‌دهد. Google Translate TTS نیاز به کلید ندارد و روی
+// همه دستگاه‌ها کار می‌کند — فقط یک URL ساده با پارامتر tl=fa است.
 let _ttsSpeaking = false;
 let _ttsVoicesLoaded = false;
 let _ttsAvailableVoices = [];
-// 🔧 متغیرهای جدید برای مدیریت دو‌موتوریه
+// 🔧 متغیرهای مدیریت چند‌موتوریه
 let _ttsCurrentBtn = null;   // دکمه فعلی (برای ریست در توقف)
-let _ttsEngine = null;       // 'web' | 'responsive' | null
+let _ttsEngine = null;       // 'web' | 'google' | 'responsive' | null
+let _ttsAudio = null;        // عنصر Audio برای Google Translate TTS
 
 // 🔧 بارگذاری صداها — در برخی مرورگرها async است و چند بار باید صدا زده شود
 function _loadTTSVoices() {
@@ -8833,19 +8843,85 @@ function readTaskAloud(text, btnEl) {
         console.log('[TTS] Persian system voice found → using Web Speech API');
         _speakWithWebSpeech(text);
     } else {
-        // ─── مسیر ۲: ResponsiveVoice (بدون نیاز به صدای سیستمی) ───
-        console.log('[TTS] No Persian system voice → using ResponsiveVoice');
-        _speakWithResponsiveVoice(text);
+        // ─── مسیر ۲: Google Translate TTS (رایگان، بدون کلید، صدای فارسی واقعی) ───
+        console.log('[TTS] No Persian system voice → using Google Translate TTS');
+        _speakWithGoogleTranslateTTS(text);
     }
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۱: ResponsiveVoice — صدای فارسی بدون نیاز به نصب روی دستگاه
+// 🗣️ موتور ۱: Google Translate TTS — رایگان، بدون کلید، صدای فارسی واقعی
+// ════════════════════════════════════════════════════════════════════
+// این موتور از endpoint غیررسمی Google Translate TTS استفاده می‌کند.
+// یک URL ساده می‌سازد که Google یک فایل MP3 برمی‌گرداند و آن را با <audio> پخش می‌کند.
+//
+// مزایا:
+//   - نیاز به کلید API ندارد (برخلاف ResponsiveVoice)
+//   - صدای فارسی واقعی و با کیفیت
+//   - روی همه مرورگرها و دستگاه‌ها کار می‌کند
+//   - رایگان است
+//
+// محدودیت‌ها:
+//   - متن باید کوتاه باشد (حداکثر ~۲۰۰ کاراکتر)
+//   - به اینترنت نیاز دارد
+//   - endpoint غیررسمی است (ولی سال‌هاست پایدار کار می‌کند)
+function _speakWithGoogleTranslateTTS(text) {
+    _ttsEngine = 'google';
+    console.log('[TTS] Using Google Translate TTS (tl=fa)');
+
+    // Google Translate TTS محدودیت طول دارد (~۲۰۰ کاراکتر)
+    // اگر متن طولانی‌تر است، آن را کوتاه کن
+    var maxLen = 200;
+    var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
+
+    // ساخت URL — پارامتر tl=fa یعنی زبان فارسی
+    var ttsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodeURIComponent(textToSpeak);
+    console.log('[TTS] Google TTS URL:', ttsUrl);
+
+    // توقف هر صدا قبلی
+    if (_ttsAudio) {
+        try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {}
+        _ttsAudio = null;
+    }
+
+    // ساخت عنصر Audio و پخش آن
+    _ttsAudio = new Audio(ttsUrl);
+
+    _ttsAudio.onplaying = function() {
+        console.log('[TTS] Google TTS started playing');
+    };
+
+    _ttsAudio.onended = function() {
+        console.log('[TTS] Google TTS ended');
+        _ttsAudio = null;
+        _resetTTSButton();
+    };
+
+    _ttsAudio.onerror = function(e) {
+        console.warn('[TTS] Google TTS error, trying ResponsiveVoice:', e);
+        _ttsAudio = null;
+        _speakWithResponsiveVoice(text);
+    };
+
+    // play() یک Promise برمی‌گرداند — اگر شکست خورد، fallback کن
+    var playPromise = _ttsAudio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function(e) {
+            console.warn('[TTS] Google TTS play() rejected, trying ResponsiveVoice:', e);
+            _ttsAudio = null;
+            _speakWithResponsiveVoice(text);
+        });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🗣️ موتور ۲: ResponsiveVoice — fallback نهایی (ممکن است با FREE-KEY کار نکند)
 // ════════════════════════════════════════════════════════════════════
 // ResponsiveVoice یک کتابخانه TTS است که صدای فارسی خودش را از سرور
 // می‌آورد. نیازی به نصب هیچ چیزی روی اندروید ندارد. فقط به اینترنت نیاز دارد.
 //
 // صدای فارسی در ResponsiveVoice با نام 'persian_female' شناخته می‌شود.
+// ⚠️  توجه: با کلید FREE-KEY ممکن است کار نکند — به‌عنوان fallback آخر استفاده می‌شود.
 function _speakWithResponsiveVoice(text) {
     // بررسی وجود ResponsiveVoice
     if (typeof responsiveVoice === 'undefined' || !responsiveVoice.voiceSupport()) {
@@ -8947,6 +9023,11 @@ function _speakWithWebSpeech(text) {
 // این تابع هر دو موتور (ResponsiveVoice و Web Speech API) را متوقف می‌کند.
 // وقتی کاربر دوباره دکمه «⏹ توقف» را می‌زند، صدا قطع می‌شود.
 function _stopAllTTS() {
+    // توقف Google Translate TTS (عنصر Audio)
+    if (_ttsAudio) {
+        try { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio.src = ''; } catch(e) {}
+        _ttsAudio = null;
+    }
     // توقف ResponsiveVoice
     if (typeof responsiveVoice !== 'undefined') {
         try { responsiveVoice.cancel(); } catch(e) {}
