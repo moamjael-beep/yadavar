@@ -247,8 +247,8 @@ body { padding-bottom: 30px; }
 /* 🔧 دکمه شناور افزودن تسک — بزرگ‌تر با افکت تپنده زیبا همیشگی */
 .floating-add-btn {
     position: fixed;
-    left: 20px;
-    bottom: 24px;
+    left: 50px;
+    bottom: 50px;
     z-index: 9000;
     width: 70px;
     height: 70px;
@@ -309,14 +309,14 @@ body { padding-bottom: 30px; }
 }
 /* در صفحات کوچک */
 @media (max-width: 480px) {
-    .floating-add-btn { width: 60px; height: 60px; font-size: 32px; left: 14px; bottom: 18px; }
+    .floating-add-btn { width: 60px; height: 60px; font-size: 32px; left: 30px; bottom: 35px; }
 }
 
 /* 🔧 دکمه شناور افزودن شخص — بزرگ‌تر با افکت تپنده زیبا همیشگی */
 .floating-contact-btn {
     position: fixed;
-    left: 20px;
-    bottom: 24px;
+    left: 50px;
+    bottom: 50px;
     z-index: 10050;
     width: 70px;
     height: 70px;
@@ -352,7 +352,7 @@ body { padding-bottom: 30px; }
     }
 }
 @media (max-width: 480px) {
-    .floating-contact-btn { width: 60px; height: 60px; font-size: 28px; left: 14px; bottom: 18px; }
+    .floating-contact-btn { width: 60px; height: 60px; font-size: 28px; left: 30px; bottom: 35px; }
 }
 /* Disabled state for the reset-order button (↩). Used on the groups list
    view AND inside the "همه کارها" group — there's no manual ordering to
@@ -1654,6 +1654,11 @@ body { padding-bottom: 30px; }
     align-items: center;
     justify-content: center;
     transition: background 0.2s, transform 0.2s;
+    /* 🔧 افزایش محدوده لمس — کاربر می‌تواند حوالی دکمه را هم لمس کند */
+    padding: 20px;
+    margin: -20px;
+    position: relative;
+    z-index: 10;
 }
 .back-btn:hover { background: rgba(255,255,255,0.4); }
 .back-btn:active { transform: scale(0.92); }
@@ -3620,7 +3625,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v104-2026-11-01-badge-text-black-stroke';
+const APP_VERSION = 'v107-2026-11-01-floating-btns-higher-right';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8864,23 +8869,18 @@ function saveBackupToLocal() {
     const customGroups = getGroups().filter(g => g.id !== 'all' && g.id !== 'urgent');
     const contacts = getContacts();
 
-    // 🔧 نسخه v6: شامل تمام عکس‌ها، رنگ‌ها، آیکون‌ها، محیط ظاهری، پین‌شده‌ها،
-    //   فوری‌ها، و هر چیزی که برنامهٔ صفر را شبیه قبلی می‌کند.
-    //   داده‌های items و groups و contacts به‌طور کامل (با تمام فیلدها) ذخیره
-    //   می‌شوند چون از JSON.stringify روی کل آبجکت استفاده می‌کنیم.
-    //   در زمان بازیابی، migrateItem/migrateGroup/migrateContacts تمام
-    //   فیلدهای معتبر را حفظ می‌کنند.
+    // 🔧 جمع‌آوری تمام یادداشت‌ها از localStorage (یادداشت عمومی + هر گروه)
+    const notes = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.indexOf('yadavar_notes_v1') === 0) {
+            notes[key] = localStorage.getItem(key);
+        }
+    }
+
+    // 🔧 نسخه v7: شامل یادداشت‌های هر گروه + تمام داده‌های قبلی
     const dbContent = JSON.stringify({
-        // Backup format version history:
-        //   v1 (legacy) — just an array of items
-        //   v2 — { items, groups } wrapper
-        //   v3 — added exportedAt, count, groupsCount, exportedAtJalali
-        //   v4 — preserves parentId, repeat, pinned, position, completedAt
-        //   v5 — + urgent, pinnedAt, pinnedOrder, headerIcon, headerImage,
-        //        showInAll, contacts, appVersion
-        //   v6 — + settings (snapshot of app-level settings for full restore)
-        //        شامل تمام عکس‌های هدر، رنگ‌ها، آیکون‌ها و محیط ظاهری
-        version: 6,
+        version: 7,
         appVersion: APP_VERSION,
         exportedAt: new Date().toISOString(),
         exportedAtJalali: toJalaliLong(new Date()),
@@ -8890,7 +8890,7 @@ function saveBackupToLocal() {
         groups: customGroups,
         items: items,
         contacts: contacts,
-        // 🔧 v6: snapshot از تنظیمات اپلیکیشن برای بازگردانی کامل محیط ظاهری
+        notes: notes,  // 🔧 v7: یادداشت‌های هر گروه
         settings: {
             appVersion: APP_VERSION,
             notificationPermission: ('Notification' in window) ? Notification.permission : 'unsupported'
@@ -8969,6 +8969,14 @@ function importDatabase() {
                     // 🔧 v5+: استخراج contacts
                     if (Array.isArray(data.contacts)) {
                         importedContacts = data.contacts;
+                    }
+                    // 🔧 v7+: استخراج یادداشت‌ها و بازیابی در localStorage
+                    if (data.notes && typeof data.notes === 'object') {
+                        for (const noteKey in data.notes) {
+                            if (noteKey.indexOf('yadavar_notes_v1') === 0) {
+                                localStorage.setItem(noteKey, data.notes[noteKey]);
+                            }
+                        }
                     }
                 } else {
                     throw new Error('ساختار فایل نامعتبر است');
