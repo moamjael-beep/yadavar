@@ -3607,7 +3607,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v94-2026-11-01-fix-report-format-modal-z-index';
+const APP_VERSION = 'v95-2026-11-01-fix-task-expand-jump-add-behavior-spec';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7914,9 +7914,18 @@ function openGroupView(groupId) {
 // Open a task's details (expands it). Pushes a history entry so back
 // collapses the task instead of leaving the group.
 function openTaskDetails(taskId) {
+    const prevExpandedId = expandedId;
     expandedId = taskId;
     navPush({ view: 'tasks', groupId: currentGroupId, expandedId: taskId });
     render();
+    // 🔧 اگر قبلاً تسک باز نبود، اسکرول نکن تا تسک در جای خودش بماند.
+    // اگر قبلاً تسک دیگری باز بود، به تسک جدید اسکرول کن.
+    if (prevExpandedId !== null && prevExpandedId !== taskId) {
+        setTimeout(function() {
+            const el = document.querySelector('.item[data-id="' + taskId + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
 }
 
 // Pop the top history entry. Used when collapsing an expanded task or going
@@ -8142,7 +8151,8 @@ window.addEventListener('popstate', (e) => {
         return;
     }
     fullRender();
-    // 🔧 اگر ویو تغییر کرده، اسکرول به بالای صفحه تا هدر گروه مشخص باشد
+    // 🔧 اسکرول به بالا فقط وقتی ویو اصلی تغییر کرده (groups ↔ tasks)
+    // اگر فقط یک تسک باز/بسته شده، اسکرول نباید بپرد تا تسک در دید بماند.
     if (prevView !== currentView) {
         window.scrollTo({ top: 0, behavior: 'auto' });
     }
@@ -8605,13 +8615,21 @@ function toggleExpand(id) {
     } else if (expandedId === null) {
         // Expanding from collapsed → push a new history entry so that
         // back returns to the collapsed tasks view.
-        openTaskDetails(id);
+        // 🔧 اسکرول نمی‌کنیم — تسک در جای خودش باز می‌شود
+        expandedId = id;
+        navPush({ view: 'tasks', groupId: currentGroupId, expandedId: id });
+        render();
     } else {
         // Switching from one expanded task to another: just replace the
         // current history entry (no extra back-press needed to leave).
         expandedId = id;
         navReplace({ view: 'tasks', groupId: currentGroupId, expandedId: id });
         render();
+        // 🔧 اسکرول نرم به تسک جدید
+        setTimeout(function() {
+            const el = document.querySelector('.item[data-id="' + id + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
     }
 }
 
