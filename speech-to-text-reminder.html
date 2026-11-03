@@ -3613,7 +3613,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v99-2026-11-01-fix-scroll-jump-on-save-edit-v2';
+const APP_VERSION = 'v100-2026-11-01-freeze-scroll-on-task-form';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8156,9 +8156,28 @@ window.addEventListener('popstate', (e) => {
     }
 
     // ===== Normal navigation =====
+    // 🔧 اگر مودال فرم تسک باز است یا تازه بسته شده، هیچ اسکرول و fullRender انجام نده
+    const taskFormJustClosed = (state.view === 'tasks' && _modalStack.length === 0 && prevView === 'tasks');
+    if (state.view === 'modal') {
+        // مودال باز است — هیچ کار نکن
+        return;
+    }
+    if (taskFormJustClosed) {
+        // مودال تازه بسته شده — فقط state را به‌روز کن، بدون fullRender و بدون اسکرول
+        // render قبلاً توسط saveItem یا cancelModal انجام شده
+        if (state.view === 'groups') {
+            currentView = 'groups';
+            currentGroupId = null;
+            expandedId = null;
+        } else if (state.view === 'tasks') {
+            currentView = 'tasks';
+            currentGroupId = state.groupId || null;
+            expandedId = state.expandedId || null;
+        }
+        return;
+    }
     const prevView = currentView;
     const prevGroup = currentGroupId;
-    const prevExpanded = expandedId;
     if (state.view === 'groups') {
         currentView = 'groups';
         currentGroupId = null;
@@ -8167,19 +8186,14 @@ window.addEventListener('popstate', (e) => {
         currentView = 'tasks';
         currentGroupId = state.groupId || null;
         expandedId = state.expandedId || null;
-    } else if (state.view === 'modal') {
-        // Reached via forward button (rare). Don't navigate underneath.
-        return;
     }
     // 🔧 اسکرول به بالا فقط وقتی ویو اصلی تغییر کرده (groups ↔ tasks)
-    // اگر فقط یک تسک باز/بسته شده یا مودال بسته شده، اسکرول نباید بپرد.
     const viewChanged = (prevView !== currentView);
     const groupChanged = (prevGroup !== currentGroupId);
     if (viewChanged || groupChanged) {
         fullRender();
         window.scrollTo({ top: 0, behavior: 'auto' });
     } else {
-        // فقط expandedId تغییر کرده یا چیزی تغییر نکرده — بدون اسکرول
         fullRender();
     }
 });
