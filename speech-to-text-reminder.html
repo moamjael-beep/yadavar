@@ -1517,14 +1517,16 @@ body { padding-bottom: 30px; }
     font-weight: 700;
     flex-shrink: 0;
     text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    -webkit-text-stroke: 0.5px #000;  /* 🔧 بوردر مشکی برای دیده شدن روی پس‌زمینه زرد */
 }
 .group-badge-urgent {
     color: #FFD600;
     font-size: 13px;
     font-weight: 700;
     flex-shrink: 0;
-    margin-right: 8px;  /* 🔧 فاصله از عدد پین‌شده */
+    margin-right: 8px;
     text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    -webkit-text-stroke: 0.5px #000;  /* 🔧 بوردر مشکی برای دیده شدن روی پس‌زمینه زرد */
 }
 /* 🔧 گروهی که از نمایش در «همه کارها» منع شده — بوردر نقطه‌چین مشکی */
 .group-item-hidden-from-all {
@@ -3618,7 +3620,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v103-2026-11-01-urgent-no-pinned-badge-pinned-yellow';
+const APP_VERSION = 'v104-2026-11-01-badge-text-black-stroke';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
