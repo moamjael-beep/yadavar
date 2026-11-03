@@ -1512,7 +1512,7 @@ body { padding-bottom: 30px; }
 }
 /* 🔧 اعداد پین‌شده (قرمز) و فوری (زرد) بدون دایره، در کنار شمارندهٔ اصلی */
 .group-badge-pinned {
-    color: #FF5252;
+    color: #FFD600;  /* 🔧 زرد — طبق درخواست کاربر */
     font-size: 13px;
     font-weight: 700;
     flex-shrink: 0;
@@ -3618,7 +3618,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v102-2026-11-01-collapse-details-without-scroll';
+const APP_VERSION = 'v103-2026-11-01-urgent-no-pinned-badge-pinned-yellow';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8314,6 +8314,7 @@ function renderGroupsView() {
     function buildGroupBadges(groupItems, opts, groupId) {
         const o = opts || {};
         const showUrgentBadge = o.showUrgentBadge !== false;
+        const showPinnedBadge = o.showPinnedBadge !== false;
         const gid = groupId || '';
         const notDone = groupItems.filter(i => !i.done);
         const notDoneCount = notDone.length;
@@ -8321,7 +8322,7 @@ function renderGroupsView() {
         const pinnedCount = notDone.filter(i => i.pinned == true).length;
         const urgentCount = notDone.filter(i => i.urgent == true).length;
         let html = '';
-        if (pinnedCount > 0) {
+        if (showPinnedBadge && pinnedCount > 0) {
             html += `<span class="group-badge-pinned">📌${toPersianNumber(pinnedCount)}</span>`;
         }
         if (showUrgentBadge && urgentCount > 0) {
@@ -8353,7 +8354,7 @@ function renderGroupsView() {
     urgentDiv.className = 'group-item group-item-fixed group-urgent';
     urgentDiv.dataset.groupId = 'urgent';
     urgentDiv.style.background = 'linear-gradient(135deg, #FFC107, #FF8F00)';
-    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false }, 'urgent')}</div>`;
+    urgentDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>🚨</span></div><span class="group-name">کارهای فوری</span>${buildGroupBadges(urgentItems, { showUrgentBadge: false, showPinnedBadge: false }, 'urgent')}</div>`;
     urgentDiv.onclick = () => openGroupView('urgent');
     container.appendChild(urgentDiv);
 
