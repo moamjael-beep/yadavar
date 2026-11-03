@@ -3613,7 +3613,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v98-2026-11-01-bigger-back-button';
+const APP_VERSION = 'v99-2026-11-01-fix-scroll-jump-on-save-edit-v2';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8157,6 +8157,8 @@ window.addEventListener('popstate', (e) => {
 
     // ===== Normal navigation =====
     const prevView = currentView;
+    const prevGroup = currentGroupId;
+    const prevExpanded = expandedId;
     if (state.view === 'groups') {
         currentView = 'groups';
         currentGroupId = null;
@@ -8169,11 +8171,16 @@ window.addEventListener('popstate', (e) => {
         // Reached via forward button (rare). Don't navigate underneath.
         return;
     }
-    fullRender();
     // 🔧 اسکرول به بالا فقط وقتی ویو اصلی تغییر کرده (groups ↔ tasks)
-    // اگر فقط یک تسک باز/بسته شده، اسکرول نباید بپرد تا تسک در دید بماند.
-    if (prevView !== currentView) {
+    // اگر فقط یک تسک باز/بسته شده یا مودال بسته شده، اسکرول نباید بپرد.
+    const viewChanged = (prevView !== currentView);
+    const groupChanged = (prevGroup !== currentGroupId);
+    if (viewChanged || groupChanged) {
+        fullRender();
         window.scrollTo({ top: 0, behavior: 'auto' });
+    } else {
+        // فقط expandedId تغییر کرده یا چیزی تغییر نکرده — بدون اسکرول
+        fullRender();
     }
 });
 
