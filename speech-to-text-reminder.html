@@ -1637,13 +1637,19 @@ body { padding-bottom: 30px; }
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 22px;
     cursor: pointer;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.2s;
 }
+.back-btn:hover { background: rgba(255,255,255,0.4); }
+.back-btn:active { transform: scale(0.92); }
 .group-title {
     font-size: 11px;
     font-weight: 700;
@@ -3607,7 +3613,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v95-2026-11-01-fix-task-expand-jump-add-behavior-spec';
+const APP_VERSION = 'v98-2026-11-01-bigger-back-button';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -7268,7 +7274,14 @@ function saveItem() {
             document.getElementById('itemText').value = '';
             document.getElementById('itemDeadline').value = '';
             editTaskId = null;  // Clear the edit flag
-            fullRender();
+            // 🔧 از fullRender استفاده نمی‌کنیم تا اسکرول نپرد
+            // به‌جای آن render را مستقیم صدا می‌زنیم
+            if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+                try { sortableInstance.destroy(); } catch(e) {}
+                sortableInstance = null;
+            }
+            render();
+            setTimeout(initSortable, 50);
             showToast('تسک ویرایش شد ✓');
             return;
         }
@@ -7383,7 +7396,13 @@ function saveItem() {
     if (document.getElementById('repeatEndDateDisplay')) document.getElementById('repeatEndDateDisplay').value = '';
     onRepeatTypeChange();
 
-    fullRender();
+    // 🔧 از fullRender استفاده نمی‌کنیم تا اسکرول نپرد
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    render();
+    setTimeout(initSortable, 50);
     showToast('یادآور ذخیره شد ✓');
 }
 
@@ -8615,22 +8634,36 @@ function toggleExpand(id) {
     } else if (expandedId === null) {
         // Expanding from collapsed → push a new history entry so that
         // back returns to the collapsed tasks view.
-        // 🔧 اسکرول نمی‌کنیم — تسک در جای خودش باز می‌شود
         expandedId = id;
         navPush({ view: 'tasks', groupId: currentGroupId, expandedId: id });
         render();
+        // 🔧 اسکرول تا بالای تسک با زیر هدر گروه تراز شود
+        _scrollTaskBelowHeader(id);
     } else {
         // Switching from one expanded task to another: just replace the
         // current history entry (no extra back-press needed to leave).
         expandedId = id;
         navReplace({ view: 'tasks', groupId: currentGroupId, expandedId: id });
         render();
-        // 🔧 اسکرول نرم به تسک جدید
-        setTimeout(function() {
-            const el = document.querySelector('.item[data-id="' + id + '"]');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+        // 🔧 اسکرول تا بالای تسک با زیر هدر گروه تراز شود
+        _scrollTaskBelowHeader(id);
     }
+}
+
+// 🔧 تابع کمکی: اسکرول صفحه تا بالای تسک دقیقاً زیر هدر گروه قرار گیرد
+function _scrollTaskBelowHeader(taskId) {
+    setTimeout(function() {
+        const taskEl = document.querySelector('.item[data-id="' + taskId + '"]');
+        const headerEl = document.querySelector('.group-tasks-header');
+        if (!taskEl || !headerEl) return;
+        const taskRect = taskEl.getBoundingClientRect();
+        const headerRect = headerEl.getBoundingClientRect();
+        // فاصله‌ای که باید اسکرول کنیم: اختلاف top تسک با bottom هدر
+        const offset = taskRect.top - headerRect.bottom;
+        if (Math.abs(offset) > 2) {
+            window.scrollBy({ top: offset, behavior: 'smooth' });
+        }
+    }, 150);
 }
 
 function toggleDone(id) {
