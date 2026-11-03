@@ -77,13 +77,12 @@
 <!-- preconnect: به مرورگر می‌گوید پیشاپیش به سرور CDN وصل شود تا
      بارگذاری فونت سریع‌تر انجام شود. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
-<!-- فونت فارسی «وزیرمتن» از CDN. اگر بارگذاری شکست خورد، حذف می‌شود
-     و مرورگر از فونت جایگزین (Tahoma) استفاده می‌کند. -->
+<!-- فونت فارسی «وزیرمتن» از CDN -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" media="all" onerror="this.remove()">
+<!-- 🗣️ کتابخانه ResponsiveVoice برای خواندن صوتی فارسی (بدون نیاز به صدای سیستمی) -->
+<script src="https://code.responsivevoice.org/1.21.0/responsivevoice.js?key=FREE-KEY"></script>
 <!-- ────────────────────────────────────────────────────────────────────
      📦 کتابخانهٔ SortableJS برای قابلیت «کشیدن و رها کردن» (Drag & Drop)
-     یادآورها و گروه‌ها. اگر CDN اصلی (jsdelivr) در دسترس نبود، به‌صورت
-     خودکار از CDN جایگزین (unpkg) بارگذاری می‌شود.
      ──────────────────────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"
         onerror="this.onerror=null; var fb=document.createElement('script'); fb.src='https://unpkg.com/sortablejs@1.15.0/Sortable.min.js'; document.head.appendChild(fb);"></script>
