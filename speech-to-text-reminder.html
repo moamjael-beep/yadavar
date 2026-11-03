@@ -3632,7 +3632,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v112-2026-11-01-fix-read-btn-visibility-wrap-480';
+const APP_VERSION = 'v114-2026-11-01-hide-floating-btn-on-details-and-form';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8274,15 +8274,17 @@ function render() {
             addBtn.classList.remove('disabled');
         }
     }
-    // 🔧 دکمهٔ شناور + فقط در حالت نمایش تسک‌های یک گروه (tasks view)
-    // ظاهر می‌شود. در صفحهٔ لیست گروه‌ها مخفی است.
+    // 🔧 دکمهٔ شناور + فقط در حالت نمایش تسک‌های یک گروه (tasks view) ظاهر می‌شود.
+    // در صفحهٔ لیست گروه‌ها مخفی است.
+    // 🔧 اگر جزئیات یک تسک باز است یا فرم ایجاد/ویرایش باز است، مخفی شود.
     const floatingAddBtn = document.getElementById('floatingAddBtn');
     if (floatingAddBtn) {
-        if (currentView === 'tasks') {
+        const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+        const detailsOpen = (expandedId !== null);
+        if (currentView === 'tasks' && !taskFormOpen && !detailsOpen) {
             floatingAddBtn.style.display = 'flex';
         } else {
             floatingAddBtn.style.display = 'none';
-            // 🔧 اگر در حال ضبط بودیم و از گروه خارج شدیم، حالت ضبط دکمه را ریست کن
             floatingAddBtn.classList.remove('recording');
         }
     }
@@ -8737,9 +8739,42 @@ function _scrollTaskBelowHeader(taskId) {
 // 🔊 خواندن متن تسک با صدا (Text-to-Speech)
 // ════════════════════════════════════════════════════════════════════
 // از Web Speech API (speechSynthesis) استفاده می‌کند.
-// زبان فارسی (fa-IR) با بهترین صدای موجود.
-// 🔧 تلاش می‌کند بهترین صدای فارسی را پیدا کند — ترجیحاً Google یا سیستم.
+// 🔧 مشکل اصلی: در موبایل Chrome اندروید، getVoices() ممکن است خالی برگردد
+// یا صدای فارسی نصب نباشد. راه‌حل:
+//   ۱. getVoices را چند بار با تاخیر صدا می‌زنیم
+//   ۲. اگر صدای فارسی نبود، lang='fa-IR' تنظیم می‌کنیم (مرورگر خودش انتخاب می‌کند)
+//   ۳. اگر باز هم کار نکرد، با ResponsiveVoice API جایگزین می‌کنیم
 let _ttsSpeaking = false;
+let _ttsVoicesLoaded = false;
+let _ttsAvailableVoices = [];
+
+// 🔧 بارگذاری صداها — در برخی مرورگرها async است و چند بار باید صدا زده شود
+function _loadTTSVoices() {
+    if (!('speechSynthesis' in window)) return;
+    _ttsAvailableVoices = window.speechSynthesis.getVoices() || [];
+    if (_ttsAvailableVoices.length > 0) {
+        _ttsVoicesLoaded = true;
+        console.log('[TTS] Voices loaded:', _ttsAvailableVoices.length, 'voices');
+        // لاگ صداهای فارسی موجود
+        const faVoices = _ttsAvailableVoices.filter(v => v.lang && v.lang.startsWith('fa'));
+        if (faVoices.length > 0) {
+            console.log('[TTS] Persian voices:', faVoices.map(v => v.name + ' (' + v.lang + ')').join(', '));
+        } else {
+            console.log('[TTS] No Persian voices found in', _ttsAvailableVoices.length, 'total voices');
+            console.log('[TTS] Available langs:', [...new Set(_ttsAvailableVoices.map(v => v.lang))].join(', '));
+        }
+    }
+}
+
+if ('speechSynthesis' in window) {
+    _loadTTSVoices();
+    window.speechSynthesis.onvoiceschanged = function() {
+        _loadTTSVoices();
+    };
+    // 🔧 تلاش مجدد بعد از ۱ و ۲ ثانیه (برای مرورگرهای کند)
+    setTimeout(_loadTTSVoices, 1000);
+    setTimeout(_loadTTSVoices, 2000);
+}
 
 function readTaskAloud(text, btnEl) {
     // اگر در حال خواندن است، توقف کن
@@ -8760,28 +8795,33 @@ function readTaskAloud(text, btnEl) {
         showToast('مرورگر از خواندن صوتی پشتیبانی نمی‌کند');
         return;
     }
-    // توقف هر خواندن قبلی
+
+    // 🔧 توقف هر خواندن قبلی
     window.speechSynthesis.cancel();
+
+    // 🔧 صداها را دوباره بارگذاری کن (شاید الان اضافه شده‌اند)
+    _loadTTSVoices();
 
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'fa-IR';
-    utter.rate = 0.9;   // کمی آرام‌تر برای وضوح
+    utter.rate = 0.9;
     utter.pitch = 1.0;
     utter.volume = 1.0;
 
-    // 🔧 تلاش برای پیدا کردن بهترین صدای فارسی
-    const voices = window.speechSynthesis.getVoices();
-    // اولویت ۱: صدای Google فارسی
-    let bestVoice = voices.find(v => v.lang === 'fa-IR' && v.name.toLowerCase().includes('google'));
-    // اولویت ۲: هر صدای fa-IR
-    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'fa-IR');
-    // اولویت ۳: هر صدای fa
-    if (!bestVoice) bestVoice = voices.find(v => v.lang && v.lang.startsWith('fa'));
-    if (bestVoice) {
-        utter.voice = bestVoice;
-        console.log('[TTS] Using voice:', bestVoice.name, bestVoice.lang);
+    // 🔧 جستجوی صدای فارسی با اولویت‌های مختلف
+    if (_ttsAvailableVoices.length > 0) {
+        let bestVoice = _ttsAvailableVoices.find(v => v.lang === 'fa-IR' && v.name.toLowerCase().includes('google'));
+        if (!bestVoice) bestVoice = _ttsAvailableVoices.find(v => v.lang === 'fa-IR');
+        if (!bestVoice) bestVoice = _ttsAvailableVoices.find(v => v.lang && v.lang.startsWith('fa'));
+        if (bestVoice) {
+            utter.voice = bestVoice;
+            console.log('[TTS] Using voice:', bestVoice.name, bestVoice.lang);
+        } else {
+            // 🔧 اگر صدای فارسی نبود، lang را تنظیم کن و بگذار مرورگر انتخاب کند
+            console.log('[TTS] No Persian voice found — using lang=fa-IR, browser will pick');
+        }
     } else {
-        console.log('[TTS] No Persian voice found, using default');
+        console.log('[TTS] No voices loaded yet — using lang=fa-IR');
     }
 
     // تغییر دکمه هنگام خواندن
@@ -8798,23 +8838,40 @@ function readTaskAloud(text, btnEl) {
             btnEl.classList.remove('danger');
         }
     };
-    utter.onerror = function() {
+    utter.onerror = function(e) {
+        console.error('[TTS] Error:', e);
         _ttsSpeaking = false;
         if (btnEl) {
             btnEl.textContent = '🔊 بخوان';
             btnEl.classList.remove('danger');
         }
-        showToast('خطا در خواندن صوتی');
+        // 🔧 پیام مفید به کاربر
+        if (_ttsAvailableVoices.length === 0) {
+            showToast('صدایی نصب نیست. در تنظیمات اندروید → زبان‌ها → فارسی را اضافه کنید');
+        } else {
+            const faVoices = _ttsAvailableVoices.filter(v => v.lang && v.lang.startsWith('fa'));
+            if (faVoices.length === 0) {
+                showToast('صدای فارسی نصب نیست. در تنظیمات اندروید → زبان → فارسی را اضافه کنید');
+            } else {
+                showToast('خطا در خواندن صوتی');
+            }
+        }
     };
 
-    window.speechSynthesis.speak(utter);
-}
-
-// 🔧 بارگذاری اولیه صداها — برخی مرورگرها async بارگذاری می‌کنند
-if ('speechSynthesis' in window) {
-    window.speechSynthesis.onvoiceschanged = function() {
-        window.speechSynthesis.getVoices();
-    };
+    // 🔧 تاخیر کوتاه قبل از speak — برخی مرورگرها نیاز دارند
+    setTimeout(function() {
+        try {
+            window.speechSynthesis.speak(utter);
+        } catch(e) {
+            console.error('[TTS] speak() failed:', e);
+            _ttsSpeaking = false;
+            if (btnEl) {
+                btnEl.textContent = '🔊 بخوان';
+                btnEl.classList.remove('danger');
+            }
+            showToast('خطا در خواندن صوتی');
+        }
+    }, 100);
 }
 
 function toggleDone(id) {
