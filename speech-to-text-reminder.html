@@ -3632,7 +3632,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v114-2026-11-01-hide-floating-btn-on-details-and-form';
+const APP_VERSION = 'v115-2026-11-01-show-floating-btn-after-close';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -6979,19 +6979,20 @@ function cancelModal() {
     if (isRecording) {
         isRecording = false;
         document.getElementById('addBtn').classList.remove('recording');
-        // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
         const fabCancel = document.getElementById('floatingAddBtn');
         if (fabCancel) fabCancel.classList.remove('recording');
         if (recognition) { try { recognition.stop(); } catch(e) {} }
     }
-    // Visually close the form + remove from the modal stack + reset edit flag.
-    // closeModalByType also handles the side-effects (stop recording, reset editTaskId).
     closeModalByType('taskForm');
-    // 🔧 باز کردن قفل اسکرول body
     unlockBodyScroll();
-    // Pop the modal marker pushed on startAdding.
     navBack();
-    // 🔧 اگر reload در انتظار است، حالا که فرم بسته شد اجرا کن
+    // 🔧 render برای به‌روزرسانی دکمه شناور + صفحه
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    render();
+    setTimeout(initSortable, 50);
     setTimeout(checkPendingReload, 500);
 }
 
