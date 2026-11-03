@@ -766,6 +766,8 @@ body { padding-bottom: 30px; }
     justify-content: center;
     padding: 16px;
     backdrop-filter: blur(2px);
+    /* 🔧 وقتی مودال باز است، صفحه زیر آن اسکرول نشود */
+    overflow: hidden;
 }
 .modal-overlay.active { display: flex; }
 .modal {
@@ -777,6 +779,9 @@ body { padding-bottom: 30px; }
     max-height: 92vh;
     overflow-y: auto;
     animation: slideUp 0.3s;
+    /* 🔧 جلوگیری از حرکت صفحه زیر مودال هنگام اسکرول در مودال */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 @keyframes slideUp {
     from { transform: translateY(30px); opacity: 0; }
@@ -3613,7 +3618,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v100-2026-11-01-freeze-scroll-on-task-form';
+const APP_VERSION = 'v102-2026-11-01-collapse-details-without-scroll';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -6677,6 +6682,27 @@ function deleteGroupRecord(id) {
     return true;
 }
 
+// 🔧 تابع کمکی: قفل کردن اسکرول body هنگام باز بودن مودال
+let _savedBodyOverflow = '';
+function lockBodyScroll() {
+    _savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // 🔧 جلوگیری از حرکت صفحه با touch در موبایل
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.top = '-' + window.scrollY + 'px';
+}
+function unlockBodyScroll() {
+    if (document.body.style.position === 'fixed') {
+        const scrollY = document.body.style.top;
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        document.body.style.overflow = _savedBodyOverflow || '';
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+    }
+}
+
 function startAdding(prefilledDeadline, prefilledText) {
     // The + button is disabled on the groups list view — a new task needs
     // to know which group to be assigned to. If the user somehow invokes
@@ -6694,6 +6720,8 @@ function startAdding(prefilledDeadline, prefilledText) {
         return;
     }
     document.getElementById('modalOverlay').classList.add('active');
+    // 🔧 قفل اسکرول body — صفحه زیر مودال حرکت نکند
+    lockBodyScroll();
     // Push a modal marker so back closes the form (instead of navigating).
     navPush({ view: 'modal', type: 'taskForm' });
     trackModalOpen('taskForm');
@@ -6945,6 +6973,8 @@ function cancelModal() {
     // Visually close the form + remove from the modal stack + reset edit flag.
     // closeModalByType also handles the side-effects (stop recording, reset editTaskId).
     closeModalByType('taskForm');
+    // 🔧 باز کردن قفل اسکرول body
+    unlockBodyScroll();
     // Pop the modal marker pushed on startAdding.
     navBack();
     // 🔧 اگر reload در انتظار است، حالا که فرم بسته شد اجرا کن
@@ -7268,6 +7298,8 @@ function saveItem() {
             try { recalcGroupPositions(items[idx].groupId || 'all'); }
             catch(e) { console.error('[saveItem edit] recalcGroupPositions failed:', e.message); }
             document.getElementById('modalOverlay').classList.remove('active');
+            // 🔧 باز کردن قفل اسکرول body
+            unlockBodyScroll();
             // Remove from the modal stack and pop the modal marker.
             trackModalClose('taskForm');
             navBack();
@@ -7384,6 +7416,8 @@ function saveItem() {
     }
 
     document.getElementById('modalOverlay').classList.remove('active');
+    // 🔧 باز کردن قفل اسکرول body
+    unlockBodyScroll();
     // Remove from the modal stack and pop the modal marker.
     trackModalClose('taskForm');
     navBack();
@@ -8648,25 +8682,20 @@ function escapeHtml(text) { const d = document.createElement('div'); d.textConte
 
 function toggleExpand(id) {
     if (expandedId === id) {
-        // Currently expanded → collapse. Use history.back() so popstate
-        // re-renders without expansion and the mobile back button behaves
-        // identically to collapsing via tap.
-        navBack();
+        // 🔧 بستن جزئیات — بدون navBack و popstate
+        // مستقیماً expandedId را null کن و render کن — بدون اسکرول
+        expandedId = null;
+        render();
     } else if (expandedId === null) {
-        // Expanding from collapsed → push a new history entry so that
-        // back returns to the collapsed tasks view.
+        // باز کردن جزئیات
         expandedId = id;
-        navPush({ view: 'tasks', groupId: currentGroupId, expandedId: id });
         render();
         // 🔧 اسکرول تا بالای تسک با زیر هدر گروه تراز شود
         _scrollTaskBelowHeader(id);
     } else {
-        // Switching from one expanded task to another: just replace the
-        // current history entry (no extra back-press needed to leave).
+        // سوییچ از یک تسک باز به تسک دیگر
         expandedId = id;
-        navReplace({ view: 'tasks', groupId: currentGroupId, expandedId: id });
         render();
-        // 🔧 اسکرول تا بالای تسک با زیر هدر گروه تراز شود
         _scrollTaskBelowHeader(id);
     }
 }
@@ -8731,7 +8760,14 @@ function toggleDone(id) {
     }
 
     setDB(items);
-    fullRender();
+    // 🔧 بستن جزئیات و render بدون fullRender — صفحه نمی‌پرد
+    expandedId = null;
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    render();
+    setTimeout(initSortable, 50);
     showToast(item.done ? 'انجام شد ✓' : 'بازگردانی شد');
 }
 
@@ -8783,12 +8819,14 @@ function deleteItem(id) {
     if (!confirm(msg)) return;
     let newItems = items.filter(i => i.id !== id && i.parentId !== id);
     setDB(newItems);
-    if (expandedId === id) {
-        expandedId = null;
-        navBack();
-    } else {
-        fullRender();
+    // 🔧 بستن جزئیات و render بدون fullRender — صفحه نمی‌پرد
+    expandedId = null;
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
     }
+    render();
+    setTimeout(initSortable, 50);
     showToast(childCount > 0 ? `تسک و ${childCount} تکرار حذف شد` : 'حذف شد');
 }
 
