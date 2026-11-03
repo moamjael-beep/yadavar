@@ -1644,24 +1644,31 @@ body { padding-bottom: 30px; }
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    font-size: 22px;
+    font-size: 14px;
     cursor: pointer;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s, transform 0.2s;
-    /* 🔧 افزایش محدوده لمس — کاربر می‌تواند حوالی دکمه را هم لمس کند */
-    padding: 20px;
-    margin: -20px;
-    position: relative;
-    z-index: 10;
 }
 .back-btn:hover { background: rgba(255,255,255,0.4); }
 .back-btn:active { transform: scale(0.92); }
+
+/* 🔧 محدوده لمس نامرئی بزرگ — کل سمت چپ هدر را پوشش می‌دهد */
+.back-touch-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 120px;
+    height: 100%;
+    z-index: 5;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
 .group-title {
     font-size: 11px;
     font-weight: 700;
@@ -3625,7 +3632,7 @@ body.locked .header-actions button {
 //         preserved). Money amounts still use separator (۲٬۰۰۰٬۰۰۰).
 //         Also: backup button now asks for confirmation before saving
 //         (it was being accidentally triggered next to the + button).
-const APP_VERSION = 'v109-2026-11-01-floating-btns-2x-right-2x-high';
+const APP_VERSION = 'v110-2026-11-01-back-btn-original-size-invisible-touch-area';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8563,7 +8570,7 @@ function renderTasksView(groupId) {
     // 🔧 منوی کشویی (dropdownHtml) مستقیماً در هدر قرار می‌گیرد (نه داخل
     // wrapper داخلی). چون منو position: fixed دارد، موقعیت آن مستقل از
     // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
-    header.innerHTML = `<div style="display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div>${dropdownHtml}`;
+    header.innerHTML = `<div style="display: flex; align-items: center; gap: 12px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
     container.appendChild(header);
 
     // 🔧 فیکس کردن هدر داخلی زیر هدر اصلی برنامه.
