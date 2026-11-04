@@ -1617,15 +1617,15 @@ body { padding-bottom: 30px; }
     line-height: 1;
 }
 .group-tasks-header {
-    padding: 16px 24px;
+    padding: 14px 20px;
     border-radius: 12px;
     color: white;
     margin-bottom: 10px;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 10px;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
-    min-height: 110px;
+    min-height: 80px;
     position: sticky;
     position: -webkit-sticky;
     top: 0;
@@ -3688,7 +3688,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v121-2026-11-04-two-row-header-audio-tts';
+const APP_VERSION = 'v122-2026-11-04-parallel-tts-single-row-header';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8664,10 +8664,7 @@ function renderTasksView(groupId) {
     // 🔧 منوی کشویی (dropdownHtml) مستقیماً در هدر قرار می‌گیرد (نه داخل
     // wrapper داخلی). چون منو position: fixed دارد، موقعیت آن مستقل از
     // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
-    header.innerHTML = `<div style="display: flex; flex-direction: column; width: 100%; gap: 6px;">
-        <div style="text-align: center; font-size: 17px; font-weight: 700; color: white; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(group.name)}</div>
-        <div style="display: flex; align-items: center; gap: 10px;">${backBtnHtml}${iconHtml}<div style="flex: 1;"></div>${menuHtml}${countHtml}</div>
-    </div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
+    header.innerHTML = `<div style="display: flex; align-items: center; gap: 10px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title" style="text-align: center;">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
     container.appendChild(header);
 
     // 🔧 فیکس کردن هدر داخلی زیر هدر اصلی برنامه.
@@ -8995,15 +8992,15 @@ function _speakWithWebSpeech(text) {
         _speakWithGoogleTranslateTTS(text);
     };
 
-    // 🔧 تایم‌اوت: اگر در ۸ ثانیه هیچ رویدادی fire نشد، به موتور بعدی برو
-    // (برخی دستگاه‌ها speak() را قبول می‌کنند ولی هیچ صدا تولید نمی‌کنند)
+    // 🔧 تایم‌اوت: اگر در ۲ ثانیه هیچ رویدادی fire نشد، به موتور بعدی برو
+    // (کاربر درخواست سریع‌تر کرد — قبلاً ۸ ثانیه بود)
     var webTimeout = setTimeout(function() {
         if (_ttsEngine === 'web') {
-            console.warn('[TTS] Web Speech timeout (8s) — no sound, trying online TTS');
+            console.warn('[TTS] Web Speech timeout (2s) — trying online TTS');
             try { window.speechSynthesis.cancel(); } catch(e) {}
             _speakWithGoogleTranslateTTS(text);
         }
-    }, 8000);
+    }, 2000);
 
     // تاخیر کوتاه قبل از speak
     setTimeout(function() {
@@ -9019,37 +9016,25 @@ function _speakWithWebSpeech(text) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۲: Online TTS — با <audio> مستقیم (بدون fetch)
+// 🗣️ موتور ۲: Online TTS — موازی (همه URL‌ها همزمان)
 // ════════════════════════════════════════════════════════════════════
-// 🔧 از <audio> مستقیم استفاده می‌کنیم (نه fetch) چون <audio> می‌تواند
-// رسانه cross-origin را بدون نیاز به هدر CORS پخش کند.
-// این روش надежیدتر است — fetch به CORS نیاز دارد ولی <audio> نه.
-//
-// ۵ URL مختلف را امتحان می‌کند:
-//   ۱) مستقیم Google TTS
-//   ۲) corsproxy.io
-//   ۳) allorigins.win
-//   ۴) codetabs.com
-//   ۵) StreamElements TTS
+// 🔧 همه ۵ URL را همزمان امتحان می‌کند — اولین URL که شروع به پخش کند
+// برنده می‌شود و بقیه متوقف می‌شوند. این روش خیلی سریع‌تر از sequential است.
+// از <audio> مستقیم استفاده می‌کنیم (بدون fetch) چون CORS لازم ندارد.
 function _speakWithGoogleTranslateTTS(text) {
     if (_ttsTriedEngines.has('google')) {
-        console.log('[TTS] Already tried, going to ResponsiveVoice');
         _speakWithResponsiveVoice(text);
         return;
     }
     _ttsTriedEngines.add('google');
     _ttsEngine = 'google';
-    console.log('[TTS] Using online TTS with <audio> elements');
+    console.log('[TTS] Trying all online TTS URLs in PARALLEL');
 
-    // محدودیت طول: ~۲۰۰ کاراکتر
     var maxLen = 200;
     var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
     var encodedText = encodeURIComponent(textToSpeak);
-
-    // URL پایه Google Translate TTS
     var googleTtsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodedText;
 
-    // لیست URL‌هایی که امتحان می‌شوند
     var urls = [
         googleTtsUrl,
         'https://corsproxy.io/?url=' + encodeURIComponent(googleTtsUrl),
@@ -9064,65 +9049,57 @@ function _speakWithGoogleTranslateTTS(text) {
         _ttsAudio = null;
     }
 
-    // تابع کمکی: URL بعدی را با <audio> امتحان کن
-    function tryAudio(index) {
-        if (index >= urls.length) {
-            console.warn('[TTS] All audio URLs failed');
-            _speakWithResponsiveVoice(text);
-            return;
-        }
+    var winner = null;
+    var allAudio = [];
 
-        var url = urls[index];
-        var shortUrl = url.length > 60 ? url.substring(0, 60) + '...' : url;
-        console.log('[TTS] Trying audio URL', index + 1, '/', urls.length, ':', shortUrl);
-
+    // همه URL‌ها را همزمان امتحان کن
+    urls.forEach(function(url, index) {
         var audio = new Audio(url);
-        _ttsAudio = audio;
-
-        // تایم‌اوت: اگر در ۸ ثانیه پخش شروع نشد، URL بعدی را امتحان کن
-        var timeoutId = setTimeout(function() {
-            if (_ttsAudio === audio) {
-                console.warn('[TTS] Timeout for URL', index + 1);
-                try { audio.pause(); audio.src = ''; } catch(e) {}
-                _ttsAudio = null;
-                tryAudio(index + 1);
-            }
-        }, 8000);
+        allAudio.push(audio);
 
         audio.onplaying = function() {
-            clearTimeout(timeoutId);
-            console.log('[TTS] ✓ Audio playing from URL', index + 1);
-            _ttsStartTime = Date.now();
+            if (winner === null) {
+                winner = audio;
+                _ttsAudio = audio;
+                console.log('[TTS] ✓ URL', index + 1, 'WON — playing!');
+                _ttsStartTime = Date.now();
+                // توقف بقیه
+                allAudio.forEach(function(a) {
+                    if (a !== winner) {
+                        try { a.pause(); a.src = ''; } catch(e) {}
+                    }
+                });
+            }
         };
 
         audio.onended = function() {
-            clearTimeout(timeoutId);
-            console.log('[TTS] Audio ended');
-            _ttsAudio = null;
-            _resetTTSButton();
+            if (winner === audio) {
+                console.log('[TTS] Audio ended');
+                _ttsAudio = null;
+                _resetTTSButton();
+            }
         };
 
-        audio.onerror = function(e) {
-            clearTimeout(timeoutId);
-            console.warn('[TTS] Audio error for URL', index + 1);
-            if (_ttsAudio === audio) _ttsAudio = null;
-            tryAudio(index + 1);
+        audio.onerror = function() {
+            console.warn('[TTS] URL', index + 1, 'error');
         };
 
-        // تلاش برای پخش
-        var playPromise = audio.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function(e) {
-                clearTimeout(timeoutId);
-                console.warn('[TTS] play() rejected for URL', index + 1, ':', e.message || e);
-                if (_ttsAudio === audio) _ttsAudio = null;
-                tryAudio(index + 1);
+        try {
+            var p = audio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    });
+
+    // تایم‌اوت: اگر در ۵ ثانیه هیچ‌کدام پخش نشد، به ResponsiveVoice برو
+    setTimeout(function() {
+        if (winner === null) {
+            console.warn('[TTS] No URL worked in 5s, trying ResponsiveVoice');
+            allAudio.forEach(function(a) {
+                try { a.pause(); a.src = ''; } catch(e) {}
             });
+            _speakWithResponsiveVoice(text);
         }
-    }
-
-    // شروع از URL اول
-    tryAudio(0);
+    }, 5000);
 }
 
 // ════════════════════════════════════════════════════════════════════
