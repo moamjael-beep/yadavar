@@ -3690,7 +3690,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v125-2026-11-04-notes-date-fix-back-touch';
+const APP_VERSION = 'v126-2026-11-04-notes-new-line-fix';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -10741,17 +10741,22 @@ function toggleNotesRecording() {
             var sameDay = firstDateSpan && firstDateSpan.textContent.trim() === todayDate;
             
             if (sameDay) {
-                // همان روز — متن را در خط بعدیِ متن‌های فعلی این روز اضافه کن
-                // پایان بخش این روز = قبل از تاریخ بعدی، یا انتهای محتوا
+                // همان روز — متن را در خط جدید اضافه کن
                 var insertBefore = (dateSpans.length > 1) ? dateSpans[1] : null;
-                var br = document.createElement('br');
                 var textNode = document.createTextNode(text);
                 if (insertBefore) {
+                    // قبل از تاریخ روز بعدی: <br> + متن + <br> قبل از تاریخ درج کن
+                    // ترتیب: textNode قبل از <br>، تا متن روی خط خودش بیاید
+                    var br = document.createElement('br');
                     content.insertBefore(br, insertBefore);
                     content.insertBefore(textNode, br);
                 } else {
+                    // انتهای محتوا: اگر آخرین عنصر <br> نیست، یک <br> اضافه کن
+                    var lastChild = content.lastChild;
+                    if (!lastChild || lastChild.nodeName !== 'BR') {
+                        content.appendChild(document.createElement('br'));
+                    }
                     content.appendChild(textNode);
-                    content.appendChild(br);
                 }
             } else {
                 // روز جدید — تاریخ در خط اول، متن در خط بعد
