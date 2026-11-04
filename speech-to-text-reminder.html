@@ -1643,10 +1643,10 @@ body { padding-bottom: 30px; }
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 22px;
     cursor: pointer;
     flex-shrink: 0;
     display: flex;
@@ -1669,7 +1669,7 @@ body { padding-bottom: 30px; }
     -webkit-tap-highlight-color: transparent;
 }
 .group-title {
-    font-size: 11px;
+    font-size: 16px;
     font-weight: 700;
     flex: 1;
     overflow: hidden;
@@ -1721,11 +1721,11 @@ body { padding-bottom: 30px; }
    در کنار آن قرار می‌گیرند. */
 .group-task-count {
     background: rgba(255,255,255,0.25);
-    min-width: 24px;
-    height: 24px;
-    padding: 0 5px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
     border-radius: 50%;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
@@ -1942,10 +1942,10 @@ body.locked .header-actions button {
     background: rgba(255,255,255,0.25);
     border: none;
     color: white;
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2291,14 +2291,14 @@ body.locked .header-actions button {
 
 /* آیکون/تصویر هدر گروه (نمایش در هدر) */
 .group-header-icon {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: rgba(255,255,255,0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 22px;
     flex-shrink: 0;
     margin-left: 8px;
     background-size: cover;
@@ -3668,7 +3668,20 @@ body.locked .header-actions button {
 //         fetch the audio from their servers (which can reach Google) and
 //         return it with CORS headers, bypassing both CORS and regional
 //         blocks.
-const APP_VERSION = 'v119-2026-11-03-tts-cors-proxy';
+//   v120 - MULTI-FIX: 5 fixes in one version:
+//         1) TTS: Removed "quick-end detection" that was incorrectly treating
+//            short Web Speech API output as a silent failure. Now if onend
+//            fires, it's considered a success.
+//         2) Pin task: Save/restore scroll position — page no longer jumps
+//            to top when pinning a task.
+//         3) Urgent checkbox: Same scroll fix — page stays in place when
+//            toggling urgent.
+//         4) Floating + button: Hidden when group settings menu/modal is
+//            open, shown when closed. New _refreshFloatingAddBtn() helper.
+//         5) Internal group header: Enlarged all elements to match external
+//            header — back button 28→40px, title 11→16px, count 24→32px,
+//            menu button 28→36px, icon 28→40px.
+const APP_VERSION = 'v120-2026-11-03-multi-fix';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5576,6 +5589,8 @@ function toggleGroupMenu(groupId, btnEl) {
     if (menu.classList.contains('active')) {
         menu.classList.remove('active');
         _activeGroupMenu = null;
+        // 🔧 نمایش کلید + شناور وقتی منو بسته شد
+        _refreshFloatingAddBtn();
         return;
     }
 
@@ -5618,6 +5633,9 @@ function toggleGroupMenu(groupId, btnEl) {
     // اکنون منو را قابل مشاهده کن
     menu.style.visibility = 'visible';
     _activeGroupMenu = menu;
+    // 🔧 پنهان کردن کلید + شناور وقتی منو باز است
+    var fab = document.getElementById('floatingAddBtn');
+    if (fab) fab.style.display = 'none';
 
     // بستن منو با کلیک خارج از آن
     setTimeout(function() {
@@ -5649,6 +5667,8 @@ function closeGroupMenuOnOutsideClick(e) {
     // کلیک خارج از منو — بستن
     _activeGroupMenu.classList.remove('active');
     _activeGroupMenu = null;
+    // 🔧 نمایش کلید + شناور وقتی منو بسته شد
+    _refreshFloatingAddBtn();
 }
 
 // بستن منوی همبرگری (از داخل منو)
@@ -5657,6 +5677,8 @@ function closeGroupMenu() {
         _activeGroupMenu.classList.remove('active');
         _activeGroupMenu = null;
     }
+    // 🔧 نمایش کلید + شناور وقتی منو بسته شد
+    _refreshFloatingAddBtn();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -5740,6 +5762,9 @@ function openGroupSettings(groupId) {
 
     // نمایش مودال
     document.getElementById('groupSettingsOverlay').classList.add('active');
+    // 🔧 پنهان کردن کلید + شناور وقتی مودال تنظیمات باز است
+    var fab = document.getElementById('floatingAddBtn');
+    if (fab) fab.style.display = 'none';
 }
 
 // 🔧 متغیر موقت برای نگه‌داشتن عکس آپلود‌شده
@@ -5928,6 +5953,8 @@ function closeGroupSettings() {
     // پاک کردن value فایل input تا بتوان همان فایل را دوباره انتخاب کرد
     const fileInput = document.getElementById('groupSettingsImageInput');
     if (fileInput) fileInput.value = '';
+    // 🔧 نمایش کلید + شناور وقتی مودال بسته شد
+    _refreshFloatingAddBtn();
 }
 
 function getTaskCountByGroup(groupId) {
@@ -7935,7 +7962,17 @@ function togglePinTask(taskId) {
     setDB(items);
     // محاسبهٔ مجدد ترتیب پین‌ها در این گروه
     recalcPinnedOrder(item.groupId || 'all');
-    fullRender();
+    // 🔧 حفظ موقعیت اسکرول — صفحه به بالای گروه نپرد
+    var savedScrollY = window.scrollY;
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    render();
+    setTimeout(function() {
+        initSortable();
+        window.scrollTo(0, savedScrollY);
+    }, 50);
     if (navigator.vibrate) navigator.vibrate(20);
     showToast(item.pinned === true ? '📌 پین شد' : '📌 پین برداشته شد');
 }
@@ -8298,6 +8335,27 @@ function fullRender() {
     setTimeout(initSortable, 50);
 }
 
+// 🔧 تابع کمکی: به‌روزرسانی نمایش کلید + شناور
+// کلید + شناور فقط وقتی نمایش داده می‌شود که:
+//   - در حالت تسک‌ها باشیم (نه لیست گروه‌ها)
+//   - هیچ فرمی باز نباشد (فرم تسک، فرم شخص، مودال تنظیمات گروه)
+//   - هیچ منویی باز نباشد (منوی همبرگری گروه)
+//   - جزئیات هیچ تسکی باز نباشد
+function _refreshFloatingAddBtn() {
+    var fab = document.getElementById('floatingAddBtn');
+    if (!fab) return;
+    var taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
+    var detailsOpen = (expandedId !== null);
+    var groupSettingsOpen = document.getElementById('groupSettingsOverlay') && document.getElementById('groupSettingsOverlay').classList.contains('active');
+    var groupMenuOpen = (typeof _activeGroupMenu !== 'undefined' && _activeGroupMenu);
+    if (currentView === 'tasks' && !taskFormOpen && !detailsOpen && !groupSettingsOpen && !groupMenuOpen) {
+        fab.style.display = 'flex';
+    } else {
+        fab.style.display = 'none';
+        fab.classList.remove('recording');
+    }
+}
+
 function render() {
     // Toggle the + button's disabled state based on the current view.
     // On the groups list view, the + button is disabled (clicking it would
@@ -8314,17 +8372,7 @@ function render() {
     // 🔧 دکمهٔ شناور + فقط در حالت نمایش تسک‌های یک گروه (tasks view) ظاهر می‌شود.
     // در صفحهٔ لیست گروه‌ها مخفی است.
     // 🔧 اگر جزئیات یک تسک باز است یا فرم ایجاد/ویرایش باز است، مخفی شود.
-    const floatingAddBtn = document.getElementById('floatingAddBtn');
-    if (floatingAddBtn) {
-        const taskFormOpen = document.getElementById('modalOverlay') && document.getElementById('modalOverlay').classList.contains('active');
-        const detailsOpen = (expandedId !== null);
-        if (currentView === 'tasks' && !taskFormOpen && !detailsOpen) {
-            floatingAddBtn.style.display = 'flex';
-        } else {
-            floatingAddBtn.style.display = 'none';
-            floatingAddBtn.classList.remove('recording');
-        }
-    }
+    _refreshFloatingAddBtn();
     // دکمه بازگردانی (↩) از هدر اصلی به منوی همبرگری هر گروه منتقل شد.
     // این کد برای سازگاری با نسخه‌های قدیمی نگه داشته شده، اما دکمه
     // در هدر اصلی مخفی است (display:none).
@@ -8924,16 +8972,11 @@ function _speakWithWebSpeech(text) {
     };
 
     utter.onend = function() {
-        var elapsed = Date.now() - (_ttsStartTime || speakStartTime);
-        console.log('[TTS] Web Speech ended after', elapsed, 'ms');
-        // 🔧 تشخیص شکست بی‌صدا: اگر در کمتر از ۵۰۰ms تمام شد
-        // و متن بلند است، احتمالاً واقعاً صحبت نکرده
-        if (elapsed < 500 && text.length > 10) {
-            console.warn('[TTS] Web Speech ended too quickly — likely silent failure');
-            _speakWithGoogleTranslateTTS(text);
-        } else {
-            _resetTTSButton();
-        }
+        console.log('[TTS] Web Speech ended normally');
+        // 🔧 تشخیص شکست بی‌صدا حذف شد — باعث می‌شد صحبت‌های کوتاه
+        // اشتباهاً به‌عنوان شکست تشخیص داده شوند و به موتور بعدی بروند.
+        // حالا اگر onend.fire. کرد یعنی صحبت تمام شده (موفقیت).
+        _resetTTSButton();
     };
 
     utter.onerror = function(e) {
@@ -9231,7 +9274,17 @@ function toggleTaskUrgent(id) {
         item.urgent = true;
     }
     setDB(items);
-    fullRender();
+    // 🔧 حفظ موقعیت اسکرول — صفحه به بالای گروه نپرد
+    var savedScrollY = window.scrollY;
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    render();
+    setTimeout(function() {
+        initSortable();
+        window.scrollTo(0, savedScrollY);
+    }, 50);
     showToast(item.urgent === true ? '🚨 فوری شد' : 'فوری برداشته شد');
     if (navigator.vibrate) navigator.vibrate(20);
 }
