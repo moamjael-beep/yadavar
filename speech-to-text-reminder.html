@@ -1658,11 +1658,12 @@ body { padding-bottom: 30px; }
 .back-btn:hover { background: rgba(255,255,255,0.4); }
 .back-btn:active { transform: scale(0.92); }
 
-/* 🔧 محدوده لمس نامرئی بزرگ — کل سمت چپ هدر را پوشش می‌دهد */
+/* 🔧 محدوده لمس نامرئی بزرگ — کل سمت راست هدر را پوشش می‌دهد (سمت دکمه برگشت) */
+/* 🔧 قبلاً left:0 بود که در RTL روی منو (☰) می‌افتاد و باعث پرش به صفحه اصلی می‌شد */
 .back-touch-area {
     position: absolute;
     top: 0;
-    left: 0;
+    right: 0;
     width: 120px;
     height: 100%;
     z-index: 5;
@@ -3689,7 +3690,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v124-2026-11-04-header-full-width';
+const APP_VERSION = 'v125-2026-11-04-notes-date-fix-back-touch';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -3797,6 +3798,15 @@ function toJalaliLong(date) {
     const [jy, jm, jd] = toJalaliParts(date);
     const wd = jalaliWeekdays[d.getDay()];
     return `${wd} ${jd} ${jalaliMonths[jm-1]} ${toPersianNumber(jy)} - ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+// 🔧 فقط تاریخ و روز هفته (بدون ساعت) — برای یادداشت‌ها
+// مثال: «چهارشنبه 12 آبان 1405»
+function toJalaliDateOnly(date) {
+    const d = new Date(date);
+    const [jy, jm, jd] = toJalaliParts(date);
+    const wd = jalaliWeekdays[d.getDay()];
+    return `${wd} ${jd} ${jalaliMonths[jm-1]} ${toPersianNumber(jy)}`;
 }
 
 function toJalaliFull(date) {
@@ -10717,15 +10727,52 @@ function toggleNotesRecording() {
         if (_notesRecognition) {
             try { _notesRecognition.stop(); } catch(e) {}
         }
-        // 🔧 اگر متنی جمع‌آوری شده، آن را به‌عنوان یک پاراگراف در بالای صفحه بنویس
+        // 🔧 اگر متنی جمع‌آوری شده، آن را طبق قوانین جدید بنویس:
+        //   - اولین ضبط هر روز: خط تاریخ (بدون ساعت) → خط بعد متن
+        //   - ضبط‌های بعدی همان روز: فقط متن (خط به خط اضافه شود)
         if (_notesAccumulatedText.trim()) {
-            const dateStr = toJalaliLong(new Date());
-            const persianDate = toPersianDigits(dateStr);
-            // 🔧 تاریخ و ساعت قرمز، متن عادی
-            const newEntry = '<span class="notes-date">' + persianDate + ' - </span>' + _notesAccumulatedText.trim() + '\n';
-            const content = document.getElementById('notesContent');
-            const currentHTML = content.innerHTML;
-            content.innerHTML = newEntry.replace(/\n/g, '<br>') + currentHTML;
+            var text = _notesAccumulatedText.trim();
+            var todayDate = toPersianDigits(toJalaliDateOnly(new Date()));
+            var content = document.getElementById('notesContent');
+            
+            // بررسی: آیا اولین تاریخ موجود با امروز یکی است؟
+            var dateSpans = content.querySelectorAll('.notes-date');
+            var firstDateSpan = dateSpans.length > 0 ? dateSpans[0] : null;
+            var sameDay = firstDateSpan && firstDateSpan.textContent.trim() === todayDate;
+            
+            if (sameDay) {
+                // همان روز — متن را در خط بعدیِ متن‌های فعلی این روز اضافه کن
+                // پایان بخش این روز = قبل از تاریخ بعدی، یا انتهای محتوا
+                var insertBefore = (dateSpans.length > 1) ? dateSpans[1] : null;
+                var br = document.createElement('br');
+                var textNode = document.createTextNode(text);
+                if (insertBefore) {
+                    content.insertBefore(br, insertBefore);
+                    content.insertBefore(textNode, br);
+                } else {
+                    content.appendChild(textNode);
+                    content.appendChild(br);
+                }
+            } else {
+                // روز جدید — تاریخ در خط اول، متن در خط بعد
+                var dateSpan = document.createElement('span');
+                dateSpan.className = 'notes-date';
+                dateSpan.textContent = todayDate;
+                var br1 = document.createElement('br');
+                var textNode = document.createTextNode(text);
+                var br2 = document.createElement('br');
+                if (content.firstChild) {
+                    content.insertBefore(br2, content.firstChild);
+                    content.insertBefore(textNode, br2);
+                    content.insertBefore(br1, textNode);
+                    content.insertBefore(dateSpan, br1);
+                } else {
+                    content.appendChild(dateSpan);
+                    content.appendChild(br1);
+                    content.appendChild(textNode);
+                }
+            }
+            
             localStorage.setItem(getNotesKey(_notesTargetGroup), content.innerHTML);
             _notesAccumulatedText = '';
             showToast('یادداشت ثبت شد ✓');
