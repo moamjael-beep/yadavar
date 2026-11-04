@@ -3690,7 +3690,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v126-2026-11-04-notes-new-line-fix';
+const APP_VERSION = 'v127-2026-11-04-notes-number-detection';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -10730,8 +10730,13 @@ function toggleNotesRecording() {
         // 🔧 اگر متنی جمع‌آوری شده، آن را طبق قوانین جدید بنویس:
         //   - اولین ضبط هر روز: خط تاریخ (بدون ساعت) → خط بعد متن
         //   - ضبط‌های بعدی همان روز: فقط متن (خط به خط اضافه شود)
+        //   - اعداد فارسی گفتاری به دیجیت تبدیل می‌شوند (مثل تسک‌ها)
+        //   - جدیدترین روز همیشه در بالای صفحه، روزهای قبل به پایین شیفت می‌شوند
         if (_notesAccumulatedText.trim()) {
-            var text = _notesAccumulatedText.trim();
+            // 🔧 تبدیل اعداد فارسی گفتاری به دیجیت (مانند تسک‌ها)
+            // مثال: «دو میلیون تومان» → «۲٬۰۰۰٬۰۰۰ تومان»
+            //       «صفر نه یک پنج» → «۰۹۱۵»
+            var text = addNumericAfterWords(_notesAccumulatedText.trim());
             var todayDate = toPersianDigits(toJalaliDateOnly(new Date()));
             var content = document.getElementById('notesContent');
             
