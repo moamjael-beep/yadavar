@@ -1625,7 +1625,7 @@ body { padding-bottom: 30px; }
     align-items: center;
     gap: 10px;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
-    min-height: 80px;
+    min-height: 100px;
     position: sticky;
     position: -webkit-sticky;
     top: 0;
@@ -3688,7 +3688,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v122-2026-11-04-parallel-tts-single-row-header';
+const APP_VERSION = 'v123-2026-11-04-two-row-header-5s-tts';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8664,7 +8664,10 @@ function renderTasksView(groupId) {
     // 🔧 منوی کشویی (dropdownHtml) مستقیماً در هدر قرار می‌گیرد (نه داخل
     // wrapper داخلی). چون منو position: fixed دارد، موقعیت آن مستقل از
     // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
-    header.innerHTML = `<div style="display: flex; align-items: center; gap: 10px; width: 100%;">${backBtnHtml}${iconHtml}<span class="group-title" style="text-align: center;">${escapeHtml(group.name)}</span>${menuHtml}${countHtml}</div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
+    header.innerHTML = `<div style="display: flex; flex-direction: column; width: 100%; gap: 8px;">
+        <div style="text-align: center; font-size: 16px; font-weight: 700; color: white; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(group.name)}</div>
+        <div style="display: flex; align-items: center; gap: 10px;">${backBtnHtml}${iconHtml}<div style="flex: 1;"></div>${menuHtml}${countHtml}</div>
+    </div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
     container.appendChild(header);
 
     // 🔧 فیکس کردن هدر داخلی زیر هدر اصلی برنامه.
@@ -8992,15 +8995,15 @@ function _speakWithWebSpeech(text) {
         _speakWithGoogleTranslateTTS(text);
     };
 
-    // 🔧 تایم‌اوت: اگر در ۲ ثانیه هیچ رویدادی fire نشد، به موتور بعدی برو
-    // (کاربر درخواست سریع‌تر کرد — قبلاً ۸ ثانیه بود)
+    // 🔧 تایم‌اوت: اگر در ۵ ثانیه هیچ رویدادی fire نشد، به موتور بعدی برو
+    // (۵ ثانیه به Web Speech API فرصت واقعی می‌دهد تا شروع کند)
     var webTimeout = setTimeout(function() {
         if (_ttsEngine === 'web') {
-            console.warn('[TTS] Web Speech timeout (2s) — trying online TTS');
+            console.warn('[TTS] Web Speech timeout (5s) — trying online TTS');
             try { window.speechSynthesis.cancel(); } catch(e) {}
             _speakWithGoogleTranslateTTS(text);
         }
-    }, 2000);
+    }, 5000);
 
     // تاخیر کوتاه قبل از speak
     setTimeout(function() {
