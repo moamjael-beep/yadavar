@@ -3697,7 +3697,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v128-2026-11-04-no-sidebars-urgent-pin-day-notes';
+const APP_VERSION = 'v129-2026-11-04-back-button-direct-nav';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8809,17 +8809,23 @@ function goToGroups() {
     if (typeof _activeGroupMenu !== 'undefined' && _activeGroupMenu) {
         closeGroupMenu();
     }
-    // If we're inside a group's tasks view, use history.back() so that
-    // popstate restores the previous (groups) view. This makes the in-app
-    // ◄ back button behave exactly like the mobile hardware back button.
-    if (currentView === 'tasks') {
-        navBack();
-        return;
-    }
+    // 🔧 مستقیماً به صفحه گروه‌ها برو — بدون history.back()
+    // قبلاً از navBack() (history.back()) استفاده می‌کرد که بعضی مواقع
+    // در موبایل کار نمی‌کرد و نیاز به ۴-۵ بار زدن دکمه بود.
+    // حالا مستقیماً currentView را تغییر می‌دهیم و fullRender می‌کنیم.
     currentView = 'groups';
     currentGroupId = null;
     expandedId = null;
+    // توقف sortable برای جلوگیری از تداخل
+    if (typeof sortableInstance !== 'undefined' && sortableInstance) {
+        try { sortableInstance.destroy(); } catch(e) {}
+        sortableInstance = null;
+    }
+    // جایگزینی تاریخ فعلی با state گروه‌ها (برای دکمه back موبایل)
+    navReplace({ view: 'groups' });
     fullRender();
+    // 🔧 اسکرول به بالا هنگام تغییر ویو اصلی (groups ↔ tasks)
+    window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 function changeTaskGroup(taskId, newGroupId) {
