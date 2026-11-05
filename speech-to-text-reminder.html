@@ -3019,7 +3019,7 @@ body.locked .header-actions button {
     <div class="header-actions">
         <button class="icon-btn share-btn install-btn" id="installBtn" onclick="installApp()" title="نصب به عنوان اپلیکیشن" style="display:none;">⬇</button>
         <button class="icon-btn share-btn" id="calBtn" onclick="openCalendar()" title="تقویم شمسی">📅</button>
-        <button class="icon-btn share-btn" id="contactsBtn" onclick="openContacts()" title="بانک اطلاعاتی اشخاص">👥</button>
+        <button class="icon-btn share-btn" id="contactsBtn" onclick="openContacts()" title="بانک اطلاعاتی اشخاص"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></button>
         <button class="icon-btn share-btn" id="notesBtn" onclick="openNotes()" title="یادداشت">📝</button>
         <!-- دکمه بازگردانی به هدر گروه‌ها منتقل شد (در منوی همبرگری هر گروه) -->
 <button class="icon-btn share-btn" id="resetOrderBtn" onclick="resetAllTaskPositions()" title="برگرداندن همه تسک‌ها به ترتیب اصلی" style="display:none;">↩</button>
@@ -3697,7 +3697,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v130-2026-11-04-scroll-preservation';
+const APP_VERSION = 'v131-2026-11-04-ai-tts-transformers';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8884,70 +8884,254 @@ function _scrollTaskBelowHeader(taskId) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🔊 خواندن متن تسک با صدا (Text-to-Speech)
+// 🔊 خواندن متن تسک با صدا — سیستم هوش مصنوعی (AI TTS) v131
 // ════════════════════════════════════════════════════════════════════
-// 🔧 استراتژی سه‌موتوریه (v117):
-//   ۱) اگر صدای فارسی سیستمی موجود است → Web Speech API (سریع، آفلاین)
-//   ۲) اگر نبود → Google Translate TTS (آنلاین، رایگان، بدون کلید API، صدای فارسی واقعی)
-//   ۳) اگر Google TTS هم شکست خورد → ResponsiveVoice (fallback نهایی)
-//   ۴) پیام خطای مناسب — اگر هیچک کار نکرد
+// این سیستم از مدل‌های هوش مصنوعی (VITS — Facebook MMS-TTS) برای تبدیل
+// متن فارسی به گفتار استفاده می‌کند. مدل در مرورگر با WebAssembly اجرا می‌شود.
 //
-// 🔧 این روش مشکل اصلی را حل می‌کند: ResponsiveVoice با کلید FREE-KEY کار نمی‌کند
-// و بعد از ۱ ثانیه خطا می‌دهد. Google Translate TTS نیاز به کلید ندارد و روی
-// همه دستگاه‌ها کار می‌کند — فقط یک URL ساده با پارامتر tl=fa است.
-let _ttsSpeaking = false;
-let _ttsVoicesLoaded = false;
-let _ttsAvailableVoices = [];
-// 🔧 متغیرهای مدیریت چند‌موتوریه
-let _ttsCurrentBtn = null;   // دکمه فعلی (برای ریست در توقف)
-let _ttsEngine = null;       // 'web' | 'google' | 'responsive' | null
-let _ttsAudio = null;        // عنصر Audio برای Google Translate TTS
-let _ttsTriedEngines = null; // Set برای جلوگیری از لوپ بی‌نهایت در fallback
-let _ttsStartTime = 0;       // زمان شروع خواندن (برای تشخیص شکست بی‌صدا)
+// مزایا:
+//   - صدای هوش مصنوعی واقعی (نه رباتی)
+//   - پس از اولین بارگذاری، آفلاین کار می‌کند (مدل در مرورگر کش می‌شود)
+//   - نیازی به کلید API ندارد
+//   - پشتیبانی کامل از زبان فارسی
+//
+// زنجیره fallback:
+//   ۱) AI TTS (Transformers.js + VITS) — primary, offline after model download
+//   ۲) Web Speech API — fallback, if Persian voice exists
+//   ۳) Google Translate TTS — fallback, online
+//   ۴) ResponsiveVoice — last resort
 
-// 🔧 بارگذاری صداها — در برخی مرورگرها async است و چند بار باید صدا زده شود
-function _loadTTSVoices() {
-    if (!('speechSynthesis' in window)) return;
-    _ttsAvailableVoices = window.speechSynthesis.getVoices() || [];
-    if (_ttsAvailableVoices.length > 0) {
-        _ttsVoicesLoaded = true;
-        console.log('[TTS] Voices loaded:', _ttsAvailableVoices.length, 'voices');
-        // لاگ صداهای فارسی موجود
-        const faVoices = _ttsAvailableVoices.filter(v => v.lang && v.lang.startsWith('fa'));
-        if (faVoices.length > 0) {
-            console.log('[TTS] Persian voices:', faVoices.map(v => v.name + ' (' + v.lang + ')').join(', '));
-        } else {
-            console.log('[TTS] No Persian voices found in', _ttsAvailableVoices.length, 'total voices');
-            console.log('[TTS] Available langs:', [...new Set(_ttsAvailableVoices.map(v => v.lang))].join(', '));
+let _ttsSpeaking = false;
+let _ttsCurrentBtn = null;
+let _ttsAudio = null;
+let _aiTtsPipeline = null;
+let _aiTtsLoading = false;
+let _ttsEngine = null;
+
+// ════════════════════════════════════════════════════════════════════
+// 🧠 موتور ۱: AI TTS — Transformers.js با مدل VITS فارسی
+// ════════════════════════════════════════════════════════════════════
+// مدل Xenova/mms-tts-fas یک مدل VITS است که برای زبان فارسی آموزش دیده است.
+// پس از اولین بارگذاری، در کش مرورگر ذخیره می‌شود و دفعات بعد آفلاین کار می‌کند.
+
+async function _initAITTS() {
+    if (_aiTtsPipeline) return _aiTtsPipeline;
+    if (_aiTtsLoading) {
+        // صبر کن تا بارگذاری قبلی تمام شود
+        var attempts = 0;
+        while (_aiTtsLoading && attempts < 100) {
+            await new Promise(function(r) { setTimeout(r, 200); });
+            attempts++;
         }
+        return _aiTtsPipeline;
+    }
+    _aiTtsLoading = true;
+    try {
+        console.log('[TTS] Loading Transformers.js...');
+        showToast('در حال بارگذاری هوش مصنوعی... (اولین بار ممکن است طول بکشد)');
+        // بارگذاری کتابخانه Transformers.js از CDN
+        var transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+        console.log('[TTS] Transformers.js loaded, loading Persian TTS model...');
+        // بارگذاری مدل VITS فارسی
+        _aiTtsPipeline = await transformers.pipeline('text-to-speech', 'Xenova/mms-tts-fas');
+        console.log('[TTS] ✓ AI TTS model loaded!');
+        showToast('هوش مصنوعی آماده ✓');
+    } catch(e) {
+        console.error('[TTS] AI model load failed:', e);
+        _aiTtsPipeline = null;
+    }
+    _aiTtsLoading = false;
+    return _aiTtsPipeline;
+}
+
+// تبدیل Float32Array (خروجی مدل) به WAV Blob (برای پخش با <audio>)
+function _float32ToWav(float32Array, sampleRate) {
+    var numSamples = float32Array.length;
+    var buffer = new ArrayBuffer(44 + numSamples * 2);
+    var view = new DataView(buffer);
+
+    // WAV header
+    var writeString = function(offset, str) {
+        for (var i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+    };
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);   // PCM
+    view.setUint16(22, 1, true);   // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true);   // block align
+    view.setUint16(34, 16, true);  // bits per sample
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    // Convert float32 to int16
+    var offset = 44;
+    for (var i = 0; i < numSamples; i++) {
+        var s = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function _speakWithAI(text) {
+    _ttsEngine = 'ai';
+    console.log('[TTS] Using AI TTS (Transformers.js + VITS)');
+    try {
+        var synthesizer = await _initAITTS();
+        if (!synthesizer) {
+            console.warn('[TTS] AI model not available, trying Web Speech');
+            _speakWithWebSpeech(text);
+            return;
+        }
+        // محدودیت طول متن
+        var maxLen = 200;
+        var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
+        console.log('[TTS] Generating audio with AI...');
+        var result = await synthesizer(textToSpeak);
+        console.log('[TTS] AI audio generated, samples:', result.audio.length);
+        // تبدیل به WAV
+        var wavBlob = _float32ToWav(result.audio, result.sampling_rate);
+        var audioUrl = URL.createObjectURL(wavBlob);
+        // پخش
+        if (_ttsAudio) {
+            try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {}
+        }
+        _ttsAudio = new Audio(audioUrl);
+        _ttsAudio.onended = function() {
+            console.log('[TTS] AI audio ended');
+            URL.revokeObjectURL(audioUrl);
+            _ttsAudio = null;
+            _resetTTSButton();
+        };
+        _ttsAudio.onerror = function(e) {
+            console.warn('[TTS] AI audio error, trying Web Speech');
+            URL.revokeObjectURL(audioUrl);
+            _ttsAudio = null;
+            _speakWithWebSpeech(text);
+        };
+        await _ttsAudio.play();
+        console.log('[TTS] ✓ AI audio playing');
+    } catch(e) {
+        console.error('[TTS] AI speak failed:', e);
+        _speakWithWebSpeech(text);
     }
 }
 
-if ('speechSynthesis' in window) {
-    _loadTTSVoices();
-    window.speechSynthesis.onvoiceschanged = function() {
-        _loadTTSVoices();
-    };
-    // 🔧 تلاش مجدد بعد از ۱ و ۲ ثانیه (برای مرورگرهای کند)
-    setTimeout(_loadTTSVoices, 1000);
-    setTimeout(_loadTTSVoices, 2000);
+// ════════════════════════════════════════════════════════════════════
+// 🗣️ موتور ۲: Web Speech API — fallback (آفلاین، صدای سیستمی)
+// ════════════════════════════════════════════════════════════════════
+function _speakWithWebSpeech(text) {
+    if (_ttsEngine === 'web') return; // جلوگیری از لوپ
+    _ttsEngine = 'web';
+    console.log('[TTS] Trying Web Speech API');
+    if (!('speechSynthesis' in window)) {
+        _speakWithGoogleTTS(text);
+        return;
+    }
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'fa-IR';
+    utter.rate = 0.9;
+    utter.onend = function() { _resetTTSButton(); };
+    utter.onerror = function() { _speakWithGoogleTTS(text); };
+    setTimeout(function() {
+        try {
+            window.speechSynthesis.speak(utter);
+        } catch(e) {
+            _speakWithGoogleTTS(text);
+        }
+    }, 100);
+    // Timeout: 5s
+    setTimeout(function() {
+        if (_ttsEngine === 'web') {
+            try { window.speechSynthesis.cancel(); } catch(e) {}
+            _speakWithGoogleTTS(text);
+        }
+    }, 5000);
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🎯 تابع اصلی خواندن صوتی — استراتژی زنجیره‌ای (v118)
+// 🗣️ موتور ۳: Google Translate TTS — fallback (آنلاین)
 // ════════════════════════════════════════════════════════════════════
-// ترتیب امتحان کردن موتورها (خطی، بدون لوپ):
-//   ۱) Web Speech API — همیشه اول امتحان می‌شود (حتی اگر صدای فارسی نباشد)
-//      بسیاری از دستگاه‌های اندروید با Google TTS engine می‌توانند فارسی
-//      صحبت کنند حتی اگر در getVoices() صدای فارسی لیست نشده باشد.
-//   ۲) Google Translate TTS — اگر Web Speech شکست خورد (آنلاین، رایگان)
-//   ۳) ResponsiveVoice — fallback نهایی
-//   ۴) پیام خطا — اگر همه شکست خوردند
-//
-// 🔧 از Set استفاده می‌کنیم تا جلوگیری کنیم از لوپ بی‌نهایت:
-//    اگر یک موتور قبلاً امتحان شده، دوباره امتحان نمی‌شود.
+function _speakWithGoogleTTS(text) {
+    if (_ttsEngine === 'google') return;
+    _ttsEngine = 'google';
+    console.log('[TTS] Trying Google Translate TTS (parallel)');
+    var maxLen = 200;
+    var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
+    var encodedText = encodeURIComponent(textToSpeak);
+    var googleUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodedText;
+    var urls = [
+        googleUrl,
+        'https://corsproxy.io/?url=' + encodeURIComponent(googleUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(googleUrl),
+        'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(googleUrl),
+        'https://api.streamelements.com/kappa/v2/speech?voice=fa-IR&text=' + encodedText,
+    ];
+    if (_ttsAudio) { try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {} _ttsAudio = null; }
+    var winner = null;
+    var allAudio = [];
+    urls.forEach(function(url, index) {
+        var audio = new Audio(url);
+        allAudio.push(audio);
+        audio.onplaying = function() {
+            if (winner === null) {
+                winner = audio;
+                _ttsAudio = audio;
+                console.log('[TTS] ✓ URL', index + 1, 'playing');
+                allAudio.forEach(function(a) { if (a !== winner) { try { a.pause(); a.src = ''; } catch(e) {} } });
+            }
+        };
+        audio.onended = function() { if (winner === audio) { _ttsAudio = null; _resetTTSButton(); } };
+        audio.onerror = function() {};
+        try { var p = audio.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
+    });
+    setTimeout(function() {
+        if (winner === null) {
+            console.warn('[TTS] All URLs failed, trying ResponsiveVoice');
+            allAudio.forEach(function(a) { try { a.pause(); a.src = ''; } catch(e) {} });
+            _speakWithResponsiveVoice(text);
+        }
+    }, 5000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🗣️ موتور ۴: ResponsiveVoice — fallback نهایی
+// ════════════════════════════════════════════════════════════════════
+function _speakWithResponsiveVoice(text) {
+    if (_ttsEngine === 'responsive') return;
+    _ttsEngine = 'responsive';
+    console.log('[TTS] Trying ResponsiveVoice (last resort)');
+    if (typeof responsiveVoice === 'undefined' || !responsiveVoice.voiceSupport()) {
+        _resetTTSButton();
+        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
+        return;
+    }
+    try {
+        responsiveVoice.speak(text, 'persian_female', {
+            onend: function() { _resetTTSButton(); },
+            onerror: function() {
+                _resetTTSButton();
+                showToast('خواندن صوتی کار نکرد.');
+            }
+        });
+    } catch(e) {
+        _resetTTSButton();
+        showToast('خواندن صوتی کار نکرد.');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🎯 تابع اصلی خواندن صوتی
+// ════════════════════════════════════════════════════════════════════
 function readTaskAloud(text, btnEl) {
-    // اگر در حال خواندن است، توقف کن
     if (_ttsSpeaking) {
         _stopAllTTS();
         return;
@@ -8956,268 +9140,29 @@ function readTaskAloud(text, btnEl) {
         showToast('متن خالی است');
         return;
     }
-
-    // ذخیره دکمه فعلی و ریست Set موتورهای امتحان‌شده
     _ttsCurrentBtn = btnEl;
     _ttsSpeaking = true;
-    _ttsTriedEngines = new Set();
-    _ttsStartTime = Date.now();
-
+    _ttsEngine = null;
     if (btnEl) {
         btnEl.textContent = '⏹ توقف';
         btnEl.classList.add('danger');
     }
-
-    // ─── همیشه از Web Speech API شروع کن ───
-    console.log('[TTS] Starting with Web Speech API');
     showToast('در حال خواندن...');
-    _speakWithWebSpeech(text);
-}
-
-// ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۱: Web Speech API — همیشه اول امتحان می‌شود
-// ════════════════════════════════════════════════════════════════════
-// حتی اگر صدای فارسی در getVoices() نباشد، امتحان می‌کنیم چون بسیاری از
-// دستگاه‌های اندروید با Google TTS engine می‌توانند فارسی صحبت کنند.
-function _speakWithWebSpeech(text) {
-    // اگر قبلاً امتحان شده، به موتور بعدی برو
-    if (_ttsTriedEngines.has('web')) {
-        console.log('[TTS] Web Speech already tried, going to Google TTS');
-        _speakWithGoogleTranslateTTS(text);
-        return;
-    }
-    _ttsTriedEngines.add('web');
-    _ttsEngine = 'web';
-
-    if (!('speechSynthesis' in window)) {
-        console.warn('[TTS] speechSynthesis not available, going to Google TTS');
-        _speakWithGoogleTranslateTTS(text);
-        return;
-    }
-
-    // توقف هر خواندن قبلی
-    window.speechSynthesis.cancel();
-
-    // صداها را بارگذاری کن (شاید الان اضافه شده باشند)
-    _loadTTSVoices();
-
-    var utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'fa-IR';
-    utter.rate = 0.9;
-    utter.pitch = 1.0;
-    utter.volume = 1.0;
-
-    // جستجوی صدای فارسی (اما حتی اگر نباشد، باز هم امتحان می‌کنیم)
-    if (_ttsAvailableVoices.length > 0) {
-        var bestVoice = null;
-        for (var i = 0; i < _ttsAvailableVoices.length; i++) {
-            var v = _ttsAvailableVoices[i];
-            if (v.lang === 'fa-IR') { bestVoice = v; break; }
-        }
-        if (!bestVoice) {
-            for (var i = 0; i < _ttsAvailableVoices.length; i++) {
-                var v = _ttsAvailableVoices[i];
-                if (v.lang && v.lang.indexOf('fa') === 0) { bestVoice = v; break; }
-            }
-        }
-        if (bestVoice) {
-            utter.voice = bestVoice;
-            console.log('[TTS] Using Persian system voice:', bestVoice.name);
-        } else {
-            console.log('[TTS] No Persian voice in list, but trying anyway with lang=fa-IR');
-        }
-    }
-
-    var speakStartTime = Date.now();
-
-    utter.onstart = function() {
-        console.log('[TTS] Web Speech started');
-        _ttsStartTime = Date.now();
-    };
-
-    utter.onend = function() {
-        clearTimeout(webTimeout);
-        console.log('[TTS] Web Speech ended normally');
-        _resetTTSButton();
-    };
-
-    utter.onerror = function(e) {
-        clearTimeout(webTimeout);
-        console.warn('[TTS] Web Speech error:', e);
-        // به موتور بعدی برو
-        _speakWithGoogleTranslateTTS(text);
-    };
-
-    // 🔧 تایم‌اوت: اگر در ۵ ثانیه هیچ رویدادی fire نشد، به موتور بعدی برو
-    // (۵ ثانیه به Web Speech API فرصت واقعی می‌دهد تا شروع کند)
-    var webTimeout = setTimeout(function() {
-        if (_ttsEngine === 'web') {
-            console.warn('[TTS] Web Speech timeout (5s) — trying online TTS');
-            try { window.speechSynthesis.cancel(); } catch(e) {}
-            _speakWithGoogleTranslateTTS(text);
-        }
-    }, 5000);
-
-    // تاخیر کوتاه قبل از speak
-    setTimeout(function() {
-        try {
-            window.speechSynthesis.speak(utter);
-            console.log('[TTS] speak() called');
-        } catch(e) {
-            clearTimeout(webTimeout);
-            console.warn('[TTS] speak() threw:', e);
-            _speakWithGoogleTranslateTTS(text);
-        }
-    }, 150);
-}
-
-// ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۲: Online TTS — موازی (همه URL‌ها همزمان)
-// ════════════════════════════════════════════════════════════════════
-// 🔧 همه ۵ URL را همزمان امتحان می‌کند — اولین URL که شروع به پخش کند
-// برنده می‌شود و بقیه متوقف می‌شوند. این روش خیلی سریع‌تر از sequential است.
-// از <audio> مستقیم استفاده می‌کنیم (بدون fetch) چون CORS لازم ندارد.
-function _speakWithGoogleTranslateTTS(text) {
-    if (_ttsTriedEngines.has('google')) {
-        _speakWithResponsiveVoice(text);
-        return;
-    }
-    _ttsTriedEngines.add('google');
-    _ttsEngine = 'google';
-    console.log('[TTS] Trying all online TTS URLs in PARALLEL');
-
-    var maxLen = 200;
-    var textToSpeak = text.length > maxLen ? text.substring(0, maxLen) : text;
-    var encodedText = encodeURIComponent(textToSpeak);
-    var googleTtsUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=fa&client=tw-ob&q=' + encodedText;
-
-    var urls = [
-        googleTtsUrl,
-        'https://corsproxy.io/?url=' + encodeURIComponent(googleTtsUrl),
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(googleTtsUrl),
-        'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(googleTtsUrl),
-        'https://api.streamelements.com/kappa/v2/speech?voice=fa-IR&text=' + encodedText,
-    ];
-
-    // توقف هر صدا قبلی
-    if (_ttsAudio) {
-        try { _ttsAudio.pause(); _ttsAudio.src = ''; } catch(e) {}
-        _ttsAudio = null;
-    }
-
-    var winner = null;
-    var allAudio = [];
-
-    // همه URL‌ها را همزمان امتحان کن
-    urls.forEach(function(url, index) {
-        var audio = new Audio(url);
-        allAudio.push(audio);
-
-        audio.onplaying = function() {
-            if (winner === null) {
-                winner = audio;
-                _ttsAudio = audio;
-                console.log('[TTS] ✓ URL', index + 1, 'WON — playing!');
-                _ttsStartTime = Date.now();
-                // توقف بقیه
-                allAudio.forEach(function(a) {
-                    if (a !== winner) {
-                        try { a.pause(); a.src = ''; } catch(e) {}
-                    }
-                });
-            }
-        };
-
-        audio.onended = function() {
-            if (winner === audio) {
-                console.log('[TTS] Audio ended');
-                _ttsAudio = null;
-                _resetTTSButton();
-            }
-        };
-
-        audio.onerror = function() {
-            console.warn('[TTS] URL', index + 1, 'error');
-        };
-
-        try {
-            var p = audio.play();
-            if (p && p.catch) p.catch(function() {});
-        } catch(e) {}
-    });
-
-    // تایم‌اوت: اگر در ۵ ثانیه هیچ‌کدام پخش نشد، به ResponsiveVoice برو
-    setTimeout(function() {
-        if (winner === null) {
-            console.warn('[TTS] No URL worked in 5s, trying ResponsiveVoice');
-            allAudio.forEach(function(a) {
-                try { a.pause(); a.src = ''; } catch(e) {}
-            });
-            _speakWithResponsiveVoice(text);
-        }
-    }, 5000);
-}
-
-// ════════════════════════════════════════════════════════════════════
-// 🗣️ موتور ۳: ResponsiveVoice — fallback نهایی
-// ════════════════════════════════════════════════════════════════════
-// ⚠️  با کلید FREE-KEY ممکن است کار نکند. فقط به‌عنوان fallback آخر استفاده می‌شود.
-function _speakWithResponsiveVoice(text) {
-    if (_ttsTriedEngines.has('responsive')) {
-        // همه موتورها امتحان شدند — پیام خطا نشان بده
-        console.error('[TTS] All engines failed');
-        _resetTTSButton();
-        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید یا صدای فارسی روی دستگاه نصب کنید.');
-        return;
-    }
-    _ttsTriedEngines.add('responsive');
-    _ttsEngine = 'responsive';
-    console.log('[TTS] Using ResponsiveVoice (persian_female)');
-
-    if (typeof responsiveVoice === 'undefined' || !responsiveVoice.voiceSupport()) {
-        console.warn('[TTS] ResponsiveVoice not available');
-        _resetTTSButton();
-        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
-        return;
-    }
-
-    try {
-        responsiveVoice.speak(text, 'persian_female', {
-            onstart: function() {
-                console.log('[TTS] ResponsiveVoice started');
-                _ttsStartTime = Date.now();
-            },
-            onend: function() {
-                console.log('[TTS] ResponsiveVoice ended');
-                _resetTTSButton();
-            },
-            onerror: function(e) {
-                console.warn('[TTS] ResponsiveVoice error:', e);
-                _resetTTSButton();
-                showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
-            }
-        });
-    } catch(e) {
-        console.warn('[TTS] ResponsiveVoice threw:', e);
-        _resetTTSButton();
-        showToast('خواندن صوتی کار نکرد. اینترنت را بررسی کنید.');
-    }
+    // شروع با AI TTS (هوش مصنوعی)
+    _speakWithAI(text);
 }
 
 // ════════════════════════════════════════════════════════════════════
 // ⏹ توقف همه موتورهای TTS
 // ════════════════════════════════════════════════════════════════════
 function _stopAllTTS() {
-    // توقف Google Translate TTS (عنصر Audio)
     if (_ttsAudio) {
         try { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio.src = ''; } catch(e) {}
         _ttsAudio = null;
     }
-    // توقف ResponsiveVoice
     if (typeof responsiveVoice !== 'undefined') {
         try { responsiveVoice.cancel(); } catch(e) {}
     }
-    // توقف Web Speech API
     if ('speechSynthesis' in window) {
         try { window.speechSynthesis.cancel(); } catch(e) {}
     }
@@ -9225,12 +9170,11 @@ function _stopAllTTS() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// 🔄 ریست دکمه به حالت عادی
+// 🔄 ریست دکمه
 // ════════════════════════════════════════════════════════════════════
 function _resetTTSButton() {
     _ttsSpeaking = false;
     _ttsEngine = null;
-    _ttsTriedEngines = null;
     if (_ttsCurrentBtn) {
         _ttsCurrentBtn.textContent = '🔊 بخوان';
         _ttsCurrentBtn.classList.remove('danger');
