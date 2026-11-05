@@ -530,11 +530,19 @@ body { padding-bottom: 30px; }
 .task-pin-btn.pinned:hover {
     background: rgba(255, 255, 255, 1);  /* سفید کامل در hover */
 }
-/* نشانگر پین شده بودن تسک — یک نوار آبی در سمت راست تسک.
-   🔧 رنگ آبی (نه زرد) و سمت راست (نه چپ) انتخاب شده تا با نشانگر فوری
-   (زرد، سمت چپ) اشتباه گرفته نشود. */
+/* 🔧 وقتی تسک فوری است — دایره پس‌زمینه آیکون پین زرد می‌شود */
+.task-pin-btn.urgent {
+    background: #FFC107;  /* زرد */
+}
+.task-pin-btn.urgent.pinned {
+    background: #FFC107;  /* زرد — حتی اگر پین هم باشد */
+}
+.task-pin-btn.urgent:hover {
+    background: #FFD54F;  /* زرد روشن‌تر در hover */
+}
+/* نشانگر پین شده بودن تسک — نوار کناری حذف شد (درخواست کاربر) */
 .item.pinned-task {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset -4px 0 0 #2196F3;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 .item-done-mark {
     width: 22px;
@@ -2379,16 +2387,14 @@ body.locked .header-actions button {
 .urgent-checkbox-label span {
     line-height: 1.4;
 }
-/* وقتی تسک فوری است، یک نوار زرد در سمت چپ نشان بده.
-   🔧 دیگر !important نیست تا وقتی تسک هم پین و هم فوری است، هر دو
-   نوار (آبی راست + زرد چپ) همزمان نمایش داده شوند. */
+/* 🔧 وقتی تسک فوری است — نوار زرد حذف شد (درخواست کاربر)
+   فقط دایره پس‌زمینه آیکون پین زرد می‌شود (در CSS پایین‌تر) */
 .item.urgent-task {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
-/* 🔧 وقتی تسک هم پین و هم فوری است: هر دو نوار نمایش داده می‌شود
-   (آبی سمت راست + زرد سمت چپ) */
+/* 🔧 وقتی تسک هم پین و هم فوری است */
 .item.pinned-task.urgent-task {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12), inset 4px 0 0 #FFC107, inset -4px 0 0 #2196F3;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 
 /* ============ 📝 صفحه یادداشت ============ */
@@ -3492,6 +3498,7 @@ body.locked .header-actions button {
                 <div id="calMonthYear"></div>
                 <div class="cal-title-row">
                     <button class="cal-today-btn" onclick="goToToday()">امروز</button>
+                    <button class="cal-add-day-btn" onclick="openDayNotes()" title="یادداشت روز انتخاب‌شده" style="background: #FF9800;">📝</button>
                     <button class="cal-add-day-btn" id="calAddDayBtn" onclick="addTaskForSelectedDay()" title="افزودن یادآور برای روز انتخاب‌شده">+</button>
                 </div>
             </div>
@@ -3690,7 +3697,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v127-2026-11-04-notes-number-detection';
+const APP_VERSION = 'v128-2026-11-04-no-sidebars-urgent-pin-day-notes';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -6974,6 +6981,24 @@ function editTask(id) {
 // Add a new task for the currently selected calendar day.
 // Closes the calendar modal, opens the new-task modal with the deadline pre-filled,
 // and starts voice recording (when supported on a secure context).
+// 🔧 باز کردن یادداشت برای یک روز خاص از تقویم
+// هر روز تقویم یادداشت مستقل خودش را دارد (مثل یادداشت گروه‌ها)
+function openDayNotes() {
+    if (!calState || !calState.selectedDay) {
+        showToast('ابتدا یک روز را در تقویم انتخاب کنید');
+        return;
+    }
+    // ساخت کلید یکتا برای این روز: day_1405_8_12
+    var dayKey = 'day_' + calState.year + '_' + calState.month + '_' + calState.selectedDay;
+    // ساخت عنوان: «📝 یادداشت — 12 آبان 1405»
+    var dateStr = toPersianDigits(calState.selectedDay) + ' ' + jalaliMonths[calState.month - 1] + ' ' + toPersianNumber(calState.year);
+    // بستن تقویم و باز کردن یادداشت
+    closeCalendar();
+    setTimeout(function() {
+        openNotes(dayKey, '📝 یادداشت — ' + dateStr);
+    }, 200);
+}
+
 function addTaskForSelectedDay() {
     if (!calState || !calState.selectedDay) {
         showToast('ابتدا یک روز را در تقویم انتخاب کنید');
@@ -8733,7 +8758,7 @@ function renderTasksView(groupId) {
         // 🔧 آیکون پین — سمت چپ (در RTL، آخرین عنصر در row)
         // کم‌رنگ وقتی پین نیست، پررنگ (با چرخش) وقتی پین شده
         const pinBtn = document.createElement('button');
-        pinBtn.className = 'task-pin-btn' + (item.pinned ? ' pinned' : '');
+        pinBtn.className = 'task-pin-btn' + (item.pinned ? ' pinned' : '') + (item.urgent == true ? ' urgent' : '');
         pinBtn.title = item.pinned ? 'حذف پین' : 'پین کردن';
         pinBtn.textContent = '📌';
         pinBtn.onclick = function(e) {
@@ -8771,7 +8796,7 @@ function renderTasksView(groupId) {
             if (action === 'read') { e.stopPropagation(); readTaskAloud(item.text, e.target); return; }
             // 🔧 دکمه «انصراف» — جزئیات تسک را می‌بندد (مانند کلیک روی تسک)
             if (action === 'cancel') { e.stopPropagation(); toggleExpand(item.id); return; }
-            if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox')) return;
+            if (e.target.closest('.action-btn') || e.target.closest('.group-selector') || e.target.closest('.urgent-checkbox-label') || e.target.classList.contains('urgent-checkbox') || e.target.closest('.item-details') || e.target.closest('.deadline-box') || e.target.closest('.detail-row')) return;
             toggleExpand(item.id);
         });
         container.appendChild(div);
@@ -8806,16 +8831,17 @@ function changeTaskGroup(taskId, newGroupId) {
 function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 
 function toggleExpand(id) {
+    // 🔧 حفظ موقعیت اسکرول — صفحه نپرد
+    var savedScrollY = window.scrollY;
     if (expandedId === id) {
-        // 🔧 بستن جزئیات — بدون navBack و popstate
-        // مستقیماً expandedId را null کن و render کن — بدون اسکرول
+        // 🔧 بستن جزئیات — بدون اسکرول
         expandedId = null;
         render();
+        setTimeout(function() { window.scrollTo(0, savedScrollY); }, 0);
     } else if (expandedId === null) {
         // باز کردن جزئیات
         expandedId = id;
         render();
-        // 🔧 اسکرول تا بالای تسک با زیر هدر گروه تراز شود
         _scrollTaskBelowHeader(id);
     } else {
         // سوییچ از یک تسک باز به تسک دیگر
@@ -9239,14 +9265,18 @@ function toggleDone(id) {
     }
 
     setDB(items);
-    // 🔧 بستن جزئیات و render بدون fullRender — صفحه نمی‌پرد
+    // 🔧 حفظ موقعیت اسکرول — صفحه نپرد
+    var savedScrollY = window.scrollY;
     expandedId = null;
     if (typeof sortableInstance !== 'undefined' && sortableInstance) {
         try { sortableInstance.destroy(); } catch(e) {}
         sortableInstance = null;
     }
     render();
-    setTimeout(initSortable, 50);
+    setTimeout(function() {
+        initSortable();
+        window.scrollTo(0, savedScrollY);
+    }, 50);
     showToast(item.done ? 'انجام شد ✓' : 'بازگردانی شد');
 }
 
@@ -9308,14 +9338,18 @@ function deleteItem(id) {
     if (!confirm(msg)) return;
     let newItems = items.filter(i => i.id !== id && i.parentId !== id);
     setDB(newItems);
-    // 🔧 بستن جزئیات و render بدون fullRender — صفحه نمی‌پرد
+    // 🔧 حفظ موقعیت اسکرول — صفحه نپرد
+    var savedScrollY = window.scrollY;
     expandedId = null;
     if (typeof sortableInstance !== 'undefined' && sortableInstance) {
         try { sortableInstance.destroy(); } catch(e) {}
         sortableInstance = null;
     }
     render();
-    setTimeout(initSortable, 50);
+    setTimeout(function() {
+        initSortable();
+        window.scrollTo(0, savedScrollY);
+    }, 50);
     showToast(childCount > 0 ? `تسک و ${childCount} تکرار حذف شد` : 'حذف شد');
 }
 
@@ -10647,17 +10681,19 @@ function getNotesKey(groupId) {
 }
 
 // باز کردن صفحه یادداشت — با groupId اختیاری
-function openNotes(groupId) {
+function openNotes(groupId, customTitle) {
     _notesTargetGroup = groupId || null;
     const content = document.getElementById('notesContent');
-    // بارگذاری یادداشت‌های ذخیره‌شده برای این گروه
+    // بارگذاری یادداشت‌های ذخیره‌شده برای این گروه/روز
     const key = getNotesKey(_notesTargetGroup);
     const saved = localStorage.getItem(key) || '';
     content.innerHTML = saved;
-    // 🔧 عنوان صفحه یادداشت بر اساس گروه
+    // 🔧 عنوان صفحه یادداشت
     const titleEl = document.querySelector('.notes-header h2');
     if (titleEl) {
-        if (_notesTargetGroup) {
+        if (customTitle) {
+            titleEl.textContent = customTitle;
+        } else if (_notesTargetGroup) {
             const group = getGroupById(_notesTargetGroup);
             const groupName = group ? group.name : 'گروه';
             titleEl.textContent = '📝 یادداشت — ' + groupName;
