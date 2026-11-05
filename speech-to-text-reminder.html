@@ -3697,7 +3697,7 @@ body.locked .header-actions button {
 //            cross-origin media WITHOUT CORS headers (fetch needs CORS).
 //            Added 8s timeout for Web Speech API (if no onend/onerror, try next).
 //            Added 8s timeout per online URL. Added "در حال خواندن..." toast.
-const APP_VERSION = 'v129-2026-11-04-back-button-direct-nav';
+const APP_VERSION = 'v130-2026-11-04-scroll-preservation';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -8400,10 +8400,16 @@ function _refreshFloatingAddBtn() {
 }
 
 function render() {
+    // 🔧 حفظ موقعیت اسکرول — جلوگیری از پرش صفحه
+    // render() محتوای container را جایگزین می‌کند که ممکن است
+    // موقعیت اسکرول را ریست کند. با ذخیره و بازیابی، پرش را حذف می‌کنیم.
+    // این مشکل سه مورد را حل می‌کند:
+    //   ۱) باز کردن تسک → پرش به بالا
+    //   ۲) اسکرول روی تسک‌ها → پرش به بالا (هر ۳۰ ثانیه render صدا زده می‌شود)
+    //   ۳) مشاهده جزئیات تسک → پرش به بالا
+    var savedScrollY = window.scrollY;
+
     // Toggle the + button's disabled state based on the current view.
-    // On the groups list view, the + button is disabled (clicking it would
-    // not know which group to assign the new task to). Inside a group's
-    // tasks view, the + button is enabled.
     const addBtn = document.getElementById('addBtn');
     if (addBtn) {
         if (currentView === 'groups') {
@@ -8412,19 +8418,16 @@ function render() {
             addBtn.classList.remove('disabled');
         }
     }
-    // 🔧 دکمهٔ شناور + فقط در حالت نمایش تسک‌های یک گروه (tasks view) ظاهر می‌شود.
-    // در صفحهٔ لیست گروه‌ها مخفی است.
-    // 🔧 اگر جزئیات یک تسک باز است یا فرم ایجاد/ویرایش باز است، مخفی شود.
     _refreshFloatingAddBtn();
-    // دکمه بازگردانی (↩) از هدر اصلی به منوی همبرگری هر گروه منتقل شد.
-    // این کد برای سازگاری با نسخه‌های قدیمی نگه داشته شده، اما دکمه
-    // در هدر اصلی مخفی است (display:none).
 
     if (currentView === 'groups') {
         renderGroupsView();
     } else {
         renderTasksView(currentGroupId);
     }
+
+    // 🔧 بازیابی موقعیت اسکرول — صفحه در جای خود بماند
+    window.scrollTo(0, savedScrollY);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -8858,6 +8861,7 @@ function toggleExpand(id) {
 }
 
 // 🔧 تابع کمکی: اسکرول صفحه تا بالای تسک دقیقاً زیر هدر گروه قرار گیرد
+// 🔧 فقط اگر تسک قابل مشاهده نیست اسکرول کن — اگر قابل مشاهده است، اسکرول نکن
 function _scrollTaskBelowHeader(taskId) {
     setTimeout(function() {
         const taskEl = document.querySelector('.item[data-id="' + taskId + '"]');
@@ -8865,7 +8869,13 @@ function _scrollTaskBelowHeader(taskId) {
         if (!taskEl || !headerEl) return;
         const taskRect = taskEl.getBoundingClientRect();
         const headerRect = headerEl.getBoundingClientRect();
-        // فاصله‌ای که باید اسکرول کنیم: اختلاف top تسک با bottom هدر
+
+        // 🔧 اگر تسک قبلاً زیر هدر و قابل مشاهده است، اسکرول نکن
+        // (جلوگیری از پرش غیرضروری)
+        if (taskRect.top >= headerRect.bottom && taskRect.bottom <= window.innerHeight) {
+            return;  // تسک قابل مشاهده است — نیازی به اسکرول نیست
+        }
+
         const offset = taskRect.top - headerRect.bottom;
         if (Math.abs(offset) > 2) {
             window.scrollBy({ top: offset, behavior: 'smooth' });
