@@ -3977,8 +3977,14 @@ body.locked .header-actions button {
     <div class="notes-body">
         <div id="notesContent" class="notes-content" contenteditable="true" spellcheck="false"></div>
     </div>
-    <button class="notes-mic-btn" id="notesMicBtn" onclick="toggleNotesRecording()" title="ضبط صوت">🎤</button>
 </div>
+
+<!-- 🔧 v178: میکروفون شناور یادداشت — OUTSIDE .notes-overlay (direct child of body)
+     این تغییر برای رفع مشکل «با صفحه اسکرول شود» روی موبایل است:
+     position:fixed داخل یک والد fixed با اسکرول داخلی، در iOS Safari و برخی
+     مرورگرهای موبایل به‌درستی کار نمی‌کند. با قرار دادن دکمه خارج از overlay،
+     همیشه نسبت به viewport ثابت می‌ماند. -->
+<button class="notes-mic-btn" id="notesMicBtn" onclick="toggleNotesRecording()" title="ضبط صوت" style="display:none;">🎤</button>
 
 <!-- مودال جستجوی اشخاص -->
 <div class="modal-overlay" id="contactSearchOverlay">
@@ -4926,7 +4932,15 @@ body.locked .header-actions button {
 //         🔧 تغییر:
 //         - animation duration: 2s → 3s (۵۰٪ کندتر)
 //         - رنگ‌ها و easing (ease-in-out) دست‌نخورده باقی ماند
-const APP_VERSION = 'v177-2026-11-08-overdue-blink-slower-3s';
+//   v178 - NOTES MIC BTN FIXED ON MOBILE (no longer scrolls with content):
+//         مشکل: دکمه میکروفون شناور در صفحه یادداشت، با اسکرول محتوا حرکت
+//         می‌کرد (به‌خصوص روی موبایل / iOS Safari). علت: position:fixed داخل
+//         یک والد fixed با اسکرول داخلی، در برخی مرورگرهای موبایل به‌درستی
+//         کار نمی‌کند.
+//         🔧 راه‌حل: دکمه میکروفون از داخل .notes-overlay خارج شد و اکنون
+//         فرزند مستقیم <body> است. با openNotes نمایش داده می‌شود و با
+//         closeNotes پنهان می‌شود. اکنون همیشه نسبت به viewport ثابت است.
+const APP_VERSION = 'v178-2026-11-08-notes-mic-btn-fixed-outside-overlay';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -13690,6 +13704,9 @@ function openNotes(groupId, customTitle) {
     var notesOverlay = document.getElementById('notesOverlay');
     notesOverlay.classList.add('active');
     bringToFront(notesOverlay);  // 🔧 v156: روی همه overlayها قرار بگیرد
+    // 🔧 v178: نمایش میکروفون شناور (اکنون خارج از overlay است)
+    const micBtn = document.getElementById('notesMicBtn');
+    if (micBtn) micBtn.style.display = 'flex';
     history.pushState({ view: 'notes' }, '');
     // اسکرول به بالا
     setTimeout(() => {
@@ -13711,6 +13728,9 @@ function closeNotes() {
         toggleNotesRecording();
     }
     document.getElementById('notesOverlay').classList.remove('active');
+    // 🔧 v178: پنهان کردن میکروفون شناور (اکنون خارج از overlay است)
+    const micBtn = document.getElementById('notesMicBtn');
+    if (micBtn) micBtn.style.display = 'none';
 }
 
 // پاک کردن همه یادداشت‌ها
