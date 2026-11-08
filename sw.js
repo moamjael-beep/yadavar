@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v178: هماهنگ با APP_VERSION در HTML (v178 notes mic btn fixed outside overlay).
-const CACHE_NAME = 'yadavar-cache-v178';
+// 🔧 v180: هماهنگ با APP_VERSION در HTML (v180 notes insert at cursor + preserve scroll).
+const CACHE_NAME = 'yadavar-cache-v180';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.

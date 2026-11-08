@@ -3977,14 +3977,8 @@ body.locked .header-actions button {
     <div class="notes-body">
         <div id="notesContent" class="notes-content" contenteditable="true" spellcheck="false"></div>
     </div>
+    <button class="notes-mic-btn" id="notesMicBtn" onclick="toggleNotesRecording()" title="ضبط صوت">🎤</button>
 </div>
-
-<!-- 🔧 v178: میکروفون شناور یادداشت — OUTSIDE .notes-overlay (direct child of body)
-     این تغییر برای رفع مشکل «با صفحه اسکرول شود» روی موبایل است:
-     position:fixed داخل یک والد fixed با اسکرول داخلی، در iOS Safari و برخی
-     مرورگرهای موبایل به‌درستی کار نمی‌کند. با قرار دادن دکمه خارج از overlay،
-     همیشه نسبت به viewport ثابت می‌ماند. -->
-<button class="notes-mic-btn" id="notesMicBtn" onclick="toggleNotesRecording()" title="ضبط صوت" style="display:none;">🎤</button>
 
 <!-- مودال جستجوی اشخاص -->
 <div class="modal-overlay" id="contactSearchOverlay">
@@ -4940,7 +4934,34 @@ body.locked .header-actions button {
 //         🔧 راه‌حل: دکمه میکروفون از داخل .notes-overlay خارج شد و اکنون
 //         فرزند مستقیم <body> است. با openNotes نمایش داده می‌شود و با
 //         closeNotes پنهان می‌شود. اکنون همیشه نسبت به viewport ثابت است.
-const APP_VERSION = 'v178-2026-11-08-notes-mic-btn-fixed-outside-overlay';
+//   v179 - REVERTED v178 (notes mic btn back inside overlay):
+//         کاربر گفت: «برگرد به نسخه قبل خراب شد».
+//         🔧 تغییرات v178 برگردانده شد:
+//         - دکمه میکروفون به داخل .notes-overlay برگشت (همان جای قبلی)
+//         - منطق show/hide در openNotes/closeNotes حذف شد
+//         - style="display:none" از دکمه حذف شد
+//         کد اکنون معادل v177 است (به‌جز overdue blink 3s که از v177 باقی است).
+//   v180 - NOTES RECORDING: INSERT TEXT AT CURSOR + PRESERVE SCROLL:
+//         مشکل: وقتی کاربر در یادداشت اسکرول می‌کرد، روی یک خط گذشته کلیک می‌کرد،
+//         و یک خط جدید بین دو خط ایجاد می‌کرد، سپس ضبط می‌کرد، متن به بالا
+//         (با منطق تاریخ) می‌رفت نه در خطی که کاربر جا باز کرده بود. همچنین
+//         صفحه می‌پرید (اسکرول ریست می‌شد) و انگار تازه وارد صفحه یادداشت شده بودیم.
+//         🔧 راه‌حل:
+//         ۱) ردیابی کرسر: listener روی selectionchange — هر بار که کرسر داخل
+//            #notesContent تغییر می‌کند، _notesSavedRange به‌روز می‌شود.
+//         ۲) فریز در شروع ضبط: در toggleNotesRecording (start)، _notesInsertionRange
+//            از _notesSavedRange کپی می‌شود — حتی اگر کاربر در حین ضبط جای دیگری
+//            کلیک کند، موقعیت اصلی حفظ می‌شود.
+//         ۳) درج در محل کرسر: در toggleNotesRecording (stop)، اگر کرسر در وسط
+//            محتواست (نه در انتها)، متن با _insertTextAtCursor در همان محل
+//            درج می‌شود (بدون منطق تاریخ) + <br> بعد از آن.
+//         ۴) ترتیب زیر هم: بعد از درج، _notesSavedRange به بعد از <br> به‌روز
+//            می‌شود — ضبط بعدی زیر درج قبلی قرار می‌گیرد.
+//         ۵) حفظ اسکرول: قبل از تغییر محتوا، scrollTop ذخیره می‌شود و بعد از
+//            درج بازگردانی می‌شود — صفحه نمی‌پرد، میکروفون همان‌جا می‌ماند.
+//         نتیجه: متن در خطی که کاربر جا باز کرده درج می‌شود + ضبط‌های بعدی
+//         زیر هم به ترتیب قرار می‌گیرند + صفحه نمی‌پرد.
+const APP_VERSION = 'v180-2026-11-08-notes-insert-at-cursor-preserve-scroll';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -13704,9 +13725,6 @@ function openNotes(groupId, customTitle) {
     var notesOverlay = document.getElementById('notesOverlay');
     notesOverlay.classList.add('active');
     bringToFront(notesOverlay);  // 🔧 v156: روی همه overlayها قرار بگیرد
-    // 🔧 v178: نمایش میکروفون شناور (اکنون خارج از overlay است)
-    const micBtn = document.getElementById('notesMicBtn');
-    if (micBtn) micBtn.style.display = 'flex';
     history.pushState({ view: 'notes' }, '');
     // اسکرول به بالا
     setTimeout(() => {
@@ -13728,9 +13746,6 @@ function closeNotes() {
         toggleNotesRecording();
     }
     document.getElementById('notesOverlay').classList.remove('active');
-    // 🔧 v178: پنهان کردن میکروفون شناور (اکنون خارج از overlay است)
-    const micBtn = document.getElementById('notesMicBtn');
-    if (micBtn) micBtn.style.display = 'none';
 }
 
 // پاک کردن همه یادداشت‌ها
@@ -13763,73 +13778,152 @@ document.addEventListener('DOMContentLoaded', function() {
 let _notesAccumulatedText = '';  // 🔧 متن جمع‌آوری‌شده در طول ضبط
 let _notesAddedIndices = new Set();  // 🔧 ایندکس‌های پردازش‌شده برای جلوگیری از تکرار
 
+// 🔧 v180: ردیابی موقعیت کرسر برای درج متن در محل درست
+// وقتی کاربر در محتوای یادداشت کلیک می‌کند (مثلاً در وسط محتوا، روی یک خط گذشته)،
+// موقعیت کرسر ذخیره می‌شود. هنگام ضبط، اگر کرسر در وسط محتواست، متن در همان محل
+// درج می‌شود (نه در بالا با منطق تاریخ). ضبط‌های بعدی، زیر درج قبلی قرار می‌گیرند.
+let _notesSavedRange = null;        // 🔧 آخرین موقعیت کرسر در محتوا (به‌طور پیوسته به‌روز می‌شود)
+let _notesInsertionRange = null;    // 🔧 موقعیت کرسر در شروع ضبط (فریز شده — برای درج در پایان ضبط)
+
+// 🔧 تابع کمکی: آیا کرسر در انتهای محتواست؟
+// اگر کرسر در انتها باشد، از منطق تاریخ استفاده می‌کنیم (رفتار قبلی).
+// اگر کرسر در وسط باشد، متن را در محل کرسر درج می‌کنیم (رفتار جدید v180).
+function _isRangeAtContentEnd(range, content) {
+    try {
+        var tempRange = document.createRange();
+        tempRange.selectNodeContents(content);
+        tempRange.collapse(false); // collapse to end
+        return range.compareBoundaryPoints(Range.END_TO_END, tempRange) >= 0;
+    } catch(e) {
+        return true; // در صورت خطا، فرض کن در انتهاست (استفاده از منطق تاریخ)
+    }
+}
+
+// 🔧 تابع کمکی: درج متن در محل کرسر + <br> بعد از آن
+// بعد از درج، _notesSavedRange به بعد از <br> به‌روز می‌شود تا ضبط بعدی
+// زیر این درج قرار گیرد (ترتیب زیر هم).
+function _insertTextAtCursor(content, text, range) {
+    var processedText = addNumericAfterWords(text);
+    var textNode = document.createTextNode(processedText);
+    var br = document.createElement('br');
+
+    // درج متن در محل کرسر
+    range.insertNode(textNode);
+    // درج <br> بعد از متن (برای خط جدید بعدی)
+    if (textNode.nextSibling) {
+        textNode.parentNode.insertBefore(br, textNode.nextSibling);
+    } else {
+        textNode.parentNode.appendChild(br);
+    }
+
+    // به‌روزرسانی _notesSavedRange به بعد از <br>
+    // اینطوری ضبط بعدی، زیر این درج قرار می‌گیرد
+    _notesSavedRange = document.createRange();
+    _notesSavedRange.setStartAfter(br);
+    _notesSavedRange.collapse(true);
+}
+
+// 🔧 v180: ردیابی کرسر در محتوای یادداشت
+// هر بار که انتخاب (selection) در صفحه تغییر می‌کند، اگر کرسر داخل
+// #notesContent باشد، موقعیت آن ذخیره می‌شود. این کار حتی وقتی کاربر
+// میکروفون را لمس می‌کند (و فوکوس از محتوا خارج می‌شود) موقعیت قبلی را حفظ می‌کند.
+document.addEventListener('selectionchange', function() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    var content = document.getElementById('notesContent');
+    if (!content) return;
+    var range = sel.getRangeAt(0);
+    // بررسی: آیا کرسر داخل محتوای یادداشت است؟
+    if (content.contains(range.commonAncestorContainer)) {
+        _notesSavedRange = range.cloneRange();
+    }
+});
+
 function toggleNotesRecording() {
     if (_notesRecording) {
-        // 🔧 توقف ضبط — کل متن جمع‌آوری‌شده را به‌عنوان یک پاراگراف بنویس
+        // 🔧 توقف ضبط — کل متن جمع‌آوری‌شده را بنویس
         _notesRecording = false;
         document.getElementById('notesMicBtn').classList.remove('recording');
         if (_notesRecognition) {
             try { _notesRecognition.stop(); } catch(e) {}
         }
-        // 🔧 اگر متنی جمع‌آوری شده، آن را طبق قوانین جدید بنویس:
+        // 🔧 اگر متنی جمع‌آوری شده، آن را طبق قوانین زیر بنویس:
         //   - اولین ضبط هر روز: خط تاریخ (بدون ساعت) → خط بعد متن
         //   - ضبط‌های بعدی همان روز: فقط متن (خط به خط اضافه شود)
         //   - اعداد فارسی گفتاری به دیجیت تبدیل می‌شوند (مثل تسک‌ها)
         //   - جدیدترین روز همیشه در بالای صفحه، روزهای قبل به پایین شیفت می‌شوند
+        //   🔧 v180: اگر کرسر در وسط محتواست (کاربر روی یک خط گذشته کلیک کرده)،
+        //   متن در محل کرسر درج می‌شود (نه در بالا با منطق تاریخ). ضبط‌های بعدی،
+        //   زیر درج قبلی قرار می‌گیرند (ترتیب زیر هم).
         if (_notesAccumulatedText.trim()) {
             // 🔧 تبدیل اعداد فارسی گفتاری به دیجیت (مانند تسک‌ها)
-            // مثال: «دو میلیون تومان» → «۲٬۰۰۰٬۰۰۰ تومان»
-            //       «صفر نه یک پنج» → «۰۹۱۵»
             var text = addNumericAfterWords(_notesAccumulatedText.trim());
             var todayDate = toPersianDigits(toJalaliDateOnly(new Date()));
             var content = document.getElementById('notesContent');
-            
-            // بررسی: آیا اولین تاریخ موجود با امروز یکی است؟
-            var dateSpans = content.querySelectorAll('.notes-date');
-            var firstDateSpan = dateSpans.length > 0 ? dateSpans[0] : null;
-            var sameDay = firstDateSpan && firstDateSpan.textContent.trim() === todayDate;
-            
-            if (sameDay) {
-                // همان روز — متن را در خط جدید اضافه کن
-                var insertBefore = (dateSpans.length > 1) ? dateSpans[1] : null;
-                var textNode = document.createTextNode(text);
-                if (insertBefore) {
-                    // قبل از تاریخ روز بعدی: <br> + متن + <br> قبل از تاریخ درج کن
-                    // ترتیب: textNode قبل از <br>، تا متن روی خط خودش بیاید
-                    var br = document.createElement('br');
-                    content.insertBefore(br, insertBefore);
-                    content.insertBefore(textNode, br);
-                } else {
-                    // انتهای محتوا: اگر آخرین عنصر <br> نیست، یک <br> اضافه کن
-                    var lastChild = content.lastChild;
-                    if (!lastChild || lastChild.nodeName !== 'BR') {
-                        content.appendChild(document.createElement('br'));
+            var notesBody = document.querySelector('.notes-body');
+            // 🔧 v180: ذخیره اسکرول قبل از تغییر محتوا — برای بازگردانی بعد از درج
+            var savedScroll = notesBody ? notesBody.scrollTop : 0;
+
+            // 🔧 v180: اگر کرسر در وسط محتواست، متن را در محل کرسر درج کن (بدون منطق تاریخ)
+            var insertedAtCursor = false;
+            if (_notesInsertionRange &&
+                content.contains(_notesInsertionRange.commonAncestorContainer) &&
+                !_isRangeAtContentEnd(_notesInsertionRange, content)) {
+                _insertTextAtCursor(content, text, _notesInsertionRange);
+                insertedAtCursor = true;
+            }
+
+            if (!insertedAtCursor) {
+                // منطق تاریخ (رفتار قبلی) — وقتی کرسر در انتهاست یا محتوا خالی است
+                // بررسی: آیا اولین تاریخ موجود با امروز یکی است؟
+                var dateSpans = content.querySelectorAll('.notes-date');
+                var firstDateSpan = dateSpans.length > 0 ? dateSpans[0] : null;
+                var sameDay = firstDateSpan && firstDateSpan.textContent.trim() === todayDate;
+
+                if (sameDay) {
+                    // همان روز — متن را در خط جدید اضافه کن
+                    var insertBefore = (dateSpans.length > 1) ? dateSpans[1] : null;
+                    var textNode = document.createTextNode(text);
+                    if (insertBefore) {
+                        // قبل از تاریخ روز بعدی: <br> + متن + <br> قبل از تاریخ درج کن
+                        var br = document.createElement('br');
+                        content.insertBefore(br, insertBefore);
+                        content.insertBefore(textNode, br);
+                    } else {
+                        // انتهای محتوا: اگر آخرین عنصر <br> نیست، یک <br> اضافه کن
+                        var lastChild = content.lastChild;
+                        if (!lastChild || lastChild.nodeName !== 'BR') {
+                            content.appendChild(document.createElement('br'));
+                        }
+                        content.appendChild(textNode);
                     }
-                    content.appendChild(textNode);
-                }
-            } else {
-                // روز جدید — تاریخ در خط اول، متن در خط بعد
-                var dateSpan = document.createElement('span');
-                dateSpan.className = 'notes-date';
-                dateSpan.textContent = todayDate;
-                var br1 = document.createElement('br');
-                var textNode = document.createTextNode(text);
-                var br2 = document.createElement('br');
-                if (content.firstChild) {
-                    content.insertBefore(br2, content.firstChild);
-                    content.insertBefore(textNode, br2);
-                    content.insertBefore(br1, textNode);
-                    content.insertBefore(dateSpan, br1);
                 } else {
-                    content.appendChild(dateSpan);
-                    content.appendChild(br1);
-                    content.appendChild(textNode);
+                    // روز جدید — تاریخ در خط اول، متن در خط بعد
+                    var dateSpan = document.createElement('span');
+                    dateSpan.className = 'notes-date';
+                    dateSpan.textContent = todayDate;
+                    var br1 = document.createElement('br');
+                    var textNode = document.createTextNode(text);
+                    var br2 = document.createElement('br');
+                    if (content.firstChild) {
+                        content.insertBefore(br2, content.firstChild);
+                        content.insertBefore(textNode, br2);
+                        content.insertBefore(br1, textNode);
+                        content.insertBefore(dateSpan, br1);
+                    } else {
+                        content.appendChild(dateSpan);
+                        content.appendChild(br1);
+                        content.appendChild(textNode);
+                    }
                 }
             }
-            
+
             localStorage.setItem(getNotesKey(_notesTargetGroup), content.innerHTML);
             _notesAccumulatedText = '';
             showToast('یادداشت ثبت شد ✓');
+
+            // 🔧 v180: بازگردانی اسکرول به محل قبلی — صفحه نپرد، میکروفون همان‌جا بماند
+            if (notesBody) notesBody.scrollTop = savedScroll;
         }
         return;
     }
@@ -13843,6 +13937,12 @@ function toggleNotesRecording() {
         showToast('اینترنت در دسترس نیست. ضبط کار نمی‌کند.');
         return;
     }
+    // 🔧 v180: فریز کردن موقعیت کرسر برای درج در پایان ضبط
+    // اگر کرسر در محتواست، یک کپی از آن می‌گیریم تا در پایان ضبط استفاده کنیم.
+    // این حتی اگر کاربر در حین ضبط جای دیگری کلیک کند، موقعیت اصلی را حفظ می‌کند.
+    _notesInsertionRange = (_notesSavedRange && document.getElementById('notesContent').contains(_notesSavedRange.commonAncestorContainer))
+        ? _notesSavedRange.cloneRange()
+        : null;
     // 🔧 ریست متن جمع‌آوری‌شده و ایندکس‌ها
     _notesAccumulatedText = '';
     _notesAddedIndices = new Set();
