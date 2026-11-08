@@ -744,7 +744,7 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
 .item.warning { background: linear-gradient(135deg, #FB8C00, #E65100); }
 .item.urgent { background: linear-gradient(135deg, #E53935, #B71C1C); }
 
-/* 🔧 v176: Overdue: blinking light black <-> pure black, 2s cycle */
+/* 🔧 v177: Overdue: blinking light black <-> pure black, 3s cycle (was 2s — slower) */
 @keyframes overdueBlink {
     0%, 100% {
         background-color: #616161;  /* 🔧 v176: مشکی روشن (Material Gray 700) */
@@ -757,7 +757,7 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
 }
 .item.overdue {
     background-color: #616161; /* fallback — 🔧 v176: مشکی */
-    animation: overdueBlink 2s ease-in-out infinite;
+    animation: overdueBlink 3s ease-in-out infinite;  /* 🔧 v177: 2s → 3s (کمی کندتر) */
 }
 @media (prefers-reduced-motion: reduce) {
     .item.overdue {
@@ -4921,7 +4921,12 @@ body.locked .header-actions button {
 //         - fallback bg + prefers-reduced-motion fallback: هر دو به #616161
 //         - box-shadow rgba(0,0,0,...) — هماهنگ با رنگ‌های مشکی
 //         نتیجه: چشمک بین دو مشکی (روشن ↔ تیره).
-const APP_VERSION = 'v176-2026-11-08-overdue-blink-black';
+//   v177 - OVERDUE BLINK SLOWER (3s instead of 2s):
+//         کاربر درخواست کرد: «سرعت چشمک کمی کمتر شود».
+//         🔧 تغییر:
+//         - animation duration: 2s → 3s (۵۰٪ کندتر)
+//         - رنگ‌ها و easing (ease-in-out) دست‌نخورده باقی ماند
+const APP_VERSION = 'v177-2026-11-08-overdue-blink-slower-3s';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
