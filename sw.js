@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔒 نسخهٔ جدید: اصلاح اساسی تشخیص اعداد فارسی (صد = ضرب، نه جمع)
-const CACHE_NAME = 'yadavar-cache-v98';
+// 🔧 v176: هماهنگ با APP_VERSION در HTML (v176 overdue blink black).
+const CACHE_NAME = 'yadavar-cache-v176';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
@@ -492,6 +492,14 @@ self.addEventListener('message', (event) => {
       self.skipWaiting();
       break;
 
+    // 🔧 v132: پیام «KEEPALIVE» — صفحهٔ HTML هر ۲۵ ثانیه این پیام را
+    // می‌فرستد تا سرویس ورکر در حافظه زنده بماند و اعلان‌های سررسید
+    // سریع‌تر ارسال شوند. هیچ کاری انجام نمی‌دهیم — فقط دریافت پیام
+    // کافی است تا مرورگر تایمر بیکاری را صفر کند.
+    case 'KEEPALIVE':
+      console.log('[SW] Keepalive ping received at', event.data.ts);
+      break;
+
     // پیام «یادآورها را بررسی کن» — از طرف صفحه فراخوانی می‌شود
     case 'CHECK_DEADLINES':
       event.waitUntil(checkDeadlinesBackground());
@@ -546,19 +554,14 @@ self.addEventListener('message', (event) => {
 // را دوبار نمی‌فرستد (به‌ کمک STORE_NOTIF_LOG).
 
 // سطوح زمانی برای اعلان: هر کدام فقط یک‌بار فرستاده می‌شوند.
-//   d1  : یک روز قبل
-//   h6  : شش ساعت قبل
-//   h1  : یک ساعت قبل
-//   m30 : سی دقیقه قبل
-//   m10 : ده دقیقه قبل
+// 🔧 v140: طبق درخواست کاربر، فقط ۳ سطح + تکرار دو بار برای ۳ ساعت و ۱۵ دقیقه
+//   h3  : ۳ ساعت قبل — تکرار می‌شود (۲ بار با فاصلهٔ ۱۵ ثانیه)
+//   m15 : ۱۵ دقیقه قبل — تکرار می‌شود (۲ بار با فاصلهٔ ۱۵ ثانیه)
 //   due : در لحظهٔ سررسید
 const NOTIF_THRESHOLDS = [
-  { minutes: 60 * 24, key: 'd1', label: '۱ روز' },
-  { minutes: 60 * 6,  key: 'h6', label: '۶ ساعت' },
-  { minutes: 60,      key: 'h1', label: '۱ ساعت' },
-  { minutes: 30,      key: 'm30', label: '۳۰ دقیقه' },
-  { minutes: 10,      key: 'm10', label: '۱۰ دقیقه' },
-  { minutes: 0,       key: 'due', label: 'سررسید' }
+  { minutes: 180, key: 'h3',  label: '۳ ساعت',  repeat: true  },  // ۳ ساعت قبل، تکرار
+  { minutes: 15,  key: 'm15', label: '۱۵ دقیقه', repeat: true  },  // ۱۵ دقیقه قبل، تکرار
+  { minutes: 0,   key: 'due', label: 'سررسید',  repeat: false }   // در لحظهٔ سررسید
 ];
 
 async function checkDeadlinesBackground() {
@@ -603,22 +606,73 @@ async function checkDeadlinesBackground() {
 
           // اعلان را نمایش بده
           try {
-            await self.registration.showNotification(title, {
+            // 🔧 v140: تنظیمات اعلان — بلندتر، طولانی‌تر، و requireInteraction برای همه
+            const notifOptions = {
               body: body,
               icon: 'icon-192.png',
               badge: 'favicon-32.png',
               dir: 'rtl',
               lang: 'fa-IR',
               tag: `reminder-${item.id}`,
-              vibrate: [200, 100, 200, 100, 200],
-              // اعلان‌های «سررسید گذشته» تا زمان کلیک کاربر پنهان نمی‌شوند
-              requireInteraction: isOverdue
-            });
+              // 🔧 v140: الگوی لرزش طولانی‌تر و قوی‌تر (۵ ثانیه)
+              vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300, 100, 300],
+              // 🔧 v140: همهٔ اعلان‌ها requireInteraction دارند (تا کلیک کاربر پنهان نشوند)
+              requireInteraction: true,
+              // 🔧 v140: صدای اعلان — اگر مرورگر پشتیبانی کند (Chrome)
+              // در غیر این صورت، پیام PLAY_NOTIFICATION_SOUND به صفحه فرستاده می‌شود
+              // تا با Web Audio API صدای زیبا پخش کند.
+              silent: false,
+              // notify: true باعث می‌شود مرورگر صدای پیش‌فرض اعلان را پخش کند
+            };
+            await self.registration.showNotification(title, notifOptions);
             // کلید را در تاریخچه ثبت کن تا دوبار فرستاده نشود
             await idbPut(STORE_NOTIF_LOG, { key: notifKey, ts: now });
             sentSet.add(notifKey);
             notificationsSent++;
             console.log('[SW] Notification sent for', notifKey);
+
+            // 🔧 v140: پیام به صفحه برای پخش صدای زیبا (Web Audio API)
+            // اگر صفحه باز است، صدای زیبا و بلند پخش می‌شود.
+            try {
+              const clientList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+              clientList.forEach(c => c.postMessage({
+                type: 'PLAY_NOTIFICATION_SOUND',
+                title: title,
+                body: body,
+                itemId: item.id,
+                threshold: t.key
+              }));
+              console.log('[SW] PLAY_NOTIFICATION_SOUND sent to', clientList.length, 'clients');
+            } catch(e) {
+              console.warn('[SW] Failed to send sound message:', e);
+            }
+
+            // 🔧 v140: تکرار اعلان (فقط برای h3 و m15 — دو بار با فاصلهٔ ۱۵ ثانیه)
+            if (t.repeat) {
+              setTimeout(async () => {
+                try {
+                  await self.registration.showNotification(title + ' (تکرار)', {
+                    ...notifOptions,
+                    tag: `reminder-${item.id}-repeat`,
+                    body: body + ' — تکرار'
+                  });
+                  console.log('[SW] Repeat notification sent for', notifKey);
+                  // پیام دوباره برای پخش صدا
+                  try {
+                    const clientList2 = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+                    clientList2.forEach(c => c.postMessage({
+                      type: 'PLAY_NOTIFICATION_SOUND',
+                      title: title + ' (تکرار)',
+                      body: body,
+                      itemId: item.id,
+                      threshold: t.key
+                    }));
+                  } catch(e) {}
+                } catch(e) {
+                  console.warn('[SW] Repeat notification failed:', e);
+                }
+              }, 15000);  // ۱۵ ثانیه بعد
+            }
           } catch(e) {
             console.error('[SW] Failed to show notification:', e);
           }
