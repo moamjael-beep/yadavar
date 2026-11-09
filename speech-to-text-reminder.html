@@ -5385,7 +5385,35 @@ body.locked .header-actions button {
 //            بنر درون‌صفحه‌ای هم بدون permission نمایش داده می‌شود.
 //         ۶) toggleNotifications بعد از grant، AudioContext را هم resume می‌کند.
 //         ۷) interval کوتاه‌تر (۱۰s) مخصوص بررسی درون‌صفحه‌ای، تا لاگ کمتر از ۶۰s نشود.
-const APP_VERSION = 'v201-2026-11-09-foreground-inpage-banner-and-audio-warm';
+//
+//   v202 - FIX: RECORDING STOPS WHEN LEAVING THE APP PAGE TEMPORARILY:
+//         کاربر گزارش داد: «ضبط صدا درهنگام ترک موقت صفحه برنامه یا رفتن به یک برنامه
+//         دیگر موبایل قطع میشود».
+//         🔍 ریشهٔ اصلی (در Chrome اندروید):
+//         ۰) وقتی صفحه hidden می‌شود (کاربر به برنامهٔ دیگر می‌رود یا صفحه را
+//            minimize می‌کند)، مرورگر SpeechRecognition را متوقف می‌کند.
+//         ۱) setTimeoutهای restart در onend یا اصلاً اجرا نمی‌شوند یا به‌شدت
+//            throttle می‌شوند (۱ اجرا در ثانیه در background).
+//         ۲) MediaSession قبلاً فعال بود اما بدون یک audio stream واقعی، اندروید
+//            آن را صرفاً metadata می‌بیند و برنامه را pause می‌کند.
+//         🔧 تغییرات v202:
+//         ۱) silent audio loop — یک AudioContext با اسیلاتور sine در 1Hz و gain=0
+//            که به‌طور مداوم در حال play است. این به Android می‌گوید برنامه در حال
+//            پخش media است و نباید آن را pause کند. این همان ترفندی است که برنامه‌های
+//            موسیقی استفاده می‌کنند.
+//         ۲) handleRecordingVisibilityChange — وقتی کاربر به برنامه برمی‌گردد،
+//            recognition را فوراً restart کن. این مهم‌ترین remediation است چون مشکل
+//            اصلی این بود که «ضبط قطع می‌شد و دیگر برنمی‌گشت». اکنون وقتی کاربر
+//            برمی‌گردد، ضبط فوراً از سر گرفته می‌شود و یک toast اطلاع می‌دهد.
+//         ۳) pagehide handler اضافی — پیام KEEPALIVE با recording=true به SW
+//            می‌فرستد تا SW زودتر بیدار شود.
+//         ۴) جلوگیری از restart بیش‌ازحد (debounce ۱ ثانیه).
+//         توجه: SpeechRecognition در حالت fully-background (صفحه کاملاً بسته)
+//         در Chrome اندروید هنوز هم کار نمی‌کند — این یک محدودیت سخت مرورگر است.
+//         اما با این تغییرات، وقتی کاربر به برنامه برمی‌گردد، ضبط فوراً از سر
+//         گرفته می‌شود و متن قبلی حفظ می‌شود. silent audio loop همچنین مدت زمان
+//         ماندن برنامه در حافظه را افزایش می‌دهد.
+const APP_VERSION = 'v202-2026-11-09-recording-continue-on-leave';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -7998,6 +8026,21 @@ document.addEventListener('visibilitychange', function() {
     if (!document.hidden && isRecording && !_wakeLock) {
         acquireRecordingWakeLock();
     }
+    // 🔧 v202: همیشه handler ضبط را صدا بزن (چه hidden چه visible)
+    // اگر hidden شد — فقط log می‌زند؛ اگر visible شد و در حال ضبط بود،
+    // recognition را فوراً restart می‌کند.
+    try { handleRecordingVisibilityChange(); } catch(e) {}
+});
+// 🔧 v202: هنگام pagehide هم تلاش کن یک restart نهایی بزن تا وقتی کاربر
+// برمی‌گردد، ضبط زودتر به‌خاطر بیاید. این listener در init هم ثبت می‌شود
+// اما اینجا هم اضافه می‌کنیم تا اطمینان حاصل شود حتی اگر init هنوز اجرا
+// نشده باشد (defensive).
+document.addEventListener('pagehide', function() {
+    try {
+        if (isRecording && navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'KEEPALIVE', ts: Date.now(), recording: true });
+        }
+    } catch(e) {}
 });
 
 // ─── MediaSession ───
@@ -8027,6 +8070,97 @@ function clearRecordingMediaSession() {
         navigator.mediaSession.playbackState = 'none';
         console.log('[MediaSession] Recording state cleared');
     } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🔧 v202: نگه‌داشتن ضبط در پس‌زمینه — silent audio loop
+// ════════════════════════════════════════════════════════════════════
+// ریشهٔ «ضبط هنگام ترک موقت قطع می‌شود» در Chrome اندروید:
+// وقتی صفحه hidden می‌شود، مرورگر SpeechRecognition را متوقف می‌کند و
+// setTimeoutهای restart را throttle می‌کند (۱ اجرا در ثانیه در حالت
+// background). auto-restart در onend یا اصلاً اجرا نمی‌شود یا دیر اجرا
+// می‌شود و recognition از حالت active خارج شده.
+//
+// راه‌حل: یک AudioContext با اسیلاتور بی‌صدا (gain=0) که به‌طور مداوم
+// در حال play است. این به Android می‌گوید برنامه در حال پخش media است
+// و نباید آن را pause کند (MediaSession + audio در حال play).
+// این همان ترفندی است که برنامه‌های موسیقی برای ماندن در پس‌زمینه استفاده
+// می‌کنند. MediaSession قبلاً فعال است؛ audio loop آن را real می‌کند.
+//
+// اسیلاتور sine با gain=0 در فرکانس ۱ هرتز — برای گوش انسان نامسموع اما
+// برای مرورگر یک «جریان audio فعال» محسوب می‌شود.
+let _silenceAudioCtx = null;
+let _silenceOsc = null;
+let _silenceGain = null;
+
+function startSilentAudioLoop() {
+    if (_silenceAudioCtx) return; // قبلاً اجرا می‌شود
+    try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        _silenceAudioCtx = new Ctx();
+        // اگر suspended، resume کن (در context ضبط ما قبلاً warm شده)
+        if (_silenceAudioCtx.state === 'suspended') {
+            _silenceAudioCtx.resume().catch(function(){});
+        }
+        _silenceOsc = _silenceAudioCtx.createOscillator();
+        _silenceGain = _silenceAudioCtx.createGain();
+        _silenceOsc.type = 'sine';
+        _silenceOsc.frequency.value = 1; // 1 Hz — نامسموع
+        _silenceGain.gain.value = 0;     // mute کامل
+        _silenceOsc.connect(_silenceGain);
+        _silenceGain.connect(_silenceAudioCtx.destination);
+        _silenceOsc.start();
+        console.log('[SilentLoop] Started — keeping app alive as media player');
+    } catch(e) {
+        console.warn('[SilentLoop] Failed to start:', e.message);
+        _silenceAudioCtx = null;
+    }
+}
+
+function stopSilentAudioLoop() {
+    try {
+        if (_silenceOsc) { _silenceOsc.stop(); _silenceOsc.disconnect(); _silenceOsc = null; }
+        if (_silenceGain) { _silenceGain.disconnect(); _silenceGain = null; }
+        if (_silenceAudioCtx) {
+            if (_silenceAudioCtx.state !== 'closed') _silenceAudioCtx.close();
+            _silenceAudioCtx = null;
+        }
+        console.log('[SilentLoop] Stopped');
+    } catch(e) { console.warn('[SilentLoop] Stop failed:', e.message); }
+}
+
+// 🔧 v202: visibilitychange handler مخصوص ضبط — وقتی کاربر به برنامه
+// برمی‌گردد، recognition را فوراً restart کن. این مهم‌ترین remediation
+// است چون مشکل اصلی این بود که «ضبط قطع می‌شد و دیگر برنمی‌گشت».
+let _lastVisibilityRestart = 0;
+function handleRecordingVisibilityChange() {
+    if (document.hidden) {
+        // صفحه hidden شد — چیزی برای restart نیست؛ مرورگر خودش SpeechRecognition
+        // را متوقف می‌کند. silent audio loop به برنامه کمک می‌کند زودتر بیدار شود.
+        console.log('[Recording] Page hidden — recognition may pause; will resume on return');
+        return;
+    }
+    // صفحه دوباره visible شد
+    if (!isRecording) return;
+    if (!recognition) return;
+    // جلوگیری از restart بیش‌ازحد (حداکثر هر ۱ ثانیه)
+    var now = Date.now();
+    if (now - _lastVisibilityRestart < 1000) return;
+    _lastVisibilityRestart = now;
+    // فوراً recognition را restart کن
+    try {
+        recognition.start();
+        console.log('[Recording] Restarted on visibility return');
+        showToast('ضبط از سر گرفته شد ▶');
+    } catch(e) {
+        // احتمالاً already running — یک restart با تأخیر کوتاه بزن
+        console.log('[Recording] restart on return deferred (already running):', e.message);
+        setTimeout(function() {
+            if (!isRecording || !recognition || document.hidden) return;
+            try { recognition.start(); } catch(e2) {}
+        }, 500);
+    }
 }
 
 function startRecording() {
@@ -8074,6 +8208,9 @@ function startRecording() {
     // 🔧 v198: ابزارهای ماندگاری — WakeLock + MediaSession
     acquireRecordingWakeLock();
     setRecordingMediaSession();
+    // 🔧 v202: silent audio loop — نگه‌داشتن Android به‌عنوان media player
+    // این مهم‌ترین remediation برای «ضبط هنگام ترک موقت قطع می‌شود» است
+    startSilentAudioLoop();
     // 🔧 v198: ضبط صوت در پس‌زمینه — keepalive قوی‌تر هنگام ضبط
     // هر ۱۰ ثانیه به SW پیام بده تا حافظه بماند
     _recordingKeepaliveInterval = setInterval(function() {
@@ -8112,6 +8249,8 @@ function stopRecording() {
     // 🔧 v198: ابزارهای ماندگاری — آزادسازی
     releaseRecordingWakeLock();
     clearRecordingMediaSession();
+    // 🔧 v202: silent audio loop را هم متوقف کن
+    stopSilentAudioLoop();
     if (_recordingKeepaliveInterval) {
         clearInterval(_recordingKeepaliveInterval);
         _recordingKeepaliveInterval = null;
