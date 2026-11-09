@@ -30,8 +30,9 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v202: هماهنگ با APP_VERSION — silent audio loop + restart تهاجمی هنگام بازگشت کاربر.
-const CACHE_NAME = 'yadavar-cache-v202';
+// 🔧 v203: هماهنگ با APP_VERSION — Worker restart loop + MediaRecorder bg capture
+// + pagehide wake-up full set (KEEPALIVE/CHECK_DEADLINES/SCHEDULE_TRIGGERS/sync).
+const CACHE_NAME = 'yadavar-cache-v203';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.

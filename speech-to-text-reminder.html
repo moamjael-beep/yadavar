@@ -5413,7 +5413,30 @@ body.locked .header-actions button {
 //         اما با این تغییرات، وقتی کاربر به برنامه برمی‌گردد، ضبط فوراً از سر
 //         گرفته می‌شود و متن قبلی حفظ می‌شود. silent audio loop همچنین مدت زمان
 //         ماندن برنامه در حافظه را افزایش می‌دهد.
-const APP_VERSION = 'v202-2026-11-09-recording-continue-on-leave';
+//
+//   v203 - KEEP APP FULLY ACTIVE DURING TEMPORARY LEAVE (recording + notifications):
+//         کاربر درخواست کرد: «برنامه در ترک موقت در گوشی همچنان کاملا فعال باشد /
+//         ضبط صدا در ترک موقت برنامه کار کند و نوتیف ها هم همینطور».
+//         🔧 تغییرات v203:
+//         ۱) Worker restart loop (startRecordingWorker/stopRecordingWorker) —
+//            یک Web Worker که هر ۱ ثانیه tick می‌زند و به main thread پیام
+//            می‌فرستد. تایمرهای Worker کمتر throttle می‌شوند و پیام‌های
+//            postMessage در زمان واقعی تحویل داده می‌شوند. هر tick → restart
+//            recognition اگر در حال ضبط باشیم. این الگو ترفند معروف
+//            «worker-based timer» است.
+//         ۲) MediaRecorder background capture (startBackgroundAudioCapture /
+//            stopBackgroundAudioCapture / showBackgroundAudioNotice) — وقتی
+//            صفحه hidden شد و در حال ضبط بودیم، MediaRecorder (که در پس‌زمینه
+//            کار می‌کند) صدا را ثبت می‌کند. وقتی کاربر برمی‌گردد: مدت صدا +
+//            دکمهٔ پخش نمایش داده می‌شود («۸ ثانیه صدا در حین ترک ثبت شد ▶»).
+//            این بهترین راه‌حل با Web APIهاست — صدای حین ترک گم نمی‌شود.
+//         ۳) pagehide handler قوی‌تر — به‌جای یک KEEPALIVE، حالا یک مجموعهٔ
+//            کامل پیام‌های بیدارباش به SW: KEEPALIVE(recording) + CHECK_DEADLINES
+//            + SCHEDULE_TRIGGERS + registerDeadlineSync. یعنی در لحظهٔ ترک،
+//            SW همه‌چیز را بررسی و زمان‌بندی می‌کند تا در پس‌زمینه اعلان‌ها
+//            کار کنند.
+//         ۴) MediaRecorder در stopRecording هم پاک‌سازی می‌شود.
+const APP_VERSION = 'v203-2026-11-09-full-active-on-leave';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -7965,15 +7988,27 @@ function initRecognition() {
 
         if (isRecording) {
             // Auto-restart with 300ms delay (same as working backup)
+            // 🔧 v203: اگر start با InvalidStateError شکست بخورد، یعنی recognition
+            // در واقع همین الان در حال اجراست (مثلاً Worker tick آن را شروع کرده).
+            // در این صورت ضبط را نباید کشت — فقط رد شو. این باگ باعث می‌شد
+            // در ترک موقت، race بین Worker tick و auto-restart، ضبط را kill کند.
             setTimeout(() => {
                 if (!isRecording) return;
                 try { recognition.start(); }
                 catch(e) {
+                    // 🔧 v203: already-running = خطا نیست، ضبط سالم است
+                    if (e && (e.name === 'InvalidStateError' || /already\s*started/i.test(e.message || ''))) {
+                        return; // recognition در حال اجراست — هیچ کاری نکن
+                    }
                     console.warn('Restart failed, retrying in 1s...', e);
                     setTimeout(() => {
                         if (!isRecording) return;
                         try { recognition.start(); }
                         catch(e2) {
+                            // 🔧 v203: همان‌جا هم — already-running یعنی سالم
+                            if (e2 && (e2.name === 'InvalidStateError' || /already\s*started/i.test(e2.message || ''))) {
+                                return;
+                            }
                             console.error('Restart failed twice', e2);
                             isRecording = false;
                             document.getElementById('addBtn')?.classList.remove('recording');
@@ -8035,11 +8070,22 @@ document.addEventListener('visibilitychange', function() {
 // برمی‌گردد، ضبط زودتر به‌خاطر بیاید. این listener در init هم ثبت می‌شود
 // اما اینجا هم اضافه می‌کنیم تا اطمینان حاصل شود حتی اگر init هنوز اجرا
 // نشده باشد (defensive).
+// 🔧 v203: هنگام pagehide، یک مجموعه کامل پیام‌های بیدارباش به SW بفرست:
+//   ۱) KEEPALIVE با recording=true → SW را زنده نگه می‌دارد و بررسی سررسید
+//      می‌کند
+//   ۲) CHECK_DEADLINES → بررسی فوری اعلان‌ها در لحظهٔ ترک (مهم‌ترین لحظه —
+//      کاربر ممکن است دیر برگردد)
+//   ۳) SCHEDULE_TRIGGERS → تریگرهای دقیق سررسید (در صورت پشتیبانی مرورگر)
+//   ۴) registerDeadlineSync → پس از بازگشت اینترنت، SW دوباره بیدار می‌شود
 document.addEventListener('pagehide', function() {
     try {
-        if (isRecording && navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'KEEPALIVE', ts: Date.now(), recording: true });
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            var _c = navigator.serviceWorker.controller;
+            _c.postMessage({ type: 'KEEPALIVE', ts: Date.now(), recording: !!isRecording });
+            _c.postMessage({ type: 'CHECK_DEADLINES' });
+            _c.postMessage({ type: 'SCHEDULE_TRIGGERS' });
         }
+        try { registerDeadlineSync(); } catch(e) {}
     } catch(e) {}
 });
 
@@ -8130,20 +8176,179 @@ function stopSilentAudioLoop() {
     } catch(e) { console.warn('[SilentLoop] Stop failed:', e.message); }
 }
 
+// ════════════════════════════════════════════════════════════════════
+// 🔧 v203: Worker restart loop — تایمر با throttle کمتر در پس‌زمینه
+// ════════════════════════════════════════════════════════════════════
+// در Chrome اندروید، تایمرهای main thread هنگام hidden شدن صفحه throttle
+// می‌شوند (۱ اجرا در ثانیه) و بعد از ~۵ دقیقه کاملاً منجمد می‌شوند. اما
+// تایمرهای داخل Web Worker کمتر throttle می‌شوند و پیام‌های postMessage
+// بین Worker و main thread در زمان واقعی (بدون throttle) تحویل داده می‌شوند.
+//
+// این Worker هر ۱ ثانیه tick می‌زند و به main thread پیام می‌فرستد.
+// main thread با دریافت هر tick، اگر در حال ضبط بود، recognition را
+// restart می‌کند. این الگو همان ترفند معروف «worker-based timer» است.
+let _recordingWorker = null;
+function startRecordingWorker() {
+    if (_recordingWorker) return;
+    try {
+        var workerCode = '' +
+            'setInterval(function() {' +
+            '  postMessage({ tick: Date.now() });' +
+            '}, 1000);';
+        var blob = new Blob([workerCode], { type: 'application/javascript' });
+        _recordingWorker = new Worker(URL.createObjectURL(blob));
+        _recordingWorker.onmessage = function(e) {
+            // هر tick: اگر در حال ضبط بودیم، recognition را restart کن
+            try {
+                if (typeof isRecording !== 'undefined' && isRecording &&
+                    typeof recognition !== 'undefined' && recognition) {
+                    try { recognition.start(); } catch(err) { /* already running */ }
+                }
+            } catch(err) {}
+        };
+        console.log('[Worker] Recording restart worker started');
+    } catch(e) {
+        console.warn('[Worker] Failed to create recording worker:', e.message);
+        _recordingWorker = null;
+    }
+}
+function stopRecordingWorker() {
+    if (_recordingWorker) {
+        try { _recordingWorker.terminate(); } catch(e) {}
+        _recordingWorker = null;
+        console.log('[Worker] Recording restart worker stopped');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🔧 v203: MediaRecorder background capture — صدای حین ترک را ثبت کن
+// ════════════════════════════════════════════════════════════════════
+// محدودیت سخت: SpeechRecognition در Chrome اندروید وقتی صفحه hidden است
+// موتور تشخیص صوت را pause می‌کند — یعنی متن کلمات گفته‌شده در حین ترک
+// از دست می‌رود و هیچ راه مستقیمی برای بازکردن آن وجود ندارد.
+//
+// راه‌حل v203: وقتی صفحه hidden شد و در حال ضبط بودیم، MediaRecorder
+// (که در پس‌زمینه هم کار می‌کند) صدا را ثبت می‌کند. وقتی کاربر برمی‌گردد:
+//   ۱) SpeechRecognition فوراً restart می‌شود (v202) — کلمات بعد از بازگشت
+//      به‌طور طبیعی transcribe می‌شوند.
+//   ۲) مدت صدا و یک لینک پخش نمایش داده می‌شود — کاربر می‌تواند صدای
+//      حین ترک را گوش کند (e.g. "۸ ثانیه در حین ترک ضبط شد ▶").
+//
+// این بهترین راه‌حل ممکن با Web APIهای موجود است — صدای حین ترک گم نمی‌شود.
+let _bgMediaRecorder = null;
+let _bgAudioChunks = [];
+let _bgAudioStartTime = null;
+let _bgAudioStream = null;
+
+async function startBackgroundAudioCapture() {
+    if (_bgMediaRecorder) return; // قبلاً اجرا می‌شود
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.warn('[BgAudio] getUserMedia not available');
+            return;
+        }
+        _bgAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _bgMediaRecorder = new MediaRecorder(_bgAudioStream);
+        _bgAudioChunks = [];
+        _bgMediaRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) _bgAudioChunks.push(e.data);
+        };
+        _bgMediaRecorder.start(2000); // هر ۲ ثانیه chunk جمع کن
+        _bgAudioStartTime = Date.now();
+        console.log('[BgAudio] Background audio capture started');
+    } catch(e) {
+        console.warn('[BgAudio] Failed to start:', e.message);
+        _bgMediaRecorder = null;
+        _bgAudioStream = null;
+    }
+}
+
+async function stopBackgroundAudioCapture() {
+    if (!_bgMediaRecorder) return null;
+    var duration = _bgAudioStartTime ? (Date.now() - _bgAudioStartTime) : 0;
+    var chunks = _bgAudioChunks.slice();
+    try {
+        _bgMediaRecorder.stop();
+    } catch(e) {}
+    try {
+        if (_bgAudioStream) _bgAudioStream.getTracks().forEach(function(t) { t.stop(); });
+    } catch(e) {}
+    _bgMediaRecorder = null;
+    _bgAudioChunks = [];
+    _bgAudioStartTime = null;
+    _bgAudioStream = null;
+    if (chunks.length > 0 && duration > 1000) {
+        try {
+            var blob = new Blob(chunks, { type: 'audio/webm' });
+            var url = URL.createObjectURL(blob);
+            console.log('[BgAudio] Captured', Math.round(duration / 1000), 's of background audio');
+            return { blob: blob, url: url, durationMs: duration };
+        } catch(e) {
+            console.warn('[BgAudio] Failed to create blob:', e.message);
+            return null;
+        }
+    }
+    return null;
+}
+
+// نمایش اعلان صدا ضبط‌شده در حین ترک — با دکمهٔ پخش
+function showBackgroundAudioNotice(captured) {
+    if (!captured || !captured.durationMs) return;
+    var secs = Math.round(captured.durationMs / 1000);
+    try {
+        showToast('🎙️ ' + toPersianDigits(secs) + ' ثانیه صدا در حین ترک ثبت شد');
+        // یک دکمهٔ پخش در بنر — ولی چون toast ماندگار نیست، از یک toast
+        // با مدت طولانی‌تر استفاده می‌کنیم
+        var toast = document.getElementById('toast');
+        if (toast) {
+            // اضافه کردن دکمهٔ پخش به toast
+            var playBtn = document.createElement('button');
+            playBtn.textContent = ' ▶ پخش';
+            playBtn.style.cssText = 'background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:4px 10px; margin-inline-start:8px; font-size:12px; cursor:pointer; font-family:inherit;';
+            playBtn.onclick = function() {
+                try {
+                    var audio = new Audio(captured.url);
+                    audio.play().catch(function(e) { console.warn('[BgAudio] Play failed:', e); });
+                    showToast('در حال پخش صدای ثبت‌شده...');
+                } catch(e) { console.warn('[BgAudio] Play failed:', e); }
+            };
+            toast.appendChild(playBtn);
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(function() {
+                toast.classList.remove('show');
+                try { if (playBtn.parentNode) playBtn.remove(); } catch(e) {}
+                try { URL.revokeObjectURL(captured.url); } catch(e) {}
+            }, 10000); // ۱۰ ثانیه فرصت برای پخش
+        }
+    } catch(e) { console.warn('[BgAudio] Notice failed:', e.message); }
+}
+
 // 🔧 v202: visibilitychange handler مخصوص ضبط — وقتی کاربر به برنامه
 // برمی‌گردد، recognition را فوراً restart کن. این مهم‌ترین remediation
 // است چون مشکل اصلی این بود که «ضبط قطع می‌شد و دیگر برنمی‌گشت».
+// 🔧 v203: MediaRecorder background capture — وقتی صفحه hidden شد و در
+// حال ضبط بودیم، صدا را MediaRecorder ثبت می‌کند. وقتی کاربر برمی‌گردد،
+// مدت صدا و دکمهٔ پخش نمایش داده می‌شود.
 let _lastVisibilityRestart = 0;
-function handleRecordingVisibilityChange() {
+async function handleRecordingVisibilityChange() {
     if (document.hidden) {
-        // صفحه hidden شد — چیزی برای restart نیست؛ مرورگر خودش SpeechRecognition
-        // را متوقف می‌کند. silent audio loop به برنامه کمک می‌کند زودتر بیدار شود.
-        console.log('[Recording] Page hidden — recognition may pause; will resume on return');
+        // صفحه hidden شد — SpeechRecognition متوقف می‌شود؛ MediaRecorder صدا را ثبت می‌کند
+        console.log('[Recording] Page hidden — recognition may pause; capturing audio via MediaRecorder');
+        try { startBackgroundAudioCapture(); } catch(e) {}
         return;
     }
     // صفحه دوباره visible شد
-    if (!isRecording) return;
+    if (!isRecording) {
+        // اگر در حال ضبط نبودیم، MediaRecorder را هم متوقف کن (در صورت روشن بودن)
+        try { stopBackgroundAudioCapture(); } catch(e) {}
+        return;
+    }
     if (!recognition) return;
+    // 🔧 v203: MediaRecorder را متوقف کن و صدا را بازیابی کن
+    try {
+        var _captured = await stopBackgroundAudioCapture();
+        if (_captured) showBackgroundAudioNotice(_captured);
+    } catch(e) { console.warn('[Recording] stopBgAudio failed:', e); }
     // جلوگیری از restart بیش‌ازحد (حداکثر هر ۱ ثانیه)
     var now = Date.now();
     if (now - _lastVisibilityRestart < 1000) return;
@@ -8211,6 +8416,8 @@ function startRecording() {
     // 🔧 v202: silent audio loop — نگه‌داشتن Android به‌عنوان media player
     // این مهم‌ترین remediation برای «ضبط هنگام ترک موقت قطع می‌شود» است
     startSilentAudioLoop();
+    // 🔧 v203: Worker restart loop — تایمر با throttle کمتر در پس‌زمینه
+    startRecordingWorker();
     // 🔧 v198: ضبط صوت در پس‌زمینه — keepalive قوی‌تر هنگام ضبط
     // هر ۱۰ ثانیه به SW پیام بده تا حافظه بماند
     _recordingKeepaliveInterval = setInterval(function() {
@@ -8251,6 +8458,19 @@ function stopRecording() {
     clearRecordingMediaSession();
     // 🔧 v202: silent audio loop را هم متوقف کن
     stopSilentAudioLoop();
+    // 🔧 v203: Worker restart loop را متوقف کن
+    stopRecordingWorker();
+    // 🔧 v203: اگر MediaRecorder در حال ضبط پس‌زمینه بود، متوقفش کن (بدون notice)
+    try {
+        if (_bgMediaRecorder) {
+            _bgMediaRecorder.stop();
+            if (_bgAudioStream) _bgAudioStream.getTracks().forEach(function(t) { t.stop(); });
+            _bgMediaRecorder = null;
+            _bgAudioStream = null;
+            _bgAudioChunks = [];
+            _bgAudioStartTime = null;
+        }
+    } catch(e) {}
     if (_recordingKeepaliveInterval) {
         clearInterval(_recordingKeepaliveInterval);
         _recordingKeepaliveInterval = null;
