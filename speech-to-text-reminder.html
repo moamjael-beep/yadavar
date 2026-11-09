@@ -5467,7 +5467,30 @@ body.locked .header-actions button {
 //            «ضبط از سر گرفته شد ▶» آن را روی‌نویسی می‌کرد — کاربر notice
 //            را هرگز نمی‌دید. رفع: اول restart، بعد notice (toast نهایی).
 //         📝 BEHAVIOR-SPEC.md کامل بازنویسی شد (نسخهٔ ۲ — قانون اساسی پروژه).
-const APP_VERSION = 'v204-2026-11-09-professional-audit-crash-fix';
+//   v205 - FRESH AUDIT — RE-RUN OF USER'S PREVIOUS REQUEST (verify best fixes):
+//         کاربر: «خواسته قبلی خودم رو دوباره انجام بده ببینم بهترین اصلاحات
+//         را انجام دادی». کل برنامه از صفر دوباره ممیزی شد (پروتکل ۰.۲ اسپک):
+//         - چک ۳ نقطهٔ نسخه ✅ | سینتکس‌چک + ممیزی استاتیک ✅ (همهٔ فلگ‌ها
+//           مثبت کاذب تاییدشده: installApp/toggleNotifications = async fn)
+//         - هر ۵ سوئیت قبلی دوباره اجرا شد: ۵۳/۵۳ سبز
+//         - سوئیت ممیزی تازهٔ scripts/test_audit_v205.mjs (۱۰ تست F1-F10)
+//           برای نواحی که قبلاً پوشش نداشت: ورود بک‌آپ v7 با مهاجرت +
+//           یادداشت، پاک شدن notif_log با ویرایش سررسید (BA-043)، تعلیق
+//           تسک، تکرار با endDate محدود، باتری پارسر اعداد گفتاری (۵ عبارت
+//           🚨)، منوی تلفن (tel/sms/whatsapp) + بستن idempotent، تغییر نام
+//           گروه، پیام UPDATE_CACHE به SW + fetch version.txt، بنر overdue
+//           بنفش، صفر pageerror — ۱۰/۱۰ سبز.
+//         - 🔍 هر ۴ فیکس v204 بازبینی ساختاری شد و تأیید شد که بهترین
+//           فیکس بودند (correct + minimal + idempotent + covered by tests).
+//         - 🔧 تنها اصلاح لازم در کد: نویسهٔ چینی «函数» در کامنت sw.js
+//           (بخش ۳) → «توابع». هیچ تغییر رفتاری — به همین دلیل نسخه فقط
+//           برای ثبت ممیزی bump شد.
+//         - 📌 ثبت در اسپک: refreshFloatingContactBtn تابع no-op شناخته‌شده
+//           است (~۱۹ فراخواننده؛ دکمهٔ floatingContactBtn هرگز ساخته
+//           نمی‌شود؛ null-guard دارد و بی‌خطر است — حذف آن بازنویسی گسترده
+//           است و طبق قانون «رفع کمینه» ممنوع).
+//         نتیجه: ۶۳/۶۳ تست سبز، صفر pageerror.
+const APP_VERSION = 'v205-2026-11-09-fresh-audit-verified';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
