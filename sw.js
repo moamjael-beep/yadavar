@@ -32,7 +32,7 @@
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
 // 🔧 v203: هماهنگ با APP_VERSION — Worker restart loop + MediaRecorder bg capture
 // + pagehide wake-up full set (KEEPALIVE/CHECK_DEADLINES/SCHEDULE_TRIGGERS/sync).
-const CACHE_NAME = 'yadavar-cache-v203';
+const CACHE_NAME = 'yadavar-cache-v204';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.

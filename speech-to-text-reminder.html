@@ -4263,8 +4263,11 @@ body.locked .header-actions button {
             <h2>📊 گزارش اشخاص</h2>
         </div>
         <div class="contacts-header-actions">
-            <button class="contacts-action-btn" onclick="saveContactReport()">💾 ذخیره</button>
-            <button class="contacts-action-btn" onclick="shareContactReport()">📤 ارسال</button>
+            <!-- 🔧 v204 (bugfix): قبلاً saveContactReport()/shareContactReport() صدا زده می‌شد
+                 که وجود نداشتند → ReferenceError هنگام کلیک (کرش). نام‌های درست:
+                 saveContactReportPrompt / shareContactReportPrompt (مودال انتخاب فرمت). -->
+            <button class="contacts-action-btn" onclick="saveContactReportPrompt()">💾 ذخیره</button>
+            <button class="contacts-action-btn" onclick="shareContactReportPrompt()">📤 ارسال</button>
             <button class="contacts-action-btn" onclick="printContactReport()">🖨️ چاپ</button>
         </div>
     </div>
@@ -5436,7 +5439,35 @@ body.locked .header-actions button {
 //            SW همه‌چیز را بررسی و زمان‌بندی می‌کند تا در پس‌زمینه اعلان‌ها
 //            کار کنند.
 //         ۴) MediaRecorder در stopRecording هم پاک‌سازی می‌شود.
-const APP_VERSION = 'v203-2026-11-09-full-active-on-leave';
+//   v204 - BUGFIX RELEASE — FULL PROFESSIONAL AUDIT (test + crash fix):
+//         کاربر درخواست کرد: «دوباره در یک رویکرد به عنوان یک برنامه نویس حرفه ای
+//         کل برنامه را تست و رفع کرش و باگ کن و فایل BEHAVIOR-SPEC را بازنگری کن».
+//         🔍 ممیزی کامل انجام شد:
+//         - تحلیل استاتیک: ۳۴۰ تابع، ۴۲۵ getElementById، ۷۴ handler HTML —
+//           بدون تعریف تکراری، بدون ID مفقود
+//         - اجرای هر ۴ سوئیت تست قبلی (۳۹/۳۹ پاس)
+//         - ساخت سوئیت E2E جدید (test_e2e_v204.mjs — ۱۴ سناریوی واقعی کلیک)
+//         🔧 سه باگ کرش واقعی یافت و رفع شد:
+//         ۱) دکمه‌های «💾 ذخیره» و «📤 ارسال» در هدر صفحهٔ نتایج گزارش اشخاص
+//            توابع ناموجود saveContactReport()/shareContactReport() را صدا
+//            می‌زدند → ReferenceError هنگام کلیک. اکنون
+//            saveContactReportPrompt()/shareContactReportPrompt() (مودال فرمت).
+//         ۲) closeCalendar() بدون شرط navBack() می‌زد — اگر تقویم باز نبود
+//            (دابل‌تپ روی «بستن»، بستن دوباره)، history.back() به خارج از
+//            برنامه می‌رفت و کل صفحه unload می‌شد. اکنون idempotent است:
+//            فقط وقتی calendarOverlay فعال است بسته می‌شود.
+//         ۳) 💥 مهم‌ترین: handler popstate (دکمهٔ Back موبایل) از prevView
+//            قبل از تعریف const استفاده می‌کرد → خطای TDZ
+//            «Cannot access 'prevView' before initialization» در هر back که
+//            به مسیر Normal navigation می‌رسید — handler می‌مرد و fullRender
+//            اجرا نمی‌شد (UI کهنه می‌ماند: تسک بسته‌شده باز می‌ماند و برعکس).
+//            رفع: انتقال تعریف prevView/prevGroup به بالای بلوک.
+//         ۴) ترتیب نمایش در بازگشت از ترک موقت (v203): notice «🎙️ X ثانیه
+//            صدا در حین ترک ثبت شد ▶ پخش» اول می‌آمد و بلافاصله toast
+//            «ضبط از سر گرفته شد ▶» آن را روی‌نویسی می‌کرد — کاربر notice
+//            را هرگز نمی‌دید. رفع: اول restart، بعد notice (toast نهایی).
+//         📝 BEHAVIOR-SPEC.md کامل بازنویسی شد (نسخهٔ ۲ — قانون اساسی پروژه).
+const APP_VERSION = 'v204-2026-11-09-professional-audit-crash-fix';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -8344,28 +8375,34 @@ async function handleRecordingVisibilityChange() {
         return;
     }
     if (!recognition) return;
-    // 🔧 v203: MediaRecorder را متوقف کن و صدا را بازیابی کن
+    // 🔧 v204 (bugfix): ترتیب مهم است — اول restart (با toast خودش)،
+    // بعد notice صدا. قبلاً notice اول می‌آمد و بلافاصله toast
+    // «ضبط از سر گرفته شد ▶» آن را روی‌نویسی می‌کرد — یعنی کاربر
+    // اعلان «صدا در حین ترک ثبت شد» را هرگز نمی‌دید.
+    // جلوگیری از restart بیش‌ازحد (حداکثر هر ۱ ثانیه)
+    var now = Date.now();
+    if (now - _lastVisibilityRestart >= 1000) {
+        _lastVisibilityRestart = now;
+        // فوراً recognition را restart کن
+        try {
+            recognition.start();
+            console.log('[Recording] Restarted on visibility return');
+            showToast('ضبط از سر گرفته شد ▶');
+        } catch(e) {
+            // احتمالاً already running — یک restart با تأخیر کوتاه بزن
+            console.log('[Recording] restart on return deferred (already running):', e.message);
+            setTimeout(function() {
+                if (!isRecording || !recognition || document.hidden) return;
+                try { recognition.start(); } catch(e2) {}
+            }, 500);
+        }
+    }
+    // 🔧 v203: MediaRecorder را متوقف کن و صدا را بازیابی کن —
+    // notice (با دکمهٔ پخش) اکنون toast نهایی است و دیده می‌شود.
     try {
         var _captured = await stopBackgroundAudioCapture();
         if (_captured) showBackgroundAudioNotice(_captured);
     } catch(e) { console.warn('[Recording] stopBgAudio failed:', e); }
-    // جلوگیری از restart بیش‌ازحد (حداکثر هر ۱ ثانیه)
-    var now = Date.now();
-    if (now - _lastVisibilityRestart < 1000) return;
-    _lastVisibilityRestart = now;
-    // فوراً recognition را restart کن
-    try {
-        recognition.start();
-        console.log('[Recording] Restarted on visibility return');
-        showToast('ضبط از سر گرفته شد ▶');
-    } catch(e) {
-        // احتمالاً already running — یک restart با تأخیر کوتاه بزن
-        console.log('[Recording] restart on return deferred (already running):', e.message);
-        setTimeout(function() {
-            if (!isRecording || !recognition || document.hidden) return;
-            try { recognition.start(); } catch(e2) {}
-        }, 500);
-    }
 }
 
 function startRecording() {
@@ -10643,6 +10680,13 @@ window.addEventListener('popstate', (e) => {
     }
 
     // ===== Normal navigation =====
+    // 🔧 v204 (bugfix): prevView/prevGroup باید قبل از استفاده تعریف شوند.
+    // قبلاً «const prevView» بعد از taskFormJustClosed بود که خودش prevView
+    // را می‌خواند → خطای TDZ «Cannot access 'prevView' before initialization»
+    // در هر popstate که به اینجا می‌رسید (مثلاً back برای بستن جزئیات تسک) —
+    // handler وسط کار می‌مرد و fullRender اجرا نمی‌شد (UI کهنه می‌ماند).
+    const prevView = currentView;
+    const prevGroup = currentGroupId;
     // 🔧 اگر مودال فرم تسک باز است یا تازه بسته شده، هیچ اسکرول و fullRender انجام نده
     const taskFormJustClosed = (state.view === 'tasks' && _modalStack.length === 0 && prevView === 'tasks');
     if (state.view === 'modal') {
@@ -10663,8 +10707,6 @@ window.addEventListener('popstate', (e) => {
         }
         return;
     }
-    const prevView = currentView;
-    const prevGroup = currentGroupId;
     if (state.view === 'groups') {
         currentView = 'groups';
         currentGroupId = null;
@@ -15688,6 +15730,13 @@ function openCalendar() {
 }
 
 function closeCalendar() {
+    // 🔧 v204 (bugfix): اگر تقویم باز نیست، هیچ کاری نکن (idempotent).
+    // قبلاً بدون شرط navBack() می‌زد: اگر تقویم باز نبود (بستن دوباره،
+    // دابل‌تپ روی «بستن»، یا فراخوانی از مسیرهای دیگر)، history.back()
+    // به ورودی قبلی تاریخچه — یعنی خارج از برنامه — می‌رفت و کل صفحه
+    // unload می‌شد. اکنون فقط وقتی تقویم واقعاً فعال است بسته می‌شود.
+    const calEl = document.getElementById('calendarOverlay');
+    if (!calEl || !calEl.classList.contains('active')) return;
     // Visually close the calendar + remove from the modal stack.
     closeModalByType('calendar');
     // Pop the modal marker we pushed on openCalendar.
