@@ -2881,23 +2881,27 @@ body.locked .header-actions button {
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
-/* 🔧 v144: فونت بزرگ‌تر برای نام شرکت/نام/سمت */
+/* 🔧 v184: فونت یکسان برای همه ستون‌ها (شرکت/نام/سمت هم‌اندازه)
+   قبلاً شرکت و نام ۱۵px bold بودند — اکنون هم‌اندازه با بقیه (۱۳px). */
 .contacts-table td:nth-child(2),
-.contacts-table td:nth-child(3) {
-    font-size: 15px;
-    font-weight: 600;
-}
+.contacts-table td:nth-child(3),
 .contacts-table td:nth-child(4) {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
 }
+/* 🔧 v184: zebra striping — ردیف‌های یکدرمیان با زمینهٔ آبی کم‌رنگ
+   برای خوانایی بهتر هنگام اسکرول */
+.contacts-table tbody tr:nth-child(even) { background: #f0f7ff; }
+.contacts-table tbody tr:nth-child(odd) { background: white; }
 /* 🔧 v144: ردیف قابل کلیک — وقتی روی شخص کلیک می‌شود، منو باز می‌شود */
 .contacts-table tr.contact-clickable {
     cursor: pointer;
     transition: background 0.15s;
 }
-.contacts-table tr.contact-clickable:hover { background: #f5f9ff; }
-.contacts-table tr.contact-clickable:active { background: #e3f2fd; }
-.contacts-table tr:hover { background: #f5f9ff; }
+/* 🔧 v184: hover روی zebra — آبی روشن‌تر */
+.contacts-table tbody tr.contact-clickable:hover,
+.contacts-table tbody tr:hover { background: #e3f2fd; }
+.contacts-table tbody tr.contact-clickable:active { background: #bbdefb; }
 .contacts-table tr:last-child td { border-bottom: none; }
 .contacts-empty {
     text-align: center;
@@ -3474,6 +3478,10 @@ body.locked .header-actions button {
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
+/* 🔧 v184: zebra striping برای جدول نتایج جستجو هم — آبی کم‌رنگ یکدرمیان */
+.search-results-table tbody tr:nth-child(even) { background: #f0f7ff; }
+.search-results-table tbody tr:nth-child(odd) { background: white; }
+.search-results-table tbody tr:hover { background: #e3f2fd; }
 .report-header {
     background: linear-gradient(135deg, #FF9800, #E65100);
     color: white;
@@ -4961,7 +4969,90 @@ body.locked .header-actions button {
 //            درج بازگردانی می‌شود — صفحه نمی‌پرد، میکروفون همان‌جا می‌ماند.
 //         نتیجه: متن در خطی که کاربر جا باز کرده درج می‌شود + ضبط‌های بعدی
 //         زیر هم به ترتیب قرار می‌گیرند + صفحه نمی‌پرد.
-const APP_VERSION = 'v180-2026-11-08-notes-insert-at-cursor-preserve-scroll';
+//   v181 - REMOVE OLD 3-HOUR + 15-MINUTE REPEAT NOTIFICATION PROCESS:
+//         کاربر درخواست کرد: «یک فرایند یادآوری ۳ ساعته و ۱۵ دقیقه از قبل
+//         در کد هست — آن را پاک کن». این فرایند، منطق تکرار (repeat) v140
+//         بود که به‌طور خاص برای h3 (۳ ساعت) و m15 (۱۵ دقیقه) طراحی شده
+//         بود — هر کدام ۱۵ ثانیه بعد اعلان را تکرار می‌کردند.
+//         🔧 حذف شد:
+//         - ویژگی `repeat` از خروجی getNotifThresholds()
+//         - پارامتر `shouldRepeat` از sendNotification()
+//         - کل بلوک تکرار در sendNotification (setTimeout 15000ms + Notification دوم)
+//         - کامنت «🔧 v140: تکرار اعلان (فقط برای h3 و m15)»
+//         - فراخوانی sendNotification در checkNotifications به‌روز شد (۴ پارامتر به‌جای ۵)
+//         🔧 دست‌نخورده باقی ماند:
+//         - فرایند نوتیفیکیشن (v148 — toggleNotifications + getNotifSettings)
+//         - انتخاب زنگ (soundType: 'bell' | 'beeps')
+//         - ۳ مقطع زمانی اختیاری (NOTIF_TIME_OPTIONS — کاربر تا ۳ زمان انتخاب می‌کند)
+//         - NOTIF_TIME_OPTIONS همچنان شامل h3 و m15 به‌عنوان گزینه‌های قابل انتخاب است
+//           (اما دیگر تکرار نمی‌شوند — فقط یک‌بار اعلان می‌فرستند)
+//         نتیجه: هر اعلان فقط یک‌بار ارسال می‌شود. فرایند تکرار قدامی حذف شد.
+//   v182 - REMOVE h3 AND m15 FROM NOTIF_TIME_OPTIONS:
+//         کاربر درخواست کرد: «NOTIF_TIME_OPTIONS همچنان شامل h3 و m15 به‌عنوان
+//         گزینه‌های قابل انتخاب است — را حذف کن. نوتیف‌های اختیاری کاربر کافی است.»
+//         🔧 حذف شد:
+//         - { minutes: 60 * 3, key: 'h3', label: '۳ ساعت قبل' }
+//         - { minutes: 15,      key: 'm15', label: '۱۵ دقیقه قبل' }
+//         🔧 باقی ماند (۸ گزینه):
+//         - ۱ روز قبل، ۱۲ ساعت، ۶ ساعت، ۱ ساعت، ۳۰ دقیقه، ۱۰ دقیقه، ۵ دقیقه، سررسید
+//         نتیجه: کاربر دیگر نمی‌تواند ۳ ساعت یا ۱۵ دقیقه را به‌عنوان زمان یادآور
+//         انتخاب کند. ۸ گزینهٔ دیگر کافی است.
+//   v183 - REMOVE HIDDEN HARDCODED 3H+15M FROM sw.js + CUSTOM TIME OPTION:
+//         مشکل: در sw.js یک NOTIF_THRESHOLDS ثابت (hardcoded) وجود داشت که
+//         ۳ ساعت و ۱۵ دقیقه و سررسید را بدون توجه به تنظیمات کاربر اعلان
+//         می‌کرد. یعنی حتی اگر کاربر نوتیفیکیشن را فعال نکرده بود یا زمان‌های
+//         دیگری انتخاب کرده بود، SW در پس‌زمینه باز هم ۳ ساعت و ۱۵ دقیقه قبل
+//         از سررسید زنگ می‌زد. کاربر گفت: «۱۵ و ۳ ساعته در کد پنهان شده بود
+//         و بدون تنظیم کاربر زنگ میزد و پیام میداد — گفتم آن‌ها را پاک کن.»
+//         🔧 راه‌حل:
+//         ۱) hardcoded NOTIF_THRESHOLDS از sw.js حذف شد.
+//         ۲) تابع getNotifThresholdsFromIDB() در sw.js اضافه شد — تنظیمات را
+//            از IndexedDB (STORE_BACKUP با کلید 'notif_settings') می‌خواند.
+//         ۳) اگر کاربر تنظیماتی ذخیره نکرده یا enabled=false → هیچ اعلانی
+//            در پس‌زمینه فرستاده نمی‌شود.
+//         ۴) HTML تابع‌های idbPutNotifSettings + idbGetNotifSettings اضافه کرد.
+//         ۵) saveNotifSettings اکنون هم در localStorage و هم در IndexedDB
+//            ذخیره می‌کند تا SW بتواند بخواند.
+//         ۶) بلوک تکرار در sw.js (که برای h3 و m15 بود) هم حذف شد (v181).
+//         🔧 NOTIF_TIME_OPTIONS به ۴ گزینه کاهش یافت:
+//         - ۱ ساعت قبل، ۵ دقیقه قبل، در لحظهٔ سررسید، و «سفارشی (دقیقه)...»
+//         - گزینهٔ «سفارشی» یک input عددی نشان می‌دهد — کاربر دقیقه دلخواه وارد می‌کند.
+//         - ذخیره با key = 'custom_<minutes>' و label = 'X دقیقه قبل'
+//         نتیجه: SW فقط همان زمان‌هایی که کاربر انتخاب کرده را اعلان می‌فرستد —
+//         هیچ اعلان پنهان بدون تنظیم کاربر نیست.
+//   v184 - CONTACTS TABLE ZEBRA + AUTO-UPDATE FROM GITHUB:
+//         ۱) جدول اشخاص: فونت شرکت/نام کوچک شد (۱۵px → ۱۳px، هم‌اندازه با سمت).
+//            zebra striping اضافه شد — ردیف‌های یکدرمیان با زمینهٔ آبی کم‌رنگ
+//            (#f0f7ff) برای خوانایی بهتر هنگام اسکرول. جدول نتایج جستجو هم همین.
+//         ۲) به‌روزرسانی خودکار از گیت‌هاب:
+//            - SW: تابع updateAppShellInBackground() اضافه شد — در پس‌زمینه
+//              آخرین نسخهٔ HTML و APP_SHELL را از گیت‌هاب دانلود و در کش
+//              ذخیره می‌کند. best-effort — اگر آفلاین باشد، نادیده گرفته می‌شود.
+//            - SW: پیام UPDATE_CACHE اضافه شد — صفحه HTML این پیام را
+//              هنگام بارگذاری (۵s بعد)، هنگام بازگشت کاربر (visibilitychange)،
+//              و هر ۳۰ دقیقه می‌فرستد.
+//            - HTML: ارسال UPDATE_CACHE در ۳ زمان (load + visibility + 30min).
+//            - استراتژی fetch: HTML «اول شبکه» (network-first) — وقتی آنلاین
+//              است، آخرین نسخه از گیت‌هاب. وقتی آفلاین است، نسخهٔ کش‌شده
+//              از حافظهٔ داخلی — حتی برای روزها و ماه‌ها.
+//            نتیجه: برنامه همیشه آخرین نسخهٔ گیت‌هاب را دارد وقتی آنلاین است،
+//            و از نسخهٔ داخلی ادامه می‌دهد وقتی آفلاین است.
+//   v185 - SW FETCH STRATEGY: STALE-WHILE-REVALIDATE (cache-first, background update):
+//         کاربر درخواست کرد: «اول برنامه در کش اجرا شود و منتظر تست اینترنت
+//         و گیت‌هاب نشود. بعد که نسخهٔ آفلاین بالا آمد و به سرعت لود شد،
+//         حالا در پس‌زمینه اگر دسترسی به آخرین نسخه در گیت‌هاب پیدا کرد،
+//         آن را بصورت اتوماتیک رفرش و آخرین نسخه را دریافت و استفاده کند.»
+//         🔧 تغییر:
+//         - استراتژی fetch برای HTML: «اول شبکه» → «اول حافظه، سپس به‌روزرسانی پس‌زمینه»
+//         - وقتی کش موجود است: فوراً کش را بده (میلی‌ثانیه — بدون انتظار شبکه)
+//         - در پس‌زمینه: آخرین نسخه از گیت‌هاب دانلود می‌شود
+//         - اگر با نسخهٔ کش فرق داشت: کش به‌روزرسانی + پیام RELOAD_PLEASE به صفحه
+//         - صفحه خودکار رفرش می‌شود (مگر در حال ضبط یا فرم باز باشد)
+//         - اگر کش موجود نیست (اولین بار): از شبکه بخوان
+//         - اگر نه شبکه نه کش: صفحهٔ آفلاین
+//         نتیجه: برنامه فوراً از کش بالا می‌آید (حتی آفلاین). سپس در پس‌زمینه
+//         آخرین نسخه را چک می‌کند و اگر جدیدتر باشد، خودکار رفرش می‌کند.
+const APP_VERSION = 'v185-2026-11-08-sw-stale-while-revalidate-cache-first';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -5746,6 +5837,36 @@ async function idbGetAllNotifLog() {
             req.onerror = () => reject(req.error);
         });
     } catch(e) { return []; }
+}
+
+// 🔧 v183: ذخیرهٔ تنظیمات اعلان در IndexedDB (STORE_BACKUP با کلید 'notif_settings')
+// تا سرویس‌ورکر (SW) بتواند تنظیمات کاربر را بخواند و فقط همان زمان‌هایی که
+// کاربر انتخاب کرده را در پس‌زمینه اعلان بفرستد — نه hardcoded 3h/15m/due.
+// قبلاً SW آستانه‌های ثابت ۳ ساعت و ۱۵ دقیقه داشت که بدون تنظیم کاربر زنگ می‌زد.
+async function idbPutNotifSettings(settings) {
+    if (!idbAvailable()) return;
+    try {
+        const db = await openIDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_BACKUP], 'readwrite');
+            tx.objectStore(STORE_BACKUP).put(settings, 'notif_settings');
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch(e) { console.warn('IDB put notif settings failed', e); }
+}
+
+async function idbGetNotifSettings() {
+    if (!idbAvailable()) return null;
+    try {
+        const db = await openIDB();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_BACKUP], 'readonly');
+            const req = tx.objectStore(STORE_BACKUP).get('notif_settings');
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return null; }
 }
 
 function getDB() {
@@ -10986,17 +11107,15 @@ function clearSentNotificationsFor(items) {
 const NOTIF_SETTINGS_KEY = 'yadavar_notif_settings_v1';
 
 // گزینه‌های زمان یادآور قابل انتخاب
+// 🔧 v183: فقط ۳ گزینهٔ ثابت + یک گزینهٔ «سفارشی» با ورود دلخواه دقیقه.
+// کاربر درخواست کرد: «همه پیشنهادها را حذف بغیر از ۱ ساعت، ۵ دقیقه، و در لحظه
+// سررسید، و یک انتخاب متغیر با ورود دلخواه».
+// گزینهٔ 'custom' در UI یک input نشان می‌دهد تا کاربر دقیقه وارد کند.
 const NOTIF_TIME_OPTIONS = [
-    { minutes: 60 * 24, key: 'd1',  label: '۱ روز قبل' },
-    { minutes: 60 * 12, key: 'h12', label: '۱۲ ساعت قبل' },
-    { minutes: 60 * 6,  key: 'h6',  label: '۶ ساعت قبل' },
-    { minutes: 60 * 3,  key: 'h3',  label: '۳ ساعت قبل' },
     { minutes: 60,      key: 'h1',  label: '۱ ساعت قبل' },
-    { minutes: 30,      key: 'm30', label: '۳۰ دقیقه قبل' },
-    { minutes: 15,      key: 'm15', label: '۱۵ دقیقه قبل' },
-    { minutes: 10,      key: 'm10', label: '۱۰ دقیقه قبل' },
     { minutes: 5,       key: 'm5',  label: '۵ دقیقه قبل' },
     { minutes: 0,       key: 'due', label: 'در لحظهٔ سررسید' },
+    { minutes: -1,      key: 'custom', label: 'سفارشی (دقیقه)...' },
 ];
 
 // دریافت تنظیمات اعلان (یا پیش‌فرض)
@@ -11014,16 +11133,25 @@ function getNotifSettings() {
 }
 
 // ذخیره تنظیمات اعلان
+// 🔧 v183: هم در localStorage و هم در IndexedDB ذخیره می‌شود تا SW بتواند
+// در پس‌زمینه تنظیمات کاربر را بخواند و فقط همان زمان‌ها را اعلان بفرستد.
 function saveNotifSettings(settings) {
     try { localStorage.setItem(NOTIF_SETTINGS_KEY, JSON.stringify(settings)); } catch(e) {}
+    // 🔧 v183: mirror to IndexedDB for service worker
+    idbPutNotifSettings(settings);
+    // 🔧 v183: به‌روزرسانی NOTIF_THRESHOLDS سراسری
+    NOTIF_THRESHOLDS = getNotifThresholds();
 }
 
 // تولید NOTIF_THRESHOLDS از تنظیمات کاربر
+// 🔧 v181: ویژگی `repeat` حذف شد — فرایند تکرار ۳ ساعته و ۱۵ دقیقه‌ای (v140)
+// که به‌طور خاص برای h3 و m15 طراحی شده بود، کامل پاک شد. اکنون فقط
+// تنظیمات کاربر (v148) اعمال می‌شود: نوتیفیکیشن، انتخاب زنگ، ۳ مقطع زمانی اختیاری.
 function getNotifThresholds() {
     const settings = getNotifSettings();
     if (!settings.enabled || !settings.times || settings.times.length === 0) return [];
     return settings.times.map(function(t) {
-        return { minutes: t.minutes, key: t.key, label: t.label, repeat: false };
+        return { minutes: t.minutes, key: t.key, label: t.label };
     });
 }
 
@@ -11132,7 +11260,9 @@ function showBellSettings() {
     timeTitle.textContent = '⏰ زمان‌های یادآور (حداکثر ۳ مورد)';
     timeSection.appendChild(timeTitle);
     // ساخت ۳ dropdown برای زمان‌ها
+    // 🔧 v183: هر dropdown یک input سفارشی هم دارد (وقتی 'custom' انتخاب شود)
     var timeSelects = [];
+    var timeCustomInputs = [];
     for (var i = 0; i < 3; i++) {
         const label = document.createElement('div');
         label.className = 'bell-time-label';
@@ -11143,11 +11273,52 @@ function showBellSettings() {
         // گزینهٔ «بدون یادآور»
         sel.innerHTML = '<option value="">— بدون یادآور —</option>';
         NOTIF_TIME_OPTIONS.forEach(function(opt) {
-            var selected = settings.times[i] && settings.times[i].key === opt.key;
+            // 🔧 v183: اگر تنظیمات ذخیره‌شده custom است، گزینهٔ 'custom' را selected کن
+            var isCustomMatch = (opt.key === 'custom' && settings.times[i] && settings.times[i].key.indexOf('custom_') === 0);
+            var selected = settings.times[i] && (settings.times[i].key === opt.key || isCustomMatch);
             sel.innerHTML += '<option value="' + opt.key + '" data-minutes="' + opt.minutes + '" data-label="' + opt.label + '"' + (selected ? ' selected' : '') + '>' + opt.label + '</option>';
         });
         timeSection.appendChild(sel);
+
+        // 🔧 v183: input سفارشی برای ورود دقیقه — فقط وقتی 'custom' انتخاب شود نمایش داده می‌شود
+        const customWrap = document.createElement('div');
+        customWrap.className = 'bell-time-custom-wrap';
+        customWrap.style.cssText = 'display:none; margin-top:6px; align-items:center; gap:6px;';
+        const customInput = document.createElement('input');
+        customInput.type = 'number';
+        customInput.min = '1';
+        customInput.max = '43200'; // تا ۳۰ روز
+        customInput.placeholder = 'تعداد دقیقه (مثلاً ۲۰)';
+        customInput.className = 'bell-time-custom-input';
+        customInput.style.cssText = 'flex:1; padding:8px 10px; border:2px solid #FFA000; border-radius:6px; font-size:14px; direction:ltr; text-align:right;';
+        // اگر تنظیمات قبلی custom بود، مقدار را پر کن
+        if (settings.times[i] && settings.times[i].key.indexOf('custom_') === 0) {
+            var prevMinutes = settings.times[i].minutes;
+            customInput.value = prevMinutes;
+        }
+        const customLabel = document.createElement('span');
+        customLabel.textContent = 'دقیقه قبل';
+        customLabel.style.cssText = 'font-size:12px; color:#666; white-space:nowrap;';
+        customWrap.appendChild(customInput);
+        customWrap.appendChild(customLabel);
+        timeSection.appendChild(customWrap);
+
+        // 🔧 v183: نمایش/پنهان کردن input سفارشی بر اساس انتخاب dropdown
+        sel.addEventListener('change', function() {
+            if (sel.value === 'custom') {
+                customWrap.style.display = 'flex';
+                customInput.focus();
+            } else {
+                customWrap.style.display = 'none';
+            }
+        });
+        // اگر در زمان بارگذاری، 'custom' selected بود، input را نشان بده
+        if (sel.value === 'custom') {
+            customWrap.style.display = 'flex';
+        }
+
         timeSelects.push(sel);
+        timeCustomInputs.push(customInput);
     }
     modal.appendChild(timeSection);
     // دکمه‌ها
@@ -11160,8 +11331,22 @@ function showBellSettings() {
     saveBtn.onclick = function() {
         // جمع‌آوری تنظیمات
         var newTimes = [];
-        timeSelects.forEach(function(sel) {
-            if (sel.value) {
+        timeSelects.forEach(function(sel, idx) {
+            if (!sel.value) return; // بدون یادآور
+            if (sel.value === 'custom') {
+                // 🔧 v183: گزینهٔ سفارشی — دقیقه را از input بخوان
+                var customInput = timeCustomInputs[idx];
+                var mins = parseInt(customInput.value, 10);
+                if (!mins || mins < 1 || mins > 43200) {
+                    showToast('یادآور ' + toPersianNumber(idx + 1) + ': عدد دقیقه معتبر وارد کنید (۱ تا ۴۳۲۰۰)');
+                    return;
+                }
+                newTimes.push({
+                    key: 'custom_' + mins,
+                    minutes: mins,
+                    label: toPersianNumber(mins) + ' دقیقه قبل'
+                });
+            } else {
                 var opt = sel.options[sel.selectedIndex];
                 newTimes.push({
                     key: sel.value,
@@ -11246,7 +11431,7 @@ function checkNotifications() {
 
             // Send if remaining <= triggerMs AND not too far past (within 60 min window)
             if (remaining <= triggerMs && remaining > triggerMs - 60 * 60 * 1000) {
-                sendNotification(item, t.label, remaining <= 0, t.repeat, item.id);
+                sendNotification(item, t.label, remaining <= 0, item.id);
                 sentNotifications.add(notifKey);
                 saveSentNotifications();
                 // Also write to IndexedDB so SW doesn't duplicate in background
@@ -11256,7 +11441,10 @@ function checkNotifications() {
     });
 }
 
-function sendNotification(item, label, isOverdue, shouldRepeat, itemId) {
+// 🔧 v181: پارامتر shouldRepeat و کل بلوک تکرار حذف شد — فرایند تکرار
+// ۳ ساعته و ۱۵ دقیقه‌ای (v140) که ۱۵ ثانیه بعد اعلان را تکرار می‌کرد، کامل
+// پاک شد. اکنون هر اعلان فقط یک‌بار ارسال می‌شود.
+function sendNotification(item, label, isOverdue, itemId) {
     try {
         const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
         const title = isOverdue
@@ -11287,33 +11475,7 @@ function sendNotification(item, label, isOverdue, shouldRepeat, itemId) {
         var _notifSettings = getNotifSettings();
         if (_notifSettings.soundType === 'beeps') playShortBeeps();
         else playNotificationSound();
-        // 🔧 v140: تکرار اعلان (فقط برای h3 و m15 — ۱۵ ثانیه بعد)
-        if (shouldRepeat) {
-            setTimeout(function() {
-                try {
-                    const n2 = new Notification(title + ' (تکرار)', {
-                        body: body + ' — تکرار',
-                        tag: item.id + '_' + label + '_repeat',
-                        dir: 'rtl',
-                        lang: 'fa-IR',
-                        requireInteraction: true,
-                        vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300, 100, 300],
-                        silent: false
-                    });
-                    n2.onclick = () => {
-                        window.focus();
-                        n2.close();
-                        expandedId = item.id;
-                        render();
-                    };
-                    // پخش صدا برای تکرار هم
-                    playNotificationSound();
-                    console.log('[Notif] Repeat notification sent');
-                } catch(e) {
-                    console.warn('[Notif] Repeat failed:', e);
-                }
-            }, 15000);  // ۱۵ ثانیه بعد
-        }
+        // 🔧 v181: بلوک تکرار (که برای h3 و m15 بود) حذف شد — دیگر تکراری نیست
     } catch(e) {
         console.error('Notification error:', e);
     }
@@ -15295,8 +15457,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 🔧 v147: به‌روزرسانی دکمه‌های شناور وقتی برگشتیم
             _refreshFloatingAddBtn();
             refreshFloatingContactBtn();
+            // 🔧 v184: وقتی کاربر به برنامه برمی‌گردد، چک کن آیا نسخهٔ جدیدی
+            // از گیت‌هاب موجود است — SW در پس‌زمینه کش را به‌روزرسانی می‌کند.
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
+            }
         }
     });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔧 v184: AUTO-UPDATE FROM GITHUB
+    // برنامه هنگام بارگذاری، هنگام بازگشت کاربر (visibilitychange)، و هر
+    // ۳۰ دقیقه به SW پیام UPDATE_CACHE می‌فرستد. SW در پس‌زمینه آخرین
+    // نسخهٔ HTML و APP_SHELL را از گیت‌هاب دانلود و در کش ذخیره می‌کند.
+    // اگر آفلاین باشد، نادیده گرفته می‌شود — برنامه از نسخهٔ کش‌شده
+    // (حافظهٔ داخلی موبایل/کامپیوتر) ادامه می‌دهد، حتی برای روزها و ماه‌ها.
+    // ─────────────────────────────────────────────────────────────────────
+    // هنگام بارگذاری اولیه — بعد از ۵ ثانیه (تا UI کامل بارگذاری شود)
+    setTimeout(function() {
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
+        }
+    }, 5000);
+    // هر ۳۰ دقیقه چک کن
+    setInterval(function() {
+        if (navigator.serviceWorker.controller && navigator.onLine) {
+            navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
+        }
+    }, 30 * 60 * 1000);
 
     // ─────────────────────────────────────────────────────────────────────
     // PERIODIC UI REFRESH (every 30s) — re-render for time-based reordering

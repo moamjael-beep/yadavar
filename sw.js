@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v180: هماهنگ با APP_VERSION در HTML (v180 notes insert at cursor + preserve scroll).
-const CACHE_NAME = 'yadavar-cache-v180';
+// 🔧 v185: هماهنگ با APP_VERSION در HTML (v185 SW stale-while-revalidate cache-first).
+const CACHE_NAME = 'yadavar-cache-v185';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
@@ -225,9 +225,46 @@ self.addEventListener('activate', (event) => {
       } catch(e) {
         console.warn('[SW] Failed to notify clients:', e);
       }
+      // 🔧 v184: به‌روزرسانی proactive کش — آخرین نسخهٔ HTML را در پس‌زمینه
+      // دانلود و در کش ذخیره کن تا دفعهٔ بعد (حتی اگر کاربر آفلاین شود)
+      // نسخهٔ تازه در دسترس باشد. این کار best-effort است — اگر شبکه شکست
+      // بخورد، نادیده گرفته می‌شود.
+      updateAppShellInBackground();
     })()
   );
 });
+
+// 🔧 v184: به‌روزرسانی proactive کش در پس‌زمینه
+// آخرین نسخهٔ HTML + APP_SHELL را از گیت‌هاب دانلود و در کش ذخیره می‌کند.
+// این تابع best-effort است — اگر شبکه شکست بخورد (آفلاین)، نادیده گرفته می‌شود.
+// این تابع توسط activate event و پیام UPDATE_CACHE صدا زده می‌شود.
+async function updateAppShellInBackground() {
+  try {
+    console.log('[SW] Background app shell update started');
+    const cache = await caches.open(CACHE_NAME);
+    // آخرین HTML را با cache: no-store بگیر (همیشه تازه)
+    const htmlRes = await fetch('./speech-to-text-reminder.html', { cache: 'no-store' });
+    if (htmlRes && htmlRes.ok) {
+      // با URL تمیز (بدون کوئری) در کش ذخیره کن
+      await cache.put(new Request('./speech-to-text-reminder.html'), htmlRes);
+      console.log('[SW] Background update: HTML cached');
+    }
+    // APP_SHELL的其他 فایل‌ها هم به‌روزرسانی کن (best-effort)
+    // فقط فایل‌های same-origin — CDN فونت را نادیده بگیر
+    const shellPromises = APP_SHELL.filter(url => !url.startsWith('http')).map(async function(url) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res && res.ok) {
+          await cache.put(new Request(url), res);
+        }
+      } catch(e) { /* best-effort — نادیده بگیر */ }
+    });
+    await Promise.all(shellPromises);
+    console.log('[SW] Background app shell update done');
+  } catch(e) {
+    console.log('[SW] Background update skipped (offline or error):', e.message);
+  }
+}
 
 
 // ════════════════════════════════════════════════════════════════════
@@ -308,12 +345,61 @@ self.addEventListener('fetch', (event) => {
   // ──────────────────────────────────────────────────────────────────
   if (isSameOrigin) {
     if (isHTMLRequest) {
-      // ─── HTML: «اول شبکه» ───
-      // اول از گیت‌هاب بخوان تا نسخهٔ تازه باشد. اگر شکست خورد، از
-      // حافظهٔ پنهان (آفلاین) استفاده کن. در صورت موفقیت، نسخهٔ تازه
-      // را در حافظهٔ پنهان هم ذخیره کن.
+      // ─── HTML: «stale-while-revalidate» (v185) ───
+      // 🔧 v185: استراتژی تغییر کرد — قبلاً «اول شبکه» بود (منتظر گیت‌هاب
+      // می‌ماند)، اکنون «اول حافظه، سپس به‌روزرسانی پس‌زمینه» است.
+      //
+      // رفتار:
+      //   ۱) اگر نسخهٔ کش‌شده موجود است → فوراً آن را بده (بدون انتظار شبکه).
+      //      برنامه در میلی‌ثانیه بالا می‌آید — حتی اگر آفلاین باشد.
+      //   ۲) در پس‌زمینه (بدون مسدود کردن صفحه)، آخرین نسخه را از گیت‌هاب
+      //      بگیر. اگر با نسخهٔ کش‌شده فرق داشت، کش را به‌روزرسانی کن و
+      //      پیام RELOAD_PLEASE به صفحه بفرست تا خودکار رفرش شود.
+      //   ۳) اگر نسخهٔ کش‌شده موجود نیست (اولین بار) → از شبکه بخوان.
+      //   ۴) اگر نه شبکه نه حافظه → صفحهٔ آفلاین نشان بده.
+      //
+      // این استراتژی مطابق درخواست کاربر است:
+      // «اول برنامه در کش اجرا شود و منتظر تست اینترنت نشود. بعد که نسخهٔ
+      //  آفلاین بالا آمد و به سرعت لود شد، حالا در پس‌زمینه اگر دسترسی به
+      //  آخرین نسخه در گیت‌هاب پیدا کرد، آن را بصورت اتوماتیک رفرش کند.»
       event.respondWith(
         (async () => {
+          // ۱) فوراً از کش بخوان (اگر موجود است)
+          const cached = await caches.match(event.request);
+          if (cached) {
+            // ۲) در پس‌زمینه، آخرین نسخه را از گیت‌هاب چک کن
+            event.waitUntil((async () => {
+              try {
+                const freshRes = await fetch(event.request, { cache: 'no-store' });
+                if (freshRes && freshRes.ok) {
+                  // مقایسهٔ متن کامل — اگر فرق داشت، نسخهٔ جدید است
+                  const freshText = await freshRes.clone().text();
+                  const cachedText = await cached.clone().text();
+                  if (freshText !== cachedText) {
+                    // نسخهٔ جدید — کش را به‌روزرسانی کن
+                    const cache = await caches.open(CACHE_NAME);
+                    await cache.put(event.request, freshRes.clone());
+                    console.log('[SW] New version detected from GitHub — cache updated, notifying page to reload');
+                    // به تمام صفحات باز پیام بفرست تا خودکار رفرش شوند
+                    const clientList = await clients.matchAll({ includeUncontrolled: true, type: 'window' });
+                    clientList.forEach(c => c.postMessage({
+                      type: 'RELOAD_PLEASE',
+                      version: CACHE_NAME,
+                      reason: 'new_version_from_github'
+                    }));
+                  } else {
+                    console.log('[SW] Background check: same version — no reload needed');
+                  }
+                }
+              } catch(e) {
+                // آفلاین یا خطا — نادیده بگیر (برنامه از کش ادامه می‌دهد)
+                console.log('[SW] Background version check skipped (offline):', e.message);
+              }
+            })());
+            // کش را فوراً برگردان — بدون انتظار
+            return cached;
+          }
+          // ۳) کش موجود نیست (اولین بار) — از شبکه بخوان
           try {
             const res = await fetch(event.request, { cache: 'no-cache' });
             if (res && (res.ok || res.type === 'opaque')) {
@@ -323,10 +409,7 @@ self.addEventListener('fetch', (event) => {
             }
             return res;
           } catch(e) {
-            // شبکه شکست خورد — از حافظهٔ پنهان بخوان
-            const cached = await caches.match(event.request);
-            if (cached) return cached;
-            // نه شبکه، نه حافظه — صفحهٔ آفلاین نشان بده
+            // ۴) نه شبکه نه حافظه — صفحهٔ آفلاین نشان بده
             return new Response(
               '<!DOCTYPE html><html><head><meta charset="utf-8"><title>آفلاین</title>' +
               '<body style="font-family:Tahoma;direction:rtl;text-align:center;padding:50px;">' +
@@ -505,6 +588,16 @@ self.addEventListener('message', (event) => {
       event.waitUntil(checkDeadlinesBackground());
       break;
 
+    // 🔧 v184: پیام «کش را به‌روزرسانی کن» — صفحه HTML این پیام را
+    // هنگام بارگذاری، هنگام بازگشت کاربر به برنامه (visibilitychange)،
+    // و هر ۳۰ دقیقه می‌فرستد. SW در پس‌زمینه آخرین نسخهٔ HTML و
+    // APP_SHELL را از گیت‌هاب دانلود و در کش ذخیره می‌کند.
+    // این کار best-effort است — اگر آفلاین باشد، نادیده گرفته می‌شود.
+    case 'UPDATE_CACHE':
+      console.log('[SW] UPDATE_CACHE received — checking for latest version from GitHub');
+      event.waitUntil(updateAppShellInBackground());
+      break;
+
     // پیام «اعلان تست بفرست» — برای تست دستی
     case 'TRIGGER_TEST_NOTIFICATION':
       event.waitUntil(
@@ -554,15 +647,37 @@ self.addEventListener('message', (event) => {
 // را دوبار نمی‌فرستد (به‌ کمک STORE_NOTIF_LOG).
 
 // سطوح زمانی برای اعلان: هر کدام فقط یک‌بار فرستاده می‌شوند.
-// 🔧 v140: طبق درخواست کاربر، فقط ۳ سطح + تکرار دو بار برای ۳ ساعت و ۱۵ دقیقه
-//   h3  : ۳ ساعت قبل — تکرار می‌شود (۲ بار با فاصلهٔ ۱۵ ثانیه)
-//   m15 : ۱۵ دقیقه قبل — تکرار می‌شود (۲ بار با فاصلهٔ ۱۵ ثانیه)
-//   due : در لحظهٔ سررسید
-const NOTIF_THRESHOLDS = [
-  { minutes: 180, key: 'h3',  label: '۳ ساعت',  repeat: true  },  // ۳ ساعت قبل، تکرار
-  { minutes: 15,  key: 'm15', label: '۱۵ دقیقه', repeat: true  },  // ۱۵ دقیقه قبل، تکرار
-  { minutes: 0,   key: 'due', label: 'سررسید',  repeat: false }   // در لحظهٔ سررسید
-];
+// 🔧 v183: hardcoded NOTIF_THRESHOLDS حذف شد — قبلاً ۳ ساعت و ۱۵ دقیقه و سررسید
+// به‌طور ثابت اینجا تعریف شده بود و بدون تنظیم کاربر زنگ می‌زد. اکنون SW
+// تنظیمات کاربر را از IndexedDB (STORE_BACKUP با کلید 'notif_settings') می‌خواند
+// و فقط همان زمان‌هایی که کاربر انتخاب کرده را در پس‌زمینه اعلان می‌فرستد.
+// اگر کاربر تنظیماتی ذخیره نکرده یا enabled=false باشد، هیچ اعلانی فرستاده نمی‌شود.
+
+// 🔧 v183: خواندن تنظیمات اعلان از IndexedDB
+async function getNotifThresholdsFromIDB() {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_BACKUP], 'readonly');
+      const req = tx.objectStore(STORE_BACKUP).get('notif_settings');
+      req.onsuccess = () => {
+        const settings = req.result;
+        if (!settings || !settings.enabled || !settings.times || settings.times.length === 0) {
+          resolve([]);
+          return;
+        }
+        // تبدیل تنظیمات کاربر به فرمت thresholds (بدون repeat — v181)
+        resolve(settings.times.map(function(t) {
+          return { minutes: t.minutes, key: t.key, label: t.label };
+        }));
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch(e) {
+    console.warn('[SW] Failed to read notif settings from IDB:', e);
+    return [];
+  }
+}
 
 async function checkDeadlinesBackground() {
   try {
@@ -572,7 +687,15 @@ async function checkDeadlinesBackground() {
     const sentSet = new Set(notifLogEntries.map(e => e.key));
     const now = Date.now();
 
-    console.log(`[SW] Background check: ${reminders.length} reminders, ${sentSet.size} sent notifs`);
+    // 🔧 v183: thresholds را از تنظیمات کاربر (IndexedDB) بخوان — نه hardcoded
+    const thresholds = await getNotifThresholdsFromIDB();
+    if (thresholds.length === 0) {
+      // کاربر تنظیماتی ذخیره نکرده یا enabled=false — هیچ اعلانی نفرست
+      console.log('[SW] No notif settings found (user has not configured notifications) — skipping background check');
+      return 0;
+    }
+
+    console.log(`[SW] Background check: ${reminders.length} reminders, ${thresholds.length} thresholds, ${sentSet.size} sent notifs`);
 
     let notificationsSent = 0;
 
@@ -580,11 +703,13 @@ async function checkDeadlinesBackground() {
     for (const item of reminders) {
       // یادآورهای انجام‌شده را رد کن
       if (item.done) continue;
+      // 🔧 v181: تسک‌های لغوشده هم اعلان نمی‌گیرند
+      if (item.cancelled == true) continue;
       const deadlineMs = new Date(item.deadline).getTime();
       if (isNaN(deadlineMs)) continue;
       const remaining = deadlineMs - now;
 
-      for (const t of NOTIF_THRESHOLDS) {
+      for (const t of thresholds) {
         const triggerMs = t.minutes * 60 * 1000;
         const notifKey = `${item.id}_${t.key}`;
         // اگر این اعلان قبلاً فرستاده شده، رد کن
@@ -647,32 +772,7 @@ async function checkDeadlinesBackground() {
               console.warn('[SW] Failed to send sound message:', e);
             }
 
-            // 🔧 v140: تکرار اعلان (فقط برای h3 و m15 — دو بار با فاصلهٔ ۱۵ ثانیه)
-            if (t.repeat) {
-              setTimeout(async () => {
-                try {
-                  await self.registration.showNotification(title + ' (تکرار)', {
-                    ...notifOptions,
-                    tag: `reminder-${item.id}-repeat`,
-                    body: body + ' — تکرار'
-                  });
-                  console.log('[SW] Repeat notification sent for', notifKey);
-                  // پیام دوباره برای پخش صدا
-                  try {
-                    const clientList2 = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-                    clientList2.forEach(c => c.postMessage({
-                      type: 'PLAY_NOTIFICATION_SOUND',
-                      title: title + ' (تکرار)',
-                      body: body,
-                      itemId: item.id,
-                      threshold: t.key
-                    }));
-                  } catch(e) {}
-                } catch(e) {
-                  console.warn('[SW] Repeat notification failed:', e);
-                }
-              }, 15000);  // ۱۵ ثانیه بعد
-            }
+            // 🔧 v181: بلوک تکرار (که برای h3 و m15 بود) حذف شد — دیگر تکراری نیست
           } catch(e) {
             console.error('[SW] Failed to show notification:', e);
           }
