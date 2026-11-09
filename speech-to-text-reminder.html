@@ -5221,7 +5221,34 @@ body.locked .header-actions button {
 //         ۷) باگ ذخیرهٔ مقدار سفارشی نامعتبر — قبلاً به‌جای قطع کل ذخیره،
 //            فقط همان گزینه را رد می‌کرد و بقیه را ذخیره می‌کرد
 //         ۸) جلوگیری از اعلان تکراری وقتی تریگر زمان‌بندی‌شده قبلاً نمایش داده شده
-const APP_VERSION = 'v199-2026-11-09-bell-notif-fix-sync-idb-mirror';
+//
+//   v200 - FIX: NOTIFICATIONS NEVER APPEARED ON ANDROID — EVEN INSIDE THE APP:
+//         کاربر گزارش کرد: «هنوز نوتیف ها اعلام نمیشود و زنگ نمیزند حتی داخل برنامه که هستم»
+//         🔍 ریشهٔ اصلی (با تست Playwright تأیید شد):
+//         ۰) ⚠️ ریشهٔ اصلی — تابع sendNotification صفحه از new Notification() استفاده
+//            می‌کرد. در Chrome اندروید این سازنده مجاز نیست (Illegal constructor —
+//            فقط ServiceWorkerRegistration.showNotification کار می‌کند). خطا بی‌صدا
+//            catch می‌شد و checkNotifications بدون توجه به نتیجه، کلید اعلان را در
+//            sentNotifications + notif_log ثبت می‌کرد → اعلان «فرستاده‌شده» علامت
+//            می‌خورد بدون اینکه هیچ اعلانی نمایش داده شود — و هرگز هم تکرار نمی‌شد!
+//         ۱) کلیدهای notif_log (شکل id_threshold) به سررسید وابسته نیستند — وقتی
+//            کاربر سررسید تسک را ویرایش می‌کرد یا تسک انجام‌شده را دوباره باز می‌کرد،
+//            اعلان جدید هرگز نمی‌آمد.
+//         ۲) تشخیص تکراری تریگر با getNotifications({tag:'trig-'+key}) هرگز match
+//            نمی‌شد چون تگ واقعی تریگرها پسوند ts دارد ('trig-...-ts') — هم در صفحه
+//            هم در SW.
+//         🔧 اضافه/اصلاح شد:
+//         ۱) sendNotification → async و برگشت true/false: اول SW showNotification
+//            (اندروید + دسکتاپ، حتی با صفحهٔ باز) و فقط در نبود SW سازندهٔ صفحه؛
+//            کلید فقط بعد از نمایش موفق ثبت می‌شود — نمایش ناموفق = تلاش مجدد
+//         ۲) clearNotifLogForItem — پاک‌کردن تاریخچهٔ اعلان‌های یک تسک هنگام
+//            ویرایش سررسید یا بازکردن دوبارهٔ تسک انجام‌شده (حافظه + IndexedDB)
+//         ۳) prefix-match تگ‌های تریگر در صفحه و SW (یک fetch به‌جای هر آیتم)
+//         ۴) خطاهای گذرای تشخیص صوت (no-speech/network/aborted/audio-capture)
+//            هنگام ضبط kick-out نمی‌کنند — onend دوباره شروع می‌کند → «ادامهٔ
+//            ضبط پس از خروج» واقعاً کار می‌کند (kick-out فقط برای خطای مجوز)
+//         ۵) هر ۲ دقیقه CHECK_DEADLINES + SCHEDULE_TRIGGERS به SW (ماندگاری حافظه)
+const APP_VERSION = 'v200-2026-11-09-notif-sw-shownotification-fix';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -7699,6 +7726,30 @@ function initRecognition() {
 
     recognition.onerror = (event) => {
         console.error('Recognition error:', event.error, 'protocol:', location.protocol);
+        // 🔧 v200: خطاهای گذرا هنگام ضبط → ضبط را نمی‌رانیم؛ onend دوباره شروع می‌کند.
+        // در پس‌زمینه Chrome ضبط را با no-speech/aborted/network قطع می‌کند — اگر
+        // kick-out می‌کردیم «ادامهٔ ضبط پس از خروج» هرگز کار نمی‌کرد.
+        // kick-out فقط برای خطاهای فجیع (رد مجوز) انجام می‌شود.
+        var _fatal = (event.error === 'not-allowed' || event.error === 'service-not-allowed');
+        var _transient = ['no-speech', 'network', 'aborted', 'audio-capture'].indexOf(event.error) !== -1;
+        if (isRecording && _transient && !_fatal) {
+            // متن جلسهٔ فعلی حفظ شود
+            if (currentSessionText.trim()) {
+                allFinalText = (allFinalText + ' ' + currentSessionText).trim().replace(/\s+/g, ' ');
+                currentSessionText = '';
+            }
+            // اطلاع‌رسانی با محدودیت زمانی — نه اسپم در هر تلاش مجدد
+            if (event.error === 'network' || event.error === 'audio-capture') {
+                var _now = Date.now();
+                if (_now - (window._lastSpeechErrToast || 0) > 15000) {
+                    window._lastSpeechErrToast = _now;
+                    showToast(event.error === 'network'
+                        ? 'ارتباط سرور صوت قطع شد — تلاش مجدد خودکار...'
+                        : 'میکروفون در دسترس نیست — تلاش مجدد خودکار...');
+                }
+            }
+            return; // onend → restart خودکار
+        }
         const errMsg = getSpeechErrorMessage(event.error);
         if (errMsg) showToast(errMsg);
         if (isRecording) {
@@ -9034,6 +9085,12 @@ function saveItem() {
             // Update the parent's text and deadline
             items[idx].text = newText;
             items[idx].deadline = newDeadline;
+            // 🔧 v200: اگر سررسید عوض شد، تاریخچهٔ اعلان‌های این تسک پاک شود
+            // وگرنه اعلان جدید هرگز نمی‌آید (کلید id_threshold به سررسید وابسته نیست)
+            if (oldDeadline !== newDeadline) {
+                clearNotifLogForItem(editTaskId);
+                requestSwDeadlineCheck();
+            }
             // 🔧 v134: به‌روزرسانی شخص مرتبط با تسک
             const formContactId = document.getElementById('taskContactId') ? document.getElementById('taskContactId').value : '';
             if (formContactId) {
@@ -10778,6 +10835,8 @@ function toggleDone(id) {
         // prototype chain issues, or stale cached objects).
         try { delete item.completedAt; } catch(e) {}
         item.completedAt = null;
+        // 🔧 v200: تسک دوباره باز شد — اعلان‌های قبلی‌اش دوباره معتبر شوند
+        clearNotifLogForItem(id);
         // Also remove any legacy "completedAt" variants that might exist
         if ('completedAt' in item && item.completedAt) {
             // Force-clear if somehow still set
@@ -11353,6 +11412,47 @@ function clearSentNotificationsFor(items) {
     // Note: IDB entries for deleted items will be cleaned up by SW's periodic cleanup
 }
 
+// 🔧 v200: حذف ردیف‌های notif_log یک تسک از IndexedDB (منبع سرویس‌ورکر)
+async function idbDeleteNotifLogByPrefix(itemId) {
+    if (!idbAvailable()) return;
+    try {
+        const db = await openIDB();
+        const prefix = itemId + '_';
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NOTIF_LOG], 'readwrite');
+            const store = tx.objectStore(STORE_NOTIF_LOG);
+            const req = store.openCursor();
+            req.onsuccess = (e) => {
+                const cur = e.target.result;
+                if (!cur) return;
+                if (String(cur.key).indexOf(prefix) === 0) {
+                    try { cur.delete(); } catch(e2) {}
+                }
+                cur.continue();
+            };
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch(e) { console.warn('[Notif] idbDeleteNotifLogByPrefix failed', e); }
+}
+
+// 🔧 v200: پاک‌کردن تاریخچهٔ اعلان‌های یک تسک — هم از حافظهٔ صفحه و هم از IDB.
+// چرا؟ کلیدها به شکل id_threshold هستند و به سررسید وابسته نیستند؛ اگر این
+// تاریخچه پاک نشود، بعد از ویرایش سررسید یا بازکردن دوبارهٔ تسک، اعلان جدید
+// هرگز نمی‌آید («تنظیم میکنم عمل نمیکند» — حالت دوم این باگ).
+function clearNotifLogForItem(itemId) {
+    if (!itemId) return;
+    const prefix = itemId + '_';
+    // ۱) حذف از حافظهٔ صفحه
+    [...sentNotifications].forEach(k => {
+        if (k.indexOf(prefix) === 0) sentNotifications.delete(k);
+    });
+    saveSentNotifications();
+    // ۲) حذف از IDB تا SW هم دوباره اعلان بفرستد
+    idbDeleteNotifLogByPrefix(itemId);
+    console.log('[Notif] Cleared notif log for item', itemId);
+}
+
 // ════════════════════════════════════════════════════════════════════
 // 🔔 بخش ۱۴: اعلان‌ها — v148 (زنگوله toggle + تنظیمات قابل انتخاب)
 // ════════════════════════════════════════════════════════════════════
@@ -11712,6 +11812,21 @@ async function checkNotifications() {
     const items = getDB();
     const now = Date.now();
 
+    // 🔧 v200: تگ‌های اعلان‌های در حال نمایش — یک‌بار در ابتدا خوانده می‌شود
+    // (به‌جای یک fetch برای هر آیتم × آستانه). prefix-match درست انجام می‌شود
+    // چون تگ واقعی تریگرها پسوند ts دارد ('trig-...-ts') و match دقیقِ قبلی
+    // هرگز پیدا نمی‌شد.
+    let swNotifTags = [];
+    try {
+        if ('serviceWorker' in navigator) {
+            var _reg0 = await navigator.serviceWorker.getRegistration();
+            if (_reg0) {
+                const _shown0 = await _reg0.getNotifications();
+                swNotifTags = (_shown0 || []).map(n => n.tag || '');
+            }
+        }
+    } catch(e) {}
+
     for (const item of items) {
         if (item.done) continue;
         // 🔧 v140: تسک‌های لغوشده هم اعلان نمی‌گیرند
@@ -11730,29 +11845,26 @@ async function checkNotifications() {
             // نشان داده نمی‌شد («تنظیم میکنم عمل نمیکند»). حالا اگر آستانه در
             // ۲۴ ساعت گذشته رد شده باشد، هنگام باز شدن اعلان جبرانی می‌آید.
             if (remaining <= triggerMs && remaining > triggerMs - 24 * 60 * 60 * 1000) {
-                // 🔧 v199: اگر اعلانِ تریگرِ زمان‌بندی‌شدهٔ SW همین الان نمایش داده شده،
-                // دوبار نفرست — کلید را ثبت کن و رد شو.
-                var _dup = false;
-                try {
-                    if ('serviceWorker' in navigator) {
-                        var _reg = await navigator.serviceWorker.getRegistration();
-                        if (_reg) {
-                            var _shown = await _reg.getNotifications({ tag: 'trig-' + notifKey });
-                            if (_shown && _shown.length > 0) _dup = true;
-                        }
-                    }
-                } catch(e) {}
-                if (_dup) {
+                // 🔧 v200: اگر اعلانِ تریگرِ زمان‌بندی‌شدهٔ SW همین الان نمایش داده شده،
+                // دوبار نفرست — کلید را ثبت کن و رد شو (prefix-match).
+                if (swNotifTags.some(tag => tag.indexOf('trig-' + notifKey) === 0)) {
                     sentNotifications.add(notifKey);
                     saveSentNotifications();
                     idbPutNotifLog(notifKey);
                     continue;
                 }
-                sendNotification(item, t.label, remaining <= 0, item.id);
-                sentNotifications.add(notifKey);
-                saveSentNotifications();
-                // Also write to IndexedDB so SW doesn't duplicate in background
-                idbPutNotifLog(notifKey);
+                // 🔧 v200: کلید فقط بعد از نمایش موفق ثبت می‌شود — قبلاً حتی وقتی
+                // new Notification در اندروید خطا می‌داد (Illegal constructor)،
+                // کلید ثبت می‌شد و اعلان برای همیشه از دست می‌رفت.
+                var _shown = await sendNotification(item, t.label, remaining <= 0, item.id);
+                if (_shown) {
+                    sentNotifications.add(notifKey);
+                    saveSentNotifications();
+                    // Also write to IndexedDB so SW doesn't duplicate in background
+                    idbPutNotifLog(notifKey);
+                } else {
+                    console.warn('[Notif] show failed for', notifKey, '— retry on next check');
+                }
             }
         }
     }
@@ -11761,41 +11873,80 @@ async function checkNotifications() {
 // 🔧 v181: پارامتر shouldRepeat و کل بلوک تکرار حذف شد — فرایند تکرار
 // ۳ ساعته و ۱۵ دقیقه‌ای (v140) که ۱۵ ثانیه بعد اعلان را تکرار می‌کرد، کامل
 // پاک شد. اکنون هر اعلان فقط یک‌بار ارسال می‌شود.
-function sendNotification(item, label, isOverdue, itemId) {
+// 🔧 v200: نمایش اعلان — async و برگشت true/false (موفق/ناموفق)
+// ⚠️ ریشهٔ اصلی «نوتیف‌ها حتی داخل برنامه عمل نمی‌کنند»:
+//    در Chrome اندروید سازندهٔ new Notification مجاز نیست (Illegal constructor —
+//    فقط ServiceWorkerRegistration.showNotification کار می‌کند). نسخهٔ قبلی خطا
+//    را بی‌صدا می‌بلعید و کلید اعلان بدون نمایش ثبت می‌شد.
+//    اکنون: مسیر اول همیشه SW showNotification است (اندروید + دسکتاپ، حتی وقتی
+//    صفحه باز است) و فقط در نبود SW به سازندهٔ صفحه برمی‌گردیم (دسکتاپ).
+async function sendNotification(item, label, isOverdue, itemId) {
+    const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
+    const title = isOverdue
+        ? `⚠️ سررسید گذشته: ${text}`
+        : `${label} تا سررسید: ${text}`;
+    const body = isOverdue
+        ? `زمان انجام این یادآور گذشته است`
+        : `یادآور شما نزدیک سررسید است`;
+    // 🔧 v200: تگ هماهنگ با SW (reminder-<id>) — کلیک اعلان → SW آن را به صفحه
+    // می‌فرستد تا تسک باز شود؛ نمایش دوباره هم جایگزین می‌شود نه تکراری.
+    const nId = itemId || item.id;
+    const nOpts = {
+        body: body,
+        tag: 'reminder-' + nId,
+        dir: 'rtl',
+        lang: 'fa-IR',
+        // 🔧 v140: requireInteraction برای همه (تا کلیک کاربر پنهان نشود)
+        requireInteraction: true,
+        // 🔧 v140: الگوی لرزش طولانی‌تر و قوی‌تر
+        vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300, 100, 300],
+        silent: false,  // صدای پیش‌فرض اعلان مرورگر پخش شود
+        icon: 'icon-192.png',
+        badge: 'favicon-32.png',
+        data: { itemId: nId }
+    };
+    // مسیر ۱ — سرویس‌ورکر (تنها راه ممکن در اندروید؛ در دسکتاپ هم درست کار می‌کند)
     try {
-        const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
-        const title = isOverdue
-            ? `⚠️ سررسید گذشته: ${text}`
-            : `${label} تا سررسید: ${text}`;
-        const body = isOverdue
-            ? `زمان انجام این یادآور گذشته است`
-            : `یادآور شما نزدیک سررسید است`;
-        // 🔧 v140: تنظیمات اعلان — requireInteraction + vibrate طولانی + silent=false
-        const n = new Notification(title, {
-            body: body,
-            tag: item.id + '_' + label,
-            dir: 'rtl',
-            lang: 'fa-IR',
-            // 🔧 v140: requireInteraction برای همه (تا کلیک کاربر پنهان نشود)
-            requireInteraction: true,
-            // 🔧 v140: الگوی لرزش طولانی‌تر و قوی‌تر
-            vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300, 100, 300],
-            silent: false  // صدای پیش‌فرض اعلان مرورگر پخش شود
-        });
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+                await reg.showNotification(title, nOpts);
+                console.log('[Notif] Shown via SW:', title);
+                // 🔧 v148: پخش صدا بر اساس تنظیمات کاربر (زنگ بلند یا ۵ بوق)
+                // چون این مسیر از صفحه است، SW پیام PLAY_NOTIFICATION_SOUND
+                // نمی‌فرستد — صدا را خود صفحه پخش می‌کند.
+                _playNotifSoundBySetting();
+                return true;
+            }
+        }
+    } catch(e) {
+        console.warn('[Notif] SW showNotification failed:', e);
+    }
+    // مسیر ۲ — سازندهٔ Notification (فقط دسکتاپ؛ در اندروید پشتیبانی نمی‌شود)
+    try {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+        const n = new Notification(title, nOpts);
         n.onclick = () => {
             window.focus();
             n.close();
-            expandedId = item.id;
+            expandedId = nId;
             render();
         };
-        // 🔧 v148: پخش صدا بر اساس تنظیمات کاربر (زنگ بلند یا ۵ بوق)
+        _playNotifSoundBySetting();
+        return true;
+    } catch(e) {
+        console.error('[Notif] Page Notification failed:', e);
+        return false;
+    }
+}
+
+// 🔧 v200: پخش صدای اعلان بر اساس تنظیمات کاربر (کمکی مشترک)
+function _playNotifSoundBySetting() {
+    try {
         var _notifSettings = getNotifSettings();
         if (_notifSettings.soundType === 'beeps') playShortBeeps();
         else playNotificationSound();
-        // 🔧 v181: بلوک تکرار (که برای h3 و m15 بود) حذف شد — دیگر تکراری نیست
-    } catch(e) {
-        console.error('Notification error:', e);
-    }
+    } catch(e) { console.warn('[Notif] Sound failed:', e); }
 }
 
 // Cleanup old sent notifications (older than 30 days)
@@ -15820,6 +15971,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(function() {
         if (navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
+            // 🔧 v200: ماندگاری حافظه — هر ۲ دقیقه SW سررسیدها را هم سمت خودش
+            // بررسی کند + تریگرها را به‌روز نگه دارد (وقتی tab باز است)
+            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+            navigator.serviceWorker.controller.postMessage({ type: 'SCHEDULE_TRIGGERS' });
         }
     }, 2 * 60 * 1000);
 

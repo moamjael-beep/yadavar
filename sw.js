@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v199: هماهنگ با APP_VERSION (v199 — رفع نوتیفیکیشن‌های زنگوله در پس‌زمینه).
-const CACHE_NAME = 'yadavar-cache-v199';
+// 🔧 v200: هماهنگ با APP_VERSION (v200 — اعلان‌ها در اندروید با SW showNotification).
+const CACHE_NAME = 'yadavar-cache-v200';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
@@ -832,6 +832,14 @@ async function checkDeadlinesBackground() {
 
     console.log(`[SW] Background check: ${reminders.length} reminders, ${thresholds.length} thresholds, ${sentSet.size} sent notifs`);
 
+    // 🔧 v200: تگ‌های اعلان‌های در حال نمایش — یک‌بار خوانده می‌شود + prefix-match.
+    // قبلاً getNotifications({tag:'trig-'+key}) هرگز match نمی‌شد چون تگ واقعی
+    // تریگرها پسوند ts دارد ('trig-...-ts').
+    let shownTags = [];
+    try {
+      shownTags = (await self.registration.getNotifications()).map(n => n.tag || '');
+    } catch(e) { /* getNotifications همه‌جا نیست — نادیده بگیر */ }
+
     let notificationsSent = 0;
 
     // ۲) روی هر یادآور و هر سطح زمانی بگذر
@@ -850,17 +858,15 @@ async function checkDeadlinesBackground() {
         // اگر این اعلان قبلاً فرستاده شده، رد کن
         if (sentSet.has(notifKey)) continue;
 
-        // 🔧 v199: اگر اعلانِ تریگرِ زمان‌بندی‌شده همین الان نمایش داده شده،
-        // دوبار نفرست — کلید را ثبت کن و رد شو. (تریگرها SW را بیدار
-        // نمی‌کنند، پس اینجا تنها جای تشخیصشان همین چک است.)
+        // 🔧 v200: اگر اعلانِ تریگرِ زمان‌بندی‌شده همین الان نمایش داده شده،
+        // دوبار نفرست — کلید را ثبت کن و رد شو (prefix-match روی تگ).
         try {
-          const trigShown = await self.registration.getNotifications({ tag: 'trig-' + notifKey });
-          if (trigShown && trigShown.length > 0) {
+          if (shownTags.some(tag => tag.indexOf('trig-' + notifKey) === 0)) {
             await idbPut(STORE_NOTIF_LOG, { key: notifKey, ts: now });
             sentSet.add(notifKey);
             continue;
           }
-        } catch(e) { /* getNotifications همه‌جا نیست — نادیده بگیر */ }
+        } catch(e) { /* نادیده بگیر */ }
 
         // در بررسی پس‌زمینه (که کم‌تر اجرا می‌شود)، پنجرهٔ زمانی وسیع‌تر
         // می‌گیریم (تا ۲۴ ساعت بعد از آستانه) تا اگر سرویس ورکر دیر بیدار
