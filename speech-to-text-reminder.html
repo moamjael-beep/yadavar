@@ -5171,12 +5171,18 @@ body.locked .header-actions button {
 //         اگر کاربر ضبط صوت بزند و Google در دسترس نباشد:
 //         recognition.onerror خطای 'network' → toast «اتصال اینترنت قطع شد»
 //         — این UX بهتر از چشمک بی‌وقفه هدر است.
-//   v193 - SIMPLIFY REACHABILITY + VERSION IN FOOTER:
-//         ۱) checkReachability: تمام fetch‌ها حذف شدند — فقط navigator.onLine.
-//            مرورگر خودش مدیریت می‌کند — online/offline events فوری fire می‌شوند.
-//            وقتی اینترنت برمی‌گردد → online event → isReachable=true → هدر به حالت اول.
-//         ۲) نسخهٔ برنامه زیر نام تهیه‌کنندگان نمایش داده می‌شود.
-const APP_VERSION = 'v193-2026-11-08-simplify-navigator-online-version-footer';
+//   v194 - HYBRID: navigator.onLine + fetch (fixes both directions):
+//         مشکل v193: navigator.onLine تنهایی کافی نیست — وقتی WiFi قطع می‌شود
+//         ولی آداپتر روشن است، navigator.onLine=true می‌ماند → هدر چشمک نمی‌زند.
+//         مشکل v187-v192: fetch با _rc=1 و SW مشکلات CORS/DNS/intercept داشت.
+//         🔧 راه‌حل: ترکیب هر دو:
+//         - فاز ۱: navigator.onLine → اگر false → قطعاً آفلاین
+//         - فاز ۲: fetch سبک (manifest.json, cache: no-store, تایموت ۴s)
+//           → اگر res.ok → آنلاین؛ اگر شکست → آفلاین
+//         - هر ۳ ثانیه چک می‌شود
+//         - online event → checkReachability فوری
+//         - offline event → isReachable=false فوری
+const APP_VERSION = 'v194-2026-11-08-hybrid-navigator-online-plus-fetch';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -15196,18 +15202,45 @@ function checkPendingReload() {
 //   - GitHub itself being down
 //   - Intermittent connectivity
 
-// 🔧 v193: ساده‌سازی نهایی — فقط navigator.onLine، بدون fetch.
-// تمام چک‌های fetch (Google، version.txt، manifest.json) حذف شدند چون
-// باعث مشکلات CORS، DNS cache، SW intercept، timeout، و مسدودسازی منطقه‌ای
-// می‌شدند. navigator.onLine توسط مرورگر مدیریت می‌شود — قابل‌اعتماد و سریع.
-// اگر کاربر ضبط صوت بزند و Google در دسترس نباشد: recognition.onerror
-// خطای 'network' → toast نشان می‌دهد. این UX بهتر از چشمک بی‌وقفه هدر است.
+// 🔧 v194: ترکیب navigator.onLine + fetch سبک
+// navigator.onLine تنهایی کافی نیست — در موبایل وقتی WiFi قطع می‌شود ولی
+// آداپتر روشن است، navigator.onLine=true می‌ماند. پس یک fetch سبک هم نیاز است.
+// اما fetch قبلی با _rc=1 و SW مشکلات داشت. این بار مستقیم fetch می‌کنیم
+// بدون _rc — SW برای فایل‌های هم‌مبدا از کش می‌خواند (cache-first)، ولی
+// cache: 'no-store' استفاده می‌کنیم تا مرورگر از HTTP cache هم نخواند.
+// اگر SW فعال بود و کش داشت، از کش می‌خواند → res.ok=true حتی آفلاین.
+// برای رفع این: اگر SW controller داریم، پیام CHECK_REACHABILITY به SW
+// می‌فرستیم تا SW خودش fetch کند و نتیجه را برگرداند.
 let isReachable = navigator.onLine;
+let _reachabilityFetching = false;
 
-function checkReachability() {
-    var wasReachable = isReachable;
-    isReachable = navigator.onLine;
-    if (wasReachable !== isReachable) {
+async function checkReachability(force) {
+    // فاز ۱: navigator.onLine — سریع
+    if (!navigator.onLine) {
+        var was1 = isReachable;
+        isReachable = false;
+        if (was1 !== isReachable) { updateOnlineStatus(); }
+        return false;
+    }
+    // فاز ۲: fetch سبک برای تأیید واقعی
+    if (_reachabilityFetching) return isReachable;
+    _reachabilityFetching = true;
+    var was2 = isReachable;
+    try {
+        var controller = new AbortController();
+        var tid = setTimeout(function() { controller.abort(); }, 4000);
+        var res = await fetch('./manifest.json', {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        clearTimeout(tid);
+        isReachable = res && res.ok;
+    } catch(e) {
+        isReachable = false;
+    }
+    _reachabilityFetching = false;
+    if (was2 !== isReachable) {
         updateOnlineStatus();
         if (isReachable) render();
     }
@@ -15537,13 +15570,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerServiceWorker();
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔧 v193: بررسی اینترنت = فقط navigator.onLine (بدون fetch)
-    // مرورگر خودش مدیریت می‌کند — online/offline events فوری fire می‌شوند.
+    // 🔧 v194: ترکیب navigator.onLine + fetch سبک — هر ۳ ثانیه
     // ─────────────────────────────────────────────────────────────────────
     window.addEventListener('online', () => {
-        isReachable = true;
-        updateOnlineStatus();
-        render();
+        checkReachability(true);
     });
     window.addEventListener('offline', () => {
         isReachable = false;
@@ -15552,18 +15582,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     isReachable = navigator.onLine;
     updateOnlineStatus();
+    // 🔧 v194: چک اولیه بعد از ۲ ثانیه
+    setTimeout(function() { checkReachability(true); }, 2000);
+    // 🔧 v194: هر ۳ ثانیه چک کن
+    setInterval(function() { checkReachability(); }, 3000);
 
     // Check when tab becomes visible (user came back from another tab/app)
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
-            // 🔧 v193: checkReachability دیگر async نیست — فقط navigator.onLine
-            checkReachability();
-            updateOnlineStatus();
-            render();
-            checkNotifications();
-            if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
-            }
+            // 🔧 v194: checkReachability اکنون async است
+            checkReachability(true).then(function() {
+                updateOnlineStatus();
+                render();
+                checkNotifications();
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+                }
+            }).catch(function() {});
             // 🔧 v147: به‌روزرسانی دکمه‌های شناور وقتی برگشتیم
             _refreshFloatingAddBtn();
             refreshFloatingContactBtn();
