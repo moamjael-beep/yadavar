@@ -5129,7 +5129,19 @@ body.locked .header-actions button {
 //         صرفه‌جویی: هر ۲ دقیقه فقط 50 bytes دانلود می‌شود (به‌جای 700KB).
 //         وقتی نسخهٔ جدید موجود باشد، 700KB دانلود می‌شود + خودکار رفرش.
 //         ⚠️ هنگام انتشار نسخهٔ جدید: version.txt را هم به‌روزرسانی کنید.
-const APP_VERSION = 'v189-2026-11-08-lightweight-version-check';
+//   v190 - FIX: HEADER KEEPS BLINKING WHEN INTERNET RETURNS:
+//         علت باگ: SW درخواست checkReachability به Google را intercept می‌کرد
+//         و وقتی Google در دسترس نبود، یک Response 503 برمی‌گرداند (از catch).
+//         چون fetch خطا نمی‌داد، isReachable=true می‌شد — اما این Response
+//         از نوع 'basic' بود نه 'opaque'. قبلاً type را بررسی نمی‌کردیم.
+//         🔧 رفع:
+//         - _rc=1 به URL Google اضافه شد → SW کش را دور می‌زند و مستقیم
+//           به شبکه می‌رود. اگر Google در دسترس نباشد، SW یک 503 برمی‌گرداند.
+//         - بررسی res.type: فقط 'opaque' = موفق (Google واقعاً در دسترس است).
+//           غیر opaque (503 از SW) = ناموفق.
+//         - تایموت: ۲s → ۵s (VPN ها ممکن است کند باشند — ۲s خیلی کوتاه بود).
+//         - اگر اینترنت برگشت: render() هم صدا زده می‌شود تا UI به‌روز شود.
+const APP_VERSION = 'v190-2026-11-08-fix-header-blink-when-internet-returns';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -15147,20 +15159,14 @@ function checkPendingReload() {
 let isReachable = true; // assume reachable initially (avoid unnecessary flashing on load)
 let lastReachabilityCheck = 0;
 let reachabilityCheckInProgress = false;
-// 🔧 v187: فاصله بررسی از ۱۰s به ۲s کاهش یافت — کاربر درخواست کرد:
-// «تست در دسترس بودن ضبط صوت از ۱۰ به ۲ ثانیه کاهش یابد»
-// «هر ۲ ثانیه چک کند و اگر ضبط صوت در دسترس بود هدر به حالت اول برگردد»
-const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds (was 10s)
-// 🔧 v187: تایموت ۲s — هم‌اندازهٔ فاصله بررسی
-const REACHABILITY_TIMEOUT = 2000; // 2 seconds timeout
-// 🔧 v187: endpoint به Google تغییر یافت — کاربر تأکید کرد:
-// «تست اینترنت در تمام برنامه با تست قابلیت ضبط صوت انجام پذیرد».
-// Web Speech API از سرورهای Google استفاده می‌کند. پس تست دسترسی به Google
-// = تست قابلیت ضبط صوت. از generate_204 (Google's captive portal detection)
-// استفاده می‌کنیم — بسیار سبک (HTTP 204، بدون body).
-// mode: 'no-cors' استفاده می‌شود تا CORS مشکلی نسازد. اگر fetch بدون خطا
-// برگردد → Google در دسترس است → ضبط صوت قابل استفاده.
-const REACHABILITY_ENDPOINTS = ['https://www.google.com/generate_204'];
+// 🔧 v190: فاصله بررسی ۲ ثانیه (بدون تغییر از v187)
+const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds
+// 🔧 v190: تایموت افزایش یافت — ۲s → ۵s (VPN ها ممکن است کند باشند)
+const REACHABILITY_TIMEOUT = 5000; // 5 seconds timeout (was 2s — too short for VPN)
+// 🔧 v190: endpoint با _rc=1 — تا SW کش را دور بزند و مستقیم به شبکه برود.
+// بررسی res.type === 'opaque' — اگر opaque بود یعنی Google واقعاً در دسترس است.
+// اگر res.type !== 'opaque' (مثلاً 503 از SW) یعنی Google در دسترس نیست.
+const REACHABILITY_ENDPOINTS = ['https://www.google.com/generate_204?_rc=1'];
 
 async function checkReachability(force = false) {
     const now = Date.now();
@@ -15183,34 +15189,40 @@ async function checkReachability(force = false) {
         return false;
     }
 
-    // 🔧 v187: Step 2: تست قابلیت ضبط صوت — fetch به Google (generate_204)
-    // این تست مشخص می‌کند که آیا سرورهای Google (که Web Speech API از آن‌ها
-    // استفاده می‌کند) در دسترس هستند یا نه. اگر در دسترس نباشند، ضبط صوت
-    // کار نمی‌کند و هدر چشمک می‌زند.
+    // 🔧 v190: Step 2: تست قابلیت ضبط صوت — fetch به Google (generate_204)
+    // با _rc=1 تا SW کش را دور بزند. بررسی res.type:
+    //   - 'opaque' → Google در دسترس است (no-cors موفق) → isReachable = true
+    //   - غیر از 'opaque' (مثلاً 'basic' با status 503) → Google در دسترس نیست → false
+    //   - fetch خطا داد (catch) → Google در دسترس نیست → false
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REACHABILITY_TIMEOUT);
         const res = await fetch(REACHABILITY_ENDPOINTS[0], {
             method: 'GET',
-            mode: 'no-cors', // 🔧 v187: no-cors — opaque response کافی است
+            mode: 'no-cors',
             cache: 'no-store',
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        // با mode: 'no-cors'، response از نوع 'opaque' است و res.ok=false.
-        // اما اگر fetch بدون خطا برگردد، یعنی Google در دسترس است.
-        // اگر fetch خطا بدهد (catch)، یعنی Google در دسترس نیست.
-        isReachable = true;
+        // 🔧 v190: فقط opaque = موفق. غیر opaque (503/504 از SW) = ناموفق.
+        if (res.type === 'opaque') {
+            isReachable = true;
+        } else {
+            isReachable = false;
+        }
     } catch(e) {
-        // fetch شکست خورد — Google در دسترس نیست → ضبط صوت کار نمی‌کند
+        // fetch شکست خورد (تایموت یا خطای شبکه) — Google در دسترس نیست
         isReachable = false;
     }
 
     reachabilityCheckInProgress = false;
-    // 🔧 v187: همیشه updateOnlineStatus صدا بزن — نه فقط وقتی تغییر کرده
-    // اینطوری هدر سریع به‌روزرسانی می‌شود وقتی اینترنت برمی‌گردد
+    // 🔧 v190: همیشه updateOnlineStatus صدا بزن اگر وضعیت تغییر کرده
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
+        // 🔧 v190: اگر اینترنت برگشته، render هم بکن تا UI به‌روز شود
+        if (isReachable) {
+            render();
+        }
     }
     return isReachable;
 }

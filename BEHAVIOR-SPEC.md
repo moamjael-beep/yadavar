@@ -47,9 +47,9 @@
 #   ۵. اگر کاربر خواست یک رفتار تغییر کند، این فایل را آپدیت کن
 #   ۶. اگر تغییری برگردانده شد (revert)، در تاریخچهٔ نسخه‌ها ثبت کن
 #
-# آخرین به‌روزرسانی: v189 — ۱۴۰۵ آبان ۱۸
-# نسخهٔ فعلی کد: APP_VERSION = v189-2026-11-08-lightweight-version-check
-#                CACHE_NAME  = yadavar-cache-v189
+# آخرین به‌روزرسانی: v190 — ۱۴۰۵ آبان ۱۸
+# نسخهٔ فعلی کد: APP_VERSION = v190-2026-11-08-fix-header-blink-when-internet-returns
+#                CACHE_NAME  = yadavar-cache-v190
 # ⚠️ فایل version.txt هم باید با هر انتشار نسخهٔ جدید به‌روز شود.
 # ════════════════════════════════════════════════════════════════════
 
@@ -1028,6 +1028,22 @@
 ---
 
 ## 📜 بخش ۱۵: تاریخچهٔ نسخه‌ها
+
+### v190 (۱۴۰۵ آبان ۱۸) — FIX: HEADER KEEPS BLINKING WHEN INTERNET RETURNS
+- **علت باگ:** SW درخواست `checkReachability` به Google را intercept می‌کرد.
+  وقتی Google در دسترس نبود، SW یک `Response 503` برمی‌گرداند (از catch block).
+  چون `fetch` خطا نمی‌داد، `isReachable = true` می‌شد — اما این Response از نوع
+  `'basic'` بود نه `'opaque'`. قبلاً `res.type` بررسی نمی‌شد.
+- **رفع:**
+  - `_rc=1` به URL Google اضافه شد → SW کش را دور می‌زند و مستقیم به شبکه می‌رود
+  - بررسی `res.type === 'opaque'`: فقط opaque = موفق (Google واقعاً در دسترس است).
+    غیر opaque (503 از SW) = ناموفق → `isReachable = false`
+  - تایموت: `۲s → ۵s` (VPN ها ممکن است کند باشند — ۲s خیلی کوتاه بود)
+  - اگر اینترنت برگشت: `render()` هم صدا زده می‌شود تا UI به‌روز شود
+- نتیجه: وقتی اینترنت (Google) برمی‌گردد، هدر سریع به حالت اول برمی‌گردد
+  و ضبط صوت در دسترس قرار می‌گیرد.
+- CACHE_NAME در sw.js به v190 بالا برده شد
+- version.txt به‌روز شد
 
 ### v189 (۱۴۰۵ آبان ۱۸) — LIGHTWEIGHT VERSION CHECK (version.txt ~50 bytes)
 - کاربر درخواست کرد: «راهی برای چک ورژن در دسترس بدون دانلود کل فایل‌های
