@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v188: هماهنگ با APP_VERSION (v188 auto-update check 2min).
-const CACHE_NAME = 'yadavar-cache-v188';
+// 🔧 v189: هماهنگ با APP_VERSION (v189 lightweight version check via version.txt).
+const CACHE_NAME = 'yadavar-cache-v189';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
@@ -59,6 +59,7 @@ const STORE_BACKUP = 'backup';
 const APP_SHELL = [
   './',                                  // صفحهٔ ریشه
   './speech-to-text-reminder.html',      // صفحهٔ اصلی برنامه
+  './version.txt',                       // 🔧 v189: فایل کوچک نسخه (~50 bytes) — برای چک سبک
   './manifest.json',                     // فایل معرفی PWA
   './icon-192.png',                      // آیکون‌های مختلف
   './icon-512.png',
@@ -234,24 +235,60 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 🔧 v184: به‌روزرسانی proactive کش در پس‌زمینه
-// آخرین نسخهٔ HTML + APP_SHELL را از گیت‌هاب دانلود و در کش ذخیره می‌کند.
-// این تابع best-effort است — اگر شبکه شکست بخورد (آفلاین)، نادیده گرفته می‌شود.
-// این تابع توسط activate event و پیام UPDATE_CACHE صدا زده می‌شود.
+// 🔧 v189: به‌روزرسانی سبک کش — اول فقط version.txt (~50 bytes) را چک کن.
+// اگر نسخهٔ یکسان بود → دانلود کامل HTML (700KB+) را صرف‌نظر کن.
+// فقط اگر نسخه فرق داشت → HTML کامل را دانلود و کش را به‌روزرسانی کن.
+// این کار مصرف اینترنت را به شدت کاهش می‌دهد (50 bytes به‌جای 700KB هر ۲ دقیقه).
 async function updateAppShellInBackground() {
   try {
-    console.log('[SW] Background app shell update started');
     const cache = await caches.open(CACHE_NAME);
-    // آخرین HTML را با cache: no-store بگیر (همیشه تازه)
+
+    // 🔧 v189: Step 1 — فایل کوچک version.txt را از گیت‌هاب بگیر (~50 bytes)
+    const versionRes = await fetch('./version.txt?_rc=1', { cache: 'no-store' });
+    if (!versionRes || !versionRes.ok) {
+      console.log('[SW] version.txt fetch failed — skipping update');
+      return;
+    }
+    const freshVersion = (await versionRes.text()).trim();
+
+    // 🔧 v189: Step 2 — نسخهٔ کش‌شده را از cache بخوان
+    const cachedVersionReq = new Request('./version.txt');
+    const cachedVersionRes = await cache.match(cachedVersionReq);
+    let cachedVersion = '';
+    if (cachedVersionRes) {
+      cachedVersion = (await cachedVersionRes.text()).trim();
+    }
+
+    // 🔧 v189: Step 3 — مقایسه — اگر یکسان بود، صرف‌نظر کن
+    if (freshVersion === cachedVersion && cachedVersion !== '') {
+      console.log('[SW] Same version (' + freshVersion + ') — skip full HTML download (saved ~700KB)');
+      return;
+    }
+
+    // 🔧 v189: Step 4 — نسخه فرق داشت — HTML کامل را دانلود کن
+    console.log('[SW] New version detected: ' + freshVersion + ' (was: ' + (cachedVersion || 'none') + ') — downloading full HTML');
     const htmlRes = await fetch('./speech-to-text-reminder.html', { cache: 'no-store' });
     if (htmlRes && htmlRes.ok) {
-      // با URL تمیز (بدون کوئری) در کش ذخیره کن
       await cache.put(new Request('./speech-to-text-reminder.html'), htmlRes);
-      console.log('[SW] Background update: HTML cached');
+      // version.txt را هم در کش ذخیره کن
+      const versionRes2 = await fetch('./version.txt?_rc=1', { cache: 'no-store' });
+      if (versionRes2 && versionRes2.ok) {
+        await cache.put(cachedVersionReq, versionRes2);
+      }
+      console.log('[SW] Full HTML cached + version.txt updated to ' + freshVersion);
+
+      // به تمام صفحات باز پیام بفرست تا خودکار رفرش شوند
+      const clientList = await clients.matchAll({ includeUncontrolled: true, type: 'window' });
+      clientList.forEach(c => c.postMessage({
+        type: 'RELOAD_PLEASE',
+        version: freshVersion,
+        reason: 'new_version_from_github'
+      }));
     }
+
     // APP_SHELL的其他 فایل‌ها هم به‌روزرسانی کن (best-effort)
     // فقط فایل‌های same-origin — CDN فونت را نادیده بگیر
-    const shellPromises = APP_SHELL.filter(url => !url.startsWith('http')).map(async function(url) {
+    const shellPromises = APP_SHELL.filter(url => !url.startsWith('http') && url !== './version.txt').map(async function(url) {
       try {
         const res = await fetch(url, { cache: 'no-store' });
         if (res && res.ok) {
@@ -367,35 +404,10 @@ self.addEventListener('fetch', (event) => {
           // ۱) فوراً از کش بخوان (اگر موجود است)
           const cached = await caches.match(event.request);
           if (cached) {
-            // ۲) در پس‌زمینه، آخرین نسخه را از گیت‌هاب چک کن
-            event.waitUntil((async () => {
-              try {
-                const freshRes = await fetch(event.request, { cache: 'no-store' });
-                if (freshRes && freshRes.ok) {
-                  // مقایسهٔ متن کامل — اگر فرق داشت، نسخهٔ جدید است
-                  const freshText = await freshRes.clone().text();
-                  const cachedText = await cached.clone().text();
-                  if (freshText !== cachedText) {
-                    // نسخهٔ جدید — کش را به‌روزرسانی کن
-                    const cache = await caches.open(CACHE_NAME);
-                    await cache.put(event.request, freshRes.clone());
-                    console.log('[SW] New version detected from GitHub — cache updated, notifying page to reload');
-                    // به تمام صفحات باز پیام بفرست تا خودکار رفرش شوند
-                    const clientList = await clients.matchAll({ includeUncontrolled: true, type: 'window' });
-                    clientList.forEach(c => c.postMessage({
-                      type: 'RELOAD_PLEASE',
-                      version: CACHE_NAME,
-                      reason: 'new_version_from_github'
-                    }));
-                  } else {
-                    console.log('[SW] Background check: same version — no reload needed');
-                  }
-                }
-              } catch(e) {
-                // آفلاین یا خطا — نادیده بگیر (برنامه از کش ادامه می‌دهد)
-                console.log('[SW] Background version check skipped (offline):', e.message);
-              }
-            })());
+            // ۲) در پس‌زمینه، نسخهٔ جدید را چک کن — اما فقط version.txt (~50 bytes)
+            //    را دانلود کن، نه کل HTML (700KB+). اگر نسخه فرق داشت،
+            //    updateAppShellInBackground کل HTML را دانلود می‌کند.
+            event.waitUntil(updateAppShellInBackground());
             // کش را فوراً برگردان — بدون انتظار
             return cached;
           }

@@ -5114,7 +5114,22 @@ body.locked .header-actions button {
 //         کاربر درخواست کرد: «فاصله زمانی تست وجود نسخه جدید برنامه و
 //         استفاده از آن و رفرش اتومات برنامه را به ۲ دقیقه کاهش بده».
 //         🔧 تغییر: setInterval برای UPDATE_CACHE از ۳۰ دقیقه به ۲ دقیقه.
-const APP_VERSION = 'v188-2026-11-08-auto-update-check-2min';
+//   v189 - LIGHTWEIGHT VERSION CHECK (version.txt — only ~50 bytes):
+//         کاربر درخواست کرد: «راهی برای چک ورژن در دسترس بدون دانلود کل
+//         فایل‌های برنامه پیدا کن تا مصرف اینترنت بالا نرود — مثل یک فایل
+//         پنجم که فقط ورژن برنامه در آن نوشته باشد.»
+//         🔧 راه‌حل:
+//         - فایل جدید version.txt اضافه شد (~50 bytes — فقط شامل APP_VERSION).
+//         - SW: updateAppShellInBackground اکنون اول version.txt را چک می‌کند.
+//           اگر نسخه یکسان بود → دانلود کامل HTML (700KB+) صرف‌نظر می‌شود.
+//           فقط اگر نسخه فرق داشت → HTML کامل دانلود می‌شود.
+//         - SW: stale-while-revalidate fetch handler هم اکنون از
+//           updateAppShellInBackground استفاده می‌کند (نه مقایسه متن کامل HTML).
+//         - SW: version.txt به APP_SHELL اضافه شد.
+//         صرفه‌جویی: هر ۲ دقیقه فقط 50 bytes دانلود می‌شود (به‌جای 700KB).
+//         وقتی نسخهٔ جدید موجود باشد، 700KB دانلود می‌شود + خودکار رفرش.
+//         ⚠️ هنگام انتشار نسخهٔ جدید: version.txt را هم به‌روزرسانی کنید.
+const APP_VERSION = 'v189-2026-11-08-lightweight-version-check';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
