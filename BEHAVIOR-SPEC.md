@@ -47,9 +47,9 @@
 #   ۵. اگر کاربر خواست یک رفتار تغییر کند، این فایل را آپدیت کن
 #   ۶. اگر تغییری برگردانده شد (revert)، در تاریخچهٔ نسخه‌ها ثبت کن
 #
-# آخرین به‌روزرسانی: v185 — ۱۴۰۵ آبان ۱۸
-# نسخهٔ فعلی کد: APP_VERSION = v185-2026-11-08-sw-stale-while-revalidate-cache-first
-#                CACHE_NAME  = yadavar-cache-v185
+# آخرین به‌روزرسانی: v186 — ۱۴۰۵ آبان ۱۸
+# نسخهٔ فعلی کد: APP_VERSION = v186-2026-11-08-contacts-tweaks-internet-check-fix
+#                CACHE_NAME  = yadavar-cache-v186
 # ════════════════════════════════════════════════════════════════════
 
 # ════════════════════════════════════════════════════════════════════
@@ -1027,6 +1027,23 @@
 ---
 
 ## 📜 بخش ۱۵: تاریخچهٔ نسخه‌ها
+
+### v186 (۱۴۰۵ آبان ۱۸) — CONTACTS TABLE TWEAKS + INTERNET CHECK FIX
+- ۱) جدول اشخاص:
+  - عرض ستون ردیف نصف شد (width: 24px، max 30px)
+  - zebra striping پررنگ‌تر: #f0f7ff → #d6eaff
+  - فونت رکوردها کوچک‌تر: ۱۳px → ۱۱px
+  - hover پررنگ‌تر: #e3f2fd → #bbdefb
+- ۲) بررسی اینترنت برای ضبط صوت:
+  - فاصله بررسی: ۱۲۰s → ۱۰s (بسیار کوتاه)
+  - تایموت: ۵s → ۳s
+  - تست واقعی با fetch به manifest.json (با AbortController + _rc=1)
+  - قبلاً فقط navigator.onLine بود (false positive در captive portal)
+  - بلافاصله بعد از لود: checkReachability(true) (fire-and-forget)
+  - هر ۱۰ ثانیه: checkReachability() در پس‌زمینه
+  - هدر آفلاین: چشمک آبی ↔ کهربایی (headerOfflineFlash) — اگر اینترنت
+    واقعاً در دسترس نیست، هدر چشمک می‌زند و ضبط صوت باز نمی‌شود
+- CACHE_NAME در sw.js به v186 بالا برده شد
 
 ### v185 (۱۴۰۵ آبان ۱۸) — SW FETCH STRATEGY: STALE-WHILE-REVALIDATE (cache-first)
 - کاربر درخواست کرد: «اول برنامه در کش اجرا شود و منتظر تست اینترنت و گیت‌هاب

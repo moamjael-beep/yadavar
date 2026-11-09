@@ -141,9 +141,9 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
     transition: background 0.3s;
 }
 .header.offline {
-    /* Flash blue ↔ yellow to signal "offline / no real internet" — the user
-       specifically asked for a blue-yellow flashing header when GitHub is
-       unreachable (VPN with no real connectivity, quota exhausted, etc.). */
+    /* 🔧 v186: هدر آفلاین چشمک می‌زند (آبی ↔ کهربایی) — کاربر درخواست کرد:
+       «اگر بدرستی در دسترس نیست هدر چشمک زن شود و ضبط صوت باز نشود».
+       چشمک نشان می‌دهد که اینترنت واقعاً در دسترس نیست. */
     animation: headerOfflineFlash 1.2s infinite !important;
 }
 @keyframes headerOfflineFlash {
@@ -2811,6 +2811,7 @@ body.locked .header-actions button {
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     font-size: 13px;
+    table-layout: fixed; /* 🔧 v186: عرض ستون‌ها دقیقاً رعایت شود */
 }
 .contacts-table thead {
     background: linear-gradient(135deg, #1976D2, #0D47A1);
@@ -2822,7 +2823,18 @@ body.locked .header-actions button {
     font-weight: 700;
     font-size: 12px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+/* 🔧 v186: عرض ستون‌ها در ردیف اول هدر (برای table-layout: fixed)
+   - ستون ردیف: ۳۰px (نازک)
+   - ستون شرکت: ۳۵%
+   - ستون نام: ۳۵%
+   - ستون سمت: ۲۵% (باقی‌مانده) */
+.contacts-table thead tr:first-child th:nth-child(1) { width: 30px; }
+.contacts-table thead tr:first-child th:nth-child(2) { width: 35%; }
+.contacts-table thead tr:first-child th:nth-child(3) { width: 35%; }
+.contacts-table thead tr:first-child th:nth-child(4) { width: auto; }
 /* 🔧 v136: هدر قابل کلیک برای sort + textbox فیلتر */
 .contacts-table th.sortable {
     cursor: pointer;
@@ -2876,32 +2888,42 @@ body.locked .header-actions button {
     border-color: white;
     box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
+/* 🔧 v186: ردیف نازک‌تر — عرض ستون ردیف نصف شد */
+.contacts-table th:first-child,
+.contacts-table td:first-child {
+    width: 24px;
+    min-width: 24px;
+    max-width: 30px;
+    text-align: center;
+    padding: 10px 4px;
+    font-size: 11px;
+    color: #888;
+}
 .contacts-table td {
-    padding: 10px;
+    padding: 8px 10px;
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
-/* 🔧 v184: فونت یکسان برای همه ستون‌ها (شرکت/نام/سمت هم‌اندازه)
-   قبلاً شرکت و نام ۱۵px bold بودند — اکنون هم‌اندازه با بقیه (۱۳px). */
+/* 🔧 v186: فونت یکسان و کوچک‌تر برای همه ستون‌ها (۱۱px)
+   قبلاً ۱۳px بود — اکنون ۱۱px برای فشرده‌تر شدن جدول. */
 .contacts-table td:nth-child(2),
 .contacts-table td:nth-child(3),
 .contacts-table td:nth-child(4) {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
 }
-/* 🔧 v184: zebra striping — ردیف‌های یکدرمیان با زمینهٔ آبی کم‌رنگ
-   برای خوانایی بهتر هنگام اسکرول */
-.contacts-table tbody tr:nth-child(even) { background: #f0f7ff; }
+/* 🔧 v186: zebra striping پررنگ‌تر — از #f0f7ff به #d6eaff (آبی روشن‌تر و متمایزتر) */
+.contacts-table tbody tr:nth-child(even) { background: #d6eaff; }
 .contacts-table tbody tr:nth-child(odd) { background: white; }
 /* 🔧 v144: ردیف قابل کلیک — وقتی روی شخص کلیک می‌شود، منو باز می‌شود */
 .contacts-table tr.contact-clickable {
     cursor: pointer;
     transition: background 0.15s;
 }
-/* 🔧 v184: hover روی zebra — آبی روشن‌تر */
+/* 🔧 v186: hover روی zebra — آبی روشن‌تر */
 .contacts-table tbody tr.contact-clickable:hover,
-.contacts-table tbody tr:hover { background: #e3f2fd; }
-.contacts-table tbody tr.contact-clickable:active { background: #bbdefb; }
+.contacts-table tbody tr:hover { background: #bbdefb; }
+.contacts-table tbody tr.contact-clickable:active { background: #90caf9; }
 .contacts-table tr:last-child td { border-bottom: none; }
 .contacts-empty {
     text-align: center;
@@ -3478,10 +3500,10 @@ body.locked .header-actions button {
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
-/* 🔧 v184: zebra striping برای جدول نتایج جستجو هم — آبی کم‌رنگ یکدرمیان */
-.search-results-table tbody tr:nth-child(even) { background: #f0f7ff; }
+/* 🔧 v186: zebra striping برای جدول نتایج جستجو هم — پررنگ‌تر */
+.search-results-table tbody tr:nth-child(even) { background: #d6eaff; }
 .search-results-table tbody tr:nth-child(odd) { background: white; }
-.search-results-table tbody tr:hover { background: #e3f2fd; }
+.search-results-table tbody tr:hover { background: #bbdefb; }
 .report-header {
     background: linear-gradient(135deg, #FF9800, #E65100);
     color: white;
@@ -5052,7 +5074,24 @@ body.locked .header-actions button {
 //         - اگر نه شبکه نه کش: صفحهٔ آفلاین
 //         نتیجه: برنامه فوراً از کش بالا می‌آید (حتی آفلاین). سپس در پس‌زمینه
 //         آخرین نسخه را چک می‌کند و اگر جدیدتر باشد، خودکار رفرش می‌کند.
-const APP_VERSION = 'v185-2026-11-08-sw-stale-while-revalidate-cache-first';
+//   v186 - CONTACTS TABLE TWEAKS + INTERNET CHECK FIX:
+//         ۱) جدول اشخاص:
+//            - عرض ستون ردیف نصف شد (width: 24px، max 30px)
+//            - zebra striping پررنگ‌تر شد: #f0f7ff → #d6eaff
+//            - فونت رکوردها کوچک‌تر شد: ۱۳px → ۱۱px
+//            - hover پررنگ‌تر: #e3f2fd → #bbdefb
+//         ۲) بررسی اینترنت برای ضبط صوت:
+//            - فاصله بررسی: ۱۲۰s → ۱۰s (بسیار کوتاه)
+//            - تایموت: ۵s → ۳s
+//            - تست واقعی با fetch به manifest.json (با AbortController)
+//              قبلاً فقط navigator.onLine بود (false positive در captive portal)
+//            - بلافاصله بعد از لود: checkReachability(true) (fire-and-forget)
+//            - هر ۱۰ ثانیه: checkReachability() در پس‌زمینه
+//            - هدر آفلاین: چشمک آبی ↔ کهربایی (headerOfflineFlash) — اگر
+//              اینترنت واقعاً در دسترس نیست، هدر چشمک می‌زند و ضبط صوت باز نمی‌شود.
+//            نتیجه: اگر اینترنت واقعاً در دسترس نیست، هدر چشمک می‌زند
+//            و ضبط صوت باز نمی‌شود.
+const APP_VERSION = 'v186-2026-11-08-contacts-tweaks-internet-check-fix';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -15070,13 +15109,14 @@ function checkPendingReload() {
 let isReachable = true; // assume reachable initially (avoid unnecessary flashing on load)
 let lastReachabilityCheck = 0;
 let reachabilityCheckInProgress = false;
-// 🔧 v165: افزایش فاصله بررسی از ۲۵s به ۱۲۰s (۲ دقیقه) — چشمک بی‌جهت حذف شود
-const REACHABILITY_CHECK_INTERVAL = 120000; // 2 minutes
-const REACHABILITY_TIMEOUT = 5000; // 5 seconds timeout (بیشتر صبر کن)
-// 🔧 v165: فقط navigator.onLine بررسی شود — fetch نکن که باعث چشمک می‌شود
-// اگر navigator.onLine=true → آنلاین. اگر false → آفلاین.
-// دیگر فایل‌ها را fetch نمی‌کنیم چون باعث چشمک بی‌جهت می‌شد.
-const REACHABILITY_ENDPOINTS = [];
+// 🔧 v186: فاصله بررسی از ۱۲۰s به ۱۰s کاهش یافت — کاربر درخواست کرد:
+// «فواصل چک کردن اینترنت مورد نیاز برای ضبط صوت را بسیار کوتاه انجام بده»
+const REACHABILITY_CHECK_INTERVAL = 10000; // 10 seconds (was 120s)
+// 🔧 v186: تایموت کوتاه — ۳ ثانیه (بودجه ۵s زیاد بود)
+const REACHABILITY_TIMEOUT = 3000; // 3 seconds timeout
+// 🔧 v186: endpoint برای تست واقعی — manifest.json (فایل کوچک، سریع)
+// با پارامتر _rc=1 تا SW کش را دور بزند و مستقیم به شبکه برود.
+const REACHABILITY_ENDPOINTS = ['./manifest.json?_rc=1'];
 
 async function checkReachability(force = false) {
     const now = Date.now();
@@ -15089,13 +15129,39 @@ async function checkReachability(force = false) {
     reachabilityCheckInProgress = true;
     lastReachabilityCheck = now;
 
-    // 🔧 v165: فقط navigator.onLine — دیگر fetch نمی‌کنیم
     const wasReachable = isReachable;
-    isReachable = navigator.onLine;
+
+    // 🔧 Step 1: navigator.onLine — بررسی سریع
+    if (!navigator.onLine) {
+        isReachable = false;
+        reachabilityCheckInProgress = false;
+        if (wasReachable !== isReachable) updateOnlineStatus();
+        return false;
+    }
+
+    // 🔧 v186: Step 2: تست واقعی با fetch — بررسی دسترسی واقعی به اینترنت
+    // قبلاً فقط navigator.onLine بررسی می‌شد که در موارد captive portal یا
+    // VPN بدون دسترسی واقعی، false positive می‌داد. اکنون یک fetch سبک
+    // به manifest.json (با تایموت ۳ ثانیه) انجام می‌دهیم.
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REACHABILITY_TIMEOUT);
+        const res = await fetch(REACHABILITY_ENDPOINTS[0], {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        isReachable = res.ok;
+    } catch(e) {
+        // fetch شکست خورد — آفلاین یا تایموت
+        isReachable = false;
+    }
+
+    reachabilityCheckInProgress = false;
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
     }
-    reachabilityCheckInProgress = false;
     return isReachable;
 }
 
@@ -15422,24 +15488,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerServiceWorker();
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔧 v166: بررسی اینترنت — کاملا حذف شد
-    // فقط navigator.onLine کافی است (مرورگر خودش مدیریت می‌کند)
-    // هیچ fetch، هیچ checkReachability، هیچ چشمک
+    // 🔧 v186: بررسی اینترنت — بسیار کوتاه و درست
+    // کاربر درخواست کرد: «فواصل چک کردن اینترنت مورد نیاز برای ضبط صوت
+    // را بسیار کوتاه و درست انجام بده تا اگر بدرستی در دسترس نیست هدر
+    // چشمک زن و ضبط صوت باز نشود.»
+    //
+    // استراتژی:
+    //   ۱) وضعیت اولیه: navigator.onLine (سریع، بدون fetch)
+    //   ۲) بلافاصله بعد از لود: checkReachability(true) — تست واقعی با fetch
+    //      به manifest.json (با تایموت ۳ ثانیه). اگر شکست خورد → isReachable=false
+    //      و هدر کهربایی ثابت (بدون چشمک) + ضبط صوت باز نمی‌شود.
+    //   ۳) هر ۱۰ ثانیه: checkReachability() — چک مجدد در پس‌زمینه.
+    //   ۴) online/offline events: به‌روزرسانی فوری.
     // ─────────────────────────────────────────────────────────────────────
-    // فقط online/offline events را گوش بده
     window.addEventListener('online', () => {
         isReachable = true;
         updateOnlineStatus();
         render();
+        // 🔧 v186: بعد از online event، تست واقعی هم بکن
+        checkReachability(true);
     });
     window.addEventListener('offline', () => {
         isReachable = false;
         updateOnlineStatus();
         render();
     });
-    // وضعیت اولیه
+    // وضعیت اولیه — سریع (بدون انتظار fetch)
     isReachable = navigator.onLine;
     updateOnlineStatus();
+    // 🔧 v186: بلافاصله تست واقعی بکن — fetch به manifest.json با تایموت ۳s
+    // این کار در پس‌زمینه انجام می‌شود (fire-and-forget) و UI را مسدود نمی‌کند.
+    // اگر fetch شکست بخورد، isReachable=false می‌شود و هدر کهربایی ثابت
+    // (بدون چشمک) + ضبط صوت باز نمی‌شود.
+    checkReachability(true);
+    // 🔧 v186: هر ۱۰ ثانیه چک کن — فواصل بسیار کوتاه
+    setInterval(function() {
+        checkReachability();
+    }, REACHABILITY_CHECK_INTERVAL);
 
     // Check when tab becomes visible (user came back from another tab/app)
     document.addEventListener('visibilitychange', () => {
