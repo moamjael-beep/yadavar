@@ -1,1 +1,1 @@
-v195-2026-11-08-fix-rc1-fetch-bypass-sw-cache
+v196-2026-11-08-remove-navigator-onLine-guard-fix-case4

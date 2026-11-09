@@ -5171,12 +5171,14 @@ body.locked .header-actions button {
 //         اگر کاربر ضبط صوت بزند و Google در دسترس نباشد:
 //         recognition.onerror خطای 'network' → toast «اتصال اینترنت قطع شد»
 //         — این UX بهتر از چشمک بی‌وقفه هدر است.
-//   v195 - FIX: _rc=1 on fetch (SW was serving from cache even when offline):
-//         مشکل v194: fetch بدون _rc → SW از کش می‌خواند → همیشه 200 → آنلاین!
-//         رفع: _rc=1 → SW کش را دور می‌زند → مستقیم شبکه → اگر شکست 503 → آفلاین
-//         🔧 همچنین: پاسخ به سؤال کاربر درباره تشخیص صوتی آفلاین — Web Speech API
-//         فقط آنلاین کار می‌کند (سرورهای Google). آفلاین جایگزینی در مرورگر نیست.
-const APP_VERSION = 'v195-2026-11-08-fix-rc1-fetch-bypass-sw-cache';
+//   v196 - FIX CASE 4 + FIX AUTO-UPDATE (remove navigator.onLine completely):
+//         مشکل ۱ (حالت ۴): وقتی اینترنت قطع است و وصل می‌شود، هدر چشمک می‌زد.
+//         علت: navigator.onLine روی false گیر می‌کرد → checkReachability زود retour.
+//         رفع: navigator.onLine guard کامل حذف شد. فقط fetch تصمیم می‌گیرد.
+//         مشکل ۲ (آپدیت اتوماتیک): UPDATE_CACHE فقط وقتی navigator.onLine=true
+//         فرستاده می‌شد. اگر navigator.onLine گیر کرده بود، هیچ‌وقت فرستاده نمی‌شد.
+//         رفع: navigator.onLine check از UPDATE_CACHE interval حذف شد.
+const APP_VERSION = 'v196-2026-11-08-remove-navigator-onLine-guard-fix-case4';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -15196,26 +15198,20 @@ function checkPendingReload() {
 //   - GitHub itself being down
 //   - Intermittent connectivity
 
-// 🔧 v195: رفع نهایی — fetch با _rc=1 تا SW کش را دور بزند
-// مشکل v194: fetch بدون _rc → SW از کش می‌خواند → همیشه 200 → همیشه آنلاین!
-// رفع: _rc=1 اضافه شد → SW مستقیم به شبکه می‌رود → اگر شکست → 503 → آفلاین
-let isReachable = navigator.onLine;
+// 🔧 v196: رفع حالت ۴ — navigator.onLine guard حذف شد
+// مشکل: وقتی اینترنت قطع است و وصل می‌شود، navigator.onLine ممکن است
+// روی false بماند → checkReachability زود retour می‌داد بدون fetch.
+// رفع: همیشه fetch کن — navigator.onLine را نادیده بگیر.
+let isReachable = true;
 let _reachabilityFetching = false;
 
-async function checkReachability(force) {
-    if (!navigator.onLine) {
-        var was0 = isReachable;
-        isReachable = false;
-        if (was0 !== isReachable) { updateOnlineStatus(); }
-        return false;
-    }
+async function checkReachability() {
     if (_reachabilityFetching) return isReachable;
     _reachabilityFetching = true;
     var was = isReachable;
     try {
         var controller = new AbortController();
         var tid = setTimeout(function() { controller.abort(); }, 4000);
-        // 🔧 v195: _rc=1 الزامی است — بدون آن SW از کش می‌خواند!
         var res = await fetch('./manifest.json?_rc=1', {
             method: 'GET',
             cache: 'no-store',
@@ -15557,28 +15553,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerServiceWorker();
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔧 v194: ترکیب navigator.onLine + fetch سبک — هر ۳ ثانیه
+    // 🔧 v196: فقط fetch — navigator.onLine حذف شد کامل
+    // online/offline events فقط checkReachability را تریگر می‌کنند
     // ─────────────────────────────────────────────────────────────────────
-    window.addEventListener('online', () => {
-        checkReachability(true);
-    });
-    window.addEventListener('offline', () => {
-        isReachable = false;
-        updateOnlineStatus();
-        render();
-    });
-    isReachable = navigator.onLine;
-    updateOnlineStatus();
-    // 🔧 v194: چک اولیه بعد از ۲ ثانیه
-    setTimeout(function() { checkReachability(true); }, 2000);
-    // 🔧 v194: هر ۳ ثانیه چک کن
+    window.addEventListener('online', () => { checkReachability(); });
+    window.addEventListener('offline', () => { checkReachability(); });
+    // چک اولیه بعد از ۱ ثانیه
+    setTimeout(function() { checkReachability(); }, 1000);
+    // هر ۳ ثانیه چک کن
     setInterval(function() { checkReachability(); }, 3000);
 
     // Check when tab becomes visible (user came back from another tab/app)
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
-            // 🔧 v194: checkReachability اکنون async است
-            checkReachability(true).then(function() {
+            // 🔧 v196: checkReachability اکنون sync در فراخوانی ولی async در اجرا
+            checkReachability().then(function() {
                 updateOnlineStatus();
                 render();
                 checkNotifications();
@@ -15611,9 +15600,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
         }
     }, 5000);
-    // 🔧 v188: هر ۲ دقیقه چک کن (قبلاً ۳۰ دقیقه بود — کاربر درخواست کرد)
+    // 🔧 v196: هر ۲ دقیقه چک کن — navigator.onLine حذف شد (گیر می‌کرد)
     setInterval(function() {
-        if (navigator.serviceWorker.controller && navigator.onLine) {
+        if (navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
         }
     }, 2 * 60 * 1000);
