@@ -2897,14 +2897,15 @@ body.locked .header-actions button {
     box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
 /* 🔧 v186: ردیف نازک‌تر — عرض ستون ردیف نصف شد */
+/* 🔧 v197: فونت ردیف کوچک‌تر — 11px → 9px */
 .contacts-table th:first-child,
 .contacts-table td:first-child {
     width: 24px;
     min-width: 24px;
     max-width: 30px;
     text-align: center;
-    padding: 10px 4px;
-    font-size: 11px;
+    padding: 8px 4px;
+    font-size: 9px;
     color: #888;
 }
 .contacts-table td {
@@ -5178,7 +5179,7 @@ body.locked .header-actions button {
 //         مشکل ۲ (آپدیت اتوماتیک): UPDATE_CACHE فقط وقتی navigator.onLine=true
 //         فرستاده می‌شد. اگر navigator.onLine گیر کرده بود، هیچ‌وقت فرستاده نمی‌شد.
 //         رفع: navigator.onLine check از UPDATE_CACHE interval حذف شد.
-const APP_VERSION = 'v196-2026-11-08-remove-navigator-onLine-guard-fix-case4';
+const APP_VERSION = 'v197-2026-11-08-spec-version-txt-5th-file-contacts-font-smaller';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {

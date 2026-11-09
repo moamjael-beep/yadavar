@@ -1,1 +1,1 @@
-v196-2026-11-08-remove-navigator-onLine-guard-fix-case4
+v197-2026-11-08-spec-version-txt-5th-file-contacts-font-smaller
