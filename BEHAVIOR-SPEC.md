@@ -49,9 +49,9 @@
 #   ۵. اگر کاربر خواست یک رفتار تغییر کند، این فایل را آپدیت کن
 #   ۶. اگر تغییری برگردانده شد (revert)، در تاریخچهٔ نسخه‌ها ثبت کن
 #
-# آخرین به‌روزرسانی: v197 — ۱۴۰۵ آبان ۱۸
-# نسخهٔ فعلی کد: APP_VERSION = v197-2026-11-08-spec-version-txt-5th-file-contacts-font-smaller
-#                CACHE_NAME  = yadavar-cache-v197
+# آخرین به‌روزرسانی: v199 — ۱۴۰۵ آبان ۱۸
+# نسخهٔ فعلی کد: APP_VERSION = v199-2026-11-09-bell-notif-fix-sync-idb-mirror
+#                CACHE_NAME  = yadavar-cache-v199
 # ⚠️ فایل version.txt هم باید با هر انتشار نسخهٔ جدید به‌روز شود.
 # ════════════════════════════════════════════════════════════════════
 
@@ -853,6 +853,66 @@
   = ۶ بار لرزش ۳۰۰ms با فاصله ۱۰۰ms = ~۱.۸ ثانیه
 - requireInteraction: true برای همهٔ اعلان‌ها (تا کلیک کاربر پنهان نشوند)
 - silent: false — صدای پیش‌فرض اعلان مرورگر هم پخش شود
+
+### T9.05 — 🔧 v199: رفع باگ «نوتیف های زنگوله را که تنظیم میکنم عمل نمیکند»
+- 🔍 ریشه‌های باگ (با تست Playwright بازسازی و تأیید شد):
+  ۰) **⚠️ ریشهٔ اصلی — باگ مرگبار openIDB/openDB در sw.js**: تابع
+     `getNotifThresholdsFromIDB()` در sw.js تابع `openIDB()` را صدا می‌زد —
+     اما در sw.js نام تابع بازکردن دیتابیس `openDB()` است (openIDB در
+     sw.js وجود ندارد — در HTML است). ReferenceError در try/catch بلعیده
+     می‌شد و تابع همیشه `[]` برمی‌گرداند → **از v183 تا v198 سرویس‌ورکر
+     هرگز تنظیمات کاربر را نمی‌خواند و هیچ اعلان پس‌زمینه‌ای نمی‌فرستاد**.
+     رفع: `openIDB()` → `openDB()` + بستن اتصال بعد از تراکنش.
+  ۱) **تنظیمات قدیمی هرگز به IndexedDB نمی‌رفتند** — تابع `idbGetNotifSettings`
+     تعریف شده بود ولی هیچ‌وقت صدا زده نمی‌شد. تنظیمات فقط هنگام ذخیرهٔ مجدد
+     در منوی زنگوله به IDB می‌رفت. کاربرانی که با نسخه‌های قبل از v183
+     تنظیمات را ذخیره کرده بودند، در IDB هیچ رکوردی نداشتند →
+     `getNotifThresholdsFromIDB()` آرایهٔ خالی برمی‌گرداند → SW هیچ
+     اعلان پس‌زمینه‌ای نمی‌فرستاد.
+  ۲) **Background Sync هرگز ثبت نمی‌شد** — SW رویداد `sync` با تگ
+     'check-deadlines-on-reconnect' را گوش می‌داد ولی صفحه هرگز
+     `reg.sync.register()` را صدا نمی‌زد → هیچ مکانیزمی SW را بعد از
+     بسته‌شدن صفحه بیدار نمی‌کرد.
+  ۳) **پنجرهٔ زمانی ناهماهنگ** — در صفحه ۶۰ دقیقه، در SW ۲۴ ساعت؛
+     اعلان‌های جبرانی هنگام باز شدن برنامه از قلم می‌افتادند.
+- 🔧 رفع‌ها:
+  ۰) **`openIDB()` → `openDB()` در getNotifThresholdsFromIDB** — ریشهٔ اصلی؛
+     اکنون SW تنظیمات را واقعاً از IDB می‌خواند (با تست headed تأیید شد:
+     SW_CHECK_RESULT sent=1 و PLAY_NOTIFICATION_SOUND رسید).
+  ۱) **آینهٔ خودکار تنظیمات به IDB هنگام شروع** — در DOMContentLoaded
+     (Phase 3): `idbPutNotifSettings(getNotifSettings())` — تنظیمات
+     localStorage (منبع حقیقت) همیشه در IDB تازه می‌شود.
+  ۲) **تابع `registerDeadlineSync()`** — `reg.sync.register('check-deadlines-on-reconnect')`
+     صدا زده می‌شود در: بارگذاری، ذخیرهٔ تنظیمات زنگوله، ذخیرهٔ تسک جدید،
+     visibilitychange (بازگشت کاربر)، و pagehide.
+  ۳) **پنجرهٔ درصفحه به ۲۴ ساعت widened شد** — هماهنگ با SW.
+  ۴) **pagehide → CHECK_DEADLINES** — آخرین بررسی قبل از انجماد صفحه.
+  ۵) **ذخیرهٔ تسک → `requestSwDeadlineCheck()` + `registerDeadlineSync()`** —
+     بعد از هر ذخیرهٔ تسک، SW فوراً بررسی + زمان‌بندی می‌کند.
+  ۶) **تابع `requestSwDeadlineCheck()`** — پیام‌های CHECK_DEADLINES +
+     SCHEDULE_TRIGGERS را به SW می‌فرستد (صدا زده شده از saveNotifSettings،
+     saveItem، و بعد از اولین checkNotifications).
+  ۷) **باگ اعتبارسنجی سفارشی** — قبلاً اگر مقدار سفارشی نامعتبر بود، فقط
+     همان گزینه رد می‌شد و بقیه بی‌صدا ذخیره می‌شد؛ اکنون کل ذخیره قطع
+     می‌شود تا کاربر مقدار را اصلاح کند.
+
+### T9.06 — 🔧 v199: زمان‌بندی اعلان دقیق (Notification Triggers / TimestampTrigger)
+- پیام `SCHEDULE_TRIGGERS` از صفحه به SW — تابع `scheduleDeadlineTriggers()` در SW.
+- **feature-detect کامل**: اگر `self.TimestampTrigger` یا `showTrigger` در
+  `Notification.prototype` نباشد، تابع بی‌صدا برمی‌گردد (هیچ خطایی نمی‌دهد).
+- اگر پشتیبانی شود: برای هر (یادآور فعال × آستانهٔ آینده) یک اعلان با
+  `showTrigger: new TimestampTrigger(deadline - triggerMs)` ثبت می‌شود —
+  اعلان **دقیقاً در لحظهٔ آستانه** نمایش داده می‌شود، حتی با مرورگر بسته.
+- تگ زمان‌بندی: `'trig-' + notifKey + '-' + timestamp` — شامل timestamp تا
+  تغییر سررسید، زمان‌بندی کهنه را قابل تشخیص کند؛ زمان‌بندی‌های کهنه
+  خودکار بسته می‌شوند (`n.close()`).
+- dedup دوسویه:
+  - در `checkDeadlinesBackground`: قبل از ارسال، `getNotifications({tag: 'trig-<key>'})`
+    چک می‌شود — اگر تریگر قبلاً نمایش داده شده، کلید در notif_log ثبت و رد می‌شود.
+  - در `checkNotifications` (صفحه): همین چک برای جلوگیری از اعلان تکراری.
+- وضعیت پشتیبانی (نوامبر ۲۰۲۶): در Chrome پایدار هنوز پشت فلگ است؛
+  در مرورگرهای دیگر بی‌اثر ولی بی‌خطر. مکانیزم‌های مکمل (sync، keepalive،
+  پنجرهٔ ۲۴ ساعته) همیشه فعال‌اند.
 
 ### T9.04 — ⚠️ محدودیت: زنگ ساعت موبایل
 - افزودن اعلان‌ها به زنگ ساعت موبایل (native alarm clock app) امکان‌پذیر نیست.

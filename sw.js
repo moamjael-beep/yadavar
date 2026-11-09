@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v197: هماهنگ با APP_VERSION (v197 spec + version.txt 5th file + contacts font smaller).
-const CACHE_NAME = 'yadavar-cache-v197';
+// 🔧 v199: هماهنگ با APP_VERSION (v199 — رفع نوتیفیکیشن‌های زنگوله در پس‌زمینه).
+const CACHE_NAME = 'yadavar-cache-v199';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.
@@ -591,13 +591,33 @@ self.addEventListener('message', (event) => {
     // می‌فرستد تا سرویس ورکر در حافظه زنده بماند و اعلان‌های سررسید
     // سریع‌تر ارسال شوند. هیچ کاری انجام نمی‌دهیم — فقط دریافت پیام
     // کافی است تا مرورگر تایمر بیکاری را صفر کند.
+    // 🔧 v198: اگر recording=true بود، SW را با interval کوتاه زنده نگه دار
     case 'KEEPALIVE':
-      console.log('[SW] Keepalive ping received at', event.data.ts);
+      console.log('[SW] Keepalive ping received at', event.data.ts, event.data.recording ? '(recording)' : '');
+      // 🔧 v198: هنگام ضبط، در پس‌زمینه هم یادآورها را بررسی کن
+      if (event.data.recording) {
+        event.waitUntil(checkDeadlinesBackground());
+      }
       break;
 
     // پیام «یادآورها را بررسی کن» — از طرف صفحه فراخوانی می‌شود
+    // 🔧 v199: بعد از بررسی، نتیجه به صفحات گزارش می‌شود (SW_CHECK_RESULT)
     case 'CHECK_DEADLINES':
-      event.waitUntil(checkDeadlinesBackground());
+      event.waitUntil(
+        checkDeadlinesBackground().then((sent) => {
+          return self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then((cs) => {
+            cs.forEach((c) => c.postMessage({ type: 'SW_CHECK_RESULT', sent: sent }));
+          }).catch(() => {});
+        })
+      );
+      break;
+
+    // 🔧 v199: پیام «اعلان‌های دقیق را زمان‌بندی کن» — اگر مرورگر
+    // Notification Triggers (TimestampTrigger) را پشتیبانی کند، برای هر
+    // یادآور × آستانه یک اعلان دقیق در لحظهٔ آستانه ثبت می‌شود — حتی اگر
+    // مرورگر کاملاً بسته باشد. در مرورگرهای بدون پشتیبانی، بی‌صدا رد می‌شود.
+    case 'SCHEDULE_TRIGGERS':
+      event.waitUntil(scheduleDeadlineTriggers());
       break;
 
     // 🔧 v184: پیام «کش را به‌روزرسانی کن» — صفحه HTML این پیام را
@@ -666,9 +686,14 @@ self.addEventListener('message', (event) => {
 // اگر کاربر تنظیماتی ذخیره نکرده یا enabled=false باشد، هیچ اعلانی فرستاده نمی‌شود.
 
 // 🔧 v183: خواندن تنظیمات اعلان از IndexedDB
+// 🔧 v199: ⚠️ رفع باگ مرگبار — این تابع `openIDB()` را صدا می‌زد که در SW
+// وجود ندارد (نام درست `openDB()` است — همان که پایین بخش ۳ تعریف شده).
+// ReferenceError در try/catch بلعیده می‌شد و تابع همیشه [] برمی‌گرداند —
+// یعنی از v183 تا v198 سرویس‌ورکر هرگز تنظیمات کاربر را نمی‌خواند و
+// هیچ اعلان پس‌زمینه‌ای نمی‌فرستاد (ریشهٔ اصلی شکایت «نوتیف‌ها عمل نمی‌کند»).
 async function getNotifThresholdsFromIDB() {
   try {
-    const db = await openIDB();
+    const db = await openDB();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction([STORE_BACKUP], 'readonly');
       const req = tx.objectStore(STORE_BACKUP).get('notif_settings');
@@ -684,10 +709,108 @@ async function getNotifThresholdsFromIDB() {
         }));
       };
       req.onerror = () => reject(req.error);
+      tx.oncomplete = () => { try { db.close(); } catch(e) {} };
     });
   } catch(e) {
     console.warn('[SW] Failed to read notif settings from IDB:', e);
     return [];
+  }
+}
+
+// 🔧 v199: تشخیص پشتیبانی Notification Triggers (TimestampTrigger)
+// این API فقط در برخی مرورگرهای Chromium فعال است (معمولاً با فلگ).
+// اگر پشتیبانی نشود، برنامه از مکانیزم‌های دیگر (KEEPALIVE، sync،
+// بازبینی دوره‌ای) استفاده می‌کند — تابع بی‌خطر است و هرگز خطا نمی‌دهد.
+function supportsNotifTriggers() {
+  try {
+    if (typeof self.TimestampTrigger !== 'function') return false;
+    if (!self.Notification || !('showTrigger' in self.Notification.prototype)) return false;
+    return true;
+  } catch(e) { return false; }
+}
+
+// 🔧 v199: زمان‌بندی اعلان‌های دقیق (در لحظهٔ آستانه) برای همهٔ یادآورهای فعال
+// برای هر (یادآور × آستانه) که هنوز ارسال نشده و در آینده است، یک اعلان
+// با showTrigger ثبت می‌شود. تگ هر زمان‌بندی شامل timestamp است تا وقتی
+// کاربر سررسید/تنظیمات را عوض کرد، زمان‌بندی‌های کهنه خودکار بسته شوند.
+async function scheduleDeadlineTriggers() {
+  if (!supportsNotifTriggers()) return; // بی‌صدا — مرورگر پشتیبانی نمی‌کند
+  try {
+    const thresholds = await getNotifThresholdsFromIDB();
+    if (thresholds.length === 0) return;
+    const reminders = await idbGetAll(STORE_REMINDERS);
+    const notifLogEntries = await idbGetAll(STORE_NOTIF_LOG);
+    const sentSet = new Set(notifLogEntries.map(e => e.key));
+    const now = Date.now();
+
+    // زمان‌بندی‌های مطلوب — tag → { ts, title, options }
+    const wanted = new Map();
+    for (const item of reminders) {
+      if (item.done) continue;
+      if (item.cancelled == true) continue;
+      const deadlineMs = new Date(item.deadline).getTime();
+      if (isNaN(deadlineMs)) continue;
+      for (const t of thresholds) {
+        const triggerMs = t.minutes * 60 * 1000;
+        const ts = deadlineMs - triggerMs;
+        if (ts <= now) continue; // گذشته — با چک معمولی اداره می‌شود
+        const notifKey = `${item.id}_${t.key}`;
+        if (sentSet.has(notifKey)) continue; // قبلاً فرستاده شده
+        const text = item.text.length > 40 ? item.text.substring(0, 40) + '...' : item.text;
+        const tag = 'trig-' + notifKey + '-' + ts;
+        wanted.set(tag, {
+          ts: ts,
+          title: `${t.label} تا سررسید: ${text}`,
+          options: {
+            body: 'یادآور شما نزدیک سررسید است',
+            icon: 'icon-192.png',
+            badge: 'favicon-32.png',
+            dir: 'rtl',
+            lang: 'fa-IR',
+            tag: tag,
+            requireInteraction: true,
+            vibrate: [300, 100, 300, 100, 300],
+            silent: false,
+            data: { itemId: item.id }
+          }
+        });
+      }
+    }
+
+    // موجودی فعلی — شامل اعلان‌های هنوز-زمان‌بندی‌نشده (triggered)
+    let existing = [];
+    try {
+      existing = await self.registration.getNotifications({ includeTriggered: true });
+    } catch(e) {
+      try { existing = await self.registration.getNotifications(); } catch(e2) {}
+    }
+    const existingTags = new Set(existing.map(n => n.tag || ''));
+
+    // بستن زمان‌بندی‌های کهنه (تسک حذف/انجام/ویرایش شده یا آستانه عوض شده)
+    for (const n of existing) {
+      if (n.tag && n.tag.indexOf('trig-') === 0 && !wanted.has(n.tag)) {
+        try { n.close(); } catch(e) {}
+      }
+    }
+
+    // ثبت زمان‌بندی‌های جدید
+    let scheduled = 0;
+    for (const [tag, sched] of wanted) {
+      if (existingTags.has(tag)) continue; // قبلاً ثبت شده
+      try {
+        const opts = Object.assign({}, sched.options);
+        opts.showTrigger = new TimestampTrigger(sched.ts);
+        await self.registration.showNotification(sched.title, opts);
+        scheduled++;
+      } catch(e) {
+        // بعضی نسخه‌ها showTrigger را قبول نمی‌کنند — کل زمان‌بندی را رها کن
+        console.warn('[SW] Trigger scheduling failed:', e.message);
+        return;
+      }
+    }
+    if (scheduled > 0) console.log('[SW] Scheduled', scheduled, 'timestamp triggers');
+  } catch(e) {
+    console.warn('[SW] scheduleDeadlineTriggers failed:', e);
   }
 }
 
@@ -726,6 +849,18 @@ async function checkDeadlinesBackground() {
         const notifKey = `${item.id}_${t.key}`;
         // اگر این اعلان قبلاً فرستاده شده، رد کن
         if (sentSet.has(notifKey)) continue;
+
+        // 🔧 v199: اگر اعلانِ تریگرِ زمان‌بندی‌شده همین الان نمایش داده شده،
+        // دوبار نفرست — کلید را ثبت کن و رد شو. (تریگرها SW را بیدار
+        // نمی‌کنند، پس اینجا تنها جای تشخیصشان همین چک است.)
+        try {
+          const trigShown = await self.registration.getNotifications({ tag: 'trig-' + notifKey });
+          if (trigShown && trigShown.length > 0) {
+            await idbPut(STORE_NOTIF_LOG, { key: notifKey, ts: now });
+            sentSet.add(notifKey);
+            continue;
+          }
+        } catch(e) { /* getNotifications همه‌جا نیست — نادیده بگیر */ }
 
         // در بررسی پس‌زمینه (که کم‌تر اجرا می‌شود)، پنجرهٔ زمانی وسیع‌تر
         // می‌گیریم (تا ۲۴ ساعت بعد از آستانه) تا اگر سرویس ورکر دیر بیدار

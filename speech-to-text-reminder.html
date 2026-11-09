@@ -5179,7 +5179,49 @@ body.locked .header-actions button {
 //         مشکل ۲ (آپدیت اتوماتیک): UPDATE_CACHE فقط وقتی navigator.onLine=true
 //         فرستاده می‌شد. اگر navigator.onLine گیر کرده بود، هیچ‌وقت فرستاده نمی‌شد.
 //         رفع: navigator.onLine check از UPDATE_CACHE interval حذف شد.
-const APP_VERSION = 'v197-2026-11-08-spec-version-txt-5th-file-contacts-font-smaller';
+//   v198 - PERSISTENCE: WAKELOCK + MEDIASESSION + RECORDING BACKGROUND + SW KEEPALIVE:
+//         کاربر درخواست کرد:
+//         «اگر روش‌های بیشتری میتوانی بکار ببری که برنامه در حافظه ماندگار
+//          و فعالیت داشته باشد و نوتیفیکیشن ها در پس زمینه هم کار کند
+//          یا اگر در حال ضبط از برنامه خارج شدیم به ضبط ادامه دهد»
+//         🔧 اضافه شد:
+//         ۱) WakeLock — هنگام ضبط، صفحه خاموش نمی‌شود (نavigator.wakeLock)
+//         ۲) MediaSession — اندروید برنامه را به‌عنوان media player نگه می‌دارد
+//         ۳) Recording keepalive — هر ۱۰ ثانیه به SW پیام KEEPALIVE + recording=true
+//         ۴) Auto-restart هنگام ضبط — اگر recognition متوقف شد، هر ۱۰ ثانیه دوباره شروع
+//         ۵) SW keepalive هنگام ضبط — SW خودش هم یادآورها را بررسی می‌کند
+//         ۶) WakeLock re-acquire — وقتی صفحه دوباره visible می‌شود
+//         نتیجه: هنگام ضبط، صفحه خاموش نمی‌شود، اندروید برنامه را نمی‌کشد،
+//         اعلان‌ها در پس‌زمینه کار می‌کنند، و اگر کاربر خارج شد و برگشت، ضبط ادامه دارد.
+//   v199 - FIX: NOTIFICATIONS CONFIGURED FROM THE BELL DIDN'T WORK IN BACKGROUND:
+//         کاربر گزارش کرد: «نوتیف های زنگوله بالا را که تنظیم میکنم عمل نمیکند»
+//         🔍 ریشه‌ها (با تست Playwright بازسازی و تأیید شد):
+//         ۰) ⚠️ ریشهٔ اصلی — در sw.js تابع getNotifThresholdsFromIDB تابع ناموجود
+//            openIDB() را صدا می‌زد (نام درست openDB() است) → ReferenceError
+//            در try/catch بلعیده می‌شد → همیشه [] → از v183 تا v198 سرویس‌ورکر
+//            هرگز هیچ اعلان پس‌زمینه‌ای نمی‌فرستاد!
+//         ۱) تنظیمات قدیمی هرگز به IndexedDB آینه نمی‌شدند — تابع idbGetNotifSettings
+//            هیچ‌وقت صدا زده نمی‌شد؛ پس SW (که فقط IDB را می‌خواند) تنظیمات نسخه‌های
+//            قبل از v183 را نمی‌دید و هیچ اعلان پس‌زمینه‌ای نمی‌فرستاد.
+//         ۲) Background Sync ('check-deadlines-on-reconnect') فقط در SW گوش داده
+//            می‌شد ولی صفحه هرگز reg.sync.register نمی‌کرد → هیچ مکانیزمی SW را
+//            بعد از بسته‌شدن صفحه بیدار نمی‌کرد.
+//         ۳) پنجرهٔ زمانی در صفحه (۶۰ دقیقه) کوچک‌تر از SW (۲۴ ساعت) بود → اگر
+//            کاربر دیر می‌آمد، اعلان از قلم می‌افتاد.
+//         🔧 اضافه/اصلاح شد:
+//         ۱) آینهٔ خودکار تنظیمات اعلان به IndexedDB هنگام شروع برنامه
+//         ۲) registerDeadlineSync() — ثبت Background Sync بعد از ذخیرهٔ تنظیمات،
+//            ذخیرهٔ تسک، بارگذاری و visibilitychange
+//         ۳) پنجرهٔ درصفحه به ۲۴ ساعت هماهنگ با SW widened شد
+//         ۴) pagehide → آخرین CHECK_DEADLINES قبل از انجماد صفحه
+//         ۵) ذخیرهٔ تسک → فوراً CHECK_DEADLINES + sync + زمان‌بندی تریگر
+//         ۶) SCHEDULE_TRIGGERS — اگر مرورگر Notification Triggers (TimestampTrigger)
+//            را پشتیبانی کند، اعلان‌ها دقیقاً در لحظهٔ آستانه زمان‌بندی می‌شوند
+//            (حتی با مرورگر بسته) — feature-detect شده، در غیر این صورت نادیده
+//         ۷) باگ ذخیرهٔ مقدار سفارشی نامعتبر — قبلاً به‌جای قطع کل ذخیره،
+//            فقط همان گزینه را رد می‌کرد و بقیه را ذخیره می‌کرد
+//         ۸) جلوگیری از اعلان تکراری وقتی تریگر زمان‌بندی‌شده قبلاً نمایش داده شده
+const APP_VERSION = 'v199-2026-11-09-bell-notif-fix-sync-idb-mirror';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -7738,6 +7780,64 @@ function initRecognition() {
     return true;
 }
 
+// 🔧 v198: ابزارهای ماندگاری در پس‌زمینه
+// این توابع باعث می‌شوند که:
+//   ۱) صفحه هنگام ضبط خاموش نشود (WakeLock)
+//   ۲) اندروید برنامه را به‌عنوان media player نگه دارد (MediaSession)
+//   ۳) SW در حافظه بماند و اعلان‌ها کار کنند (keepalive)
+//   ۴) ضبط صوت پس از خروج از برنامه ادامه یابد
+
+// ─── WakeLock ───
+// از API پیشرفته wakeLock استفاده می‌کند — صفحه را روشن نگه می‌دارد
+// تا تشخیص صوت متوقف نشود.
+let _wakeLock = null;
+async function acquireRecordingWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        _wakeLock = await navigator.wakeLock.request('screen');
+        console.log('[WakeLock] Acquired — screen stays on during recording');
+    } catch(e) {
+        console.warn('[WakeLock] Not available:', e.message);
+    }
+}
+function releaseRecordingWakeLock() {
+    if (_wakeLock) {
+        try { _wakeLock.release(); _wakeLock = null; console.log('[WakeLock] Released'); } catch(e) {}
+    }
+}
+// وقتی صفحه دوباره visible می‌شود، wakeLock را دوباره بگیر
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && isRecording && !_wakeLock) {
+        acquireRecordingWakeLock();
+    }
+});
+
+// ─── MediaSession ───
+// اندروید برنامه‌های دارای MediaSession فعال را به‌عنوان media player
+// می‌شناسد و آن‌ها را از بین نمی‌برد. در نوار اعلان هم آیکون ضبط نشان می‌دهد.
+function setRecordingMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'در حال ضبط صوت',
+            artist: 'یادآور صوتی',
+            album: 'ضبط صوت فعال'
+        });
+        navigator.mediaSession.playbackState = 'recording';
+        console.log('[MediaSession] Recording state set');
+    } catch(e) {
+        console.warn('[MediaSession] Not available:', e.message);
+    }
+}
+function clearRecordingMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+        console.log('[MediaSession] Recording state cleared');
+    } catch(e) {}
+}
+
 function startRecording() {
     if (!isSpeechSupported()) {
         showToast('مرورگر شما از تبدیل صوت به متن پشتیبانی نمی‌کند. لطفاً از Chrome یا Edge استفاده کنید.');
@@ -7780,6 +7880,20 @@ function startRecording() {
     // 🔧 همگام‌سازی حالت ضبط با دکمهٔ شناور
     const fab2 = document.getElementById('floatingAddBtn');
     if (fab2) fab2.classList.add('recording');
+    // 🔧 v198: ابزارهای ماندگاری — WakeLock + MediaSession
+    acquireRecordingWakeLock();
+    setRecordingMediaSession();
+    // 🔧 v198: ضبط صوت در پس‌زمینه — keepalive قوی‌تر هنگام ضبط
+    // هر ۱۰ ثانیه به SW پیام بده تا حافظه بماند
+    _recordingKeepaliveInterval = setInterval(function() {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'KEEPALIVE', ts: Date.now(), recording: true });
+        }
+        // 🔧 v198: اگر recognition متوقف شده (مرورگر آن را kill کرده)، دوباره شروع کن
+        if (isRecording && recognition) {
+            try { recognition.start(); } catch(e) { /* already running */ }
+        }
+    }, 10000);
     try {
         recognition.start();
     } catch(e) {
@@ -7794,6 +7908,9 @@ function startRecording() {
     }
 }
 
+// 🔧 v198: keepalive interval برای ضبط
+let _recordingKeepaliveInterval = null;
+
 function stopRecording() {
     isRecording = false;
     document.getElementById('addBtn').classList.remove('recording');
@@ -7801,6 +7918,13 @@ function stopRecording() {
     const fabStop = document.getElementById('floatingAddBtn');
     if (fabStop) fabStop.classList.remove('recording');
     if (recognition) { try { recognition.stop(); } catch(e) {} }
+    // 🔧 v198: ابزارهای ماندگاری — آزادسازی
+    releaseRecordingWakeLock();
+    clearRecordingMediaSession();
+    if (_recordingKeepaliveInterval) {
+        clearInterval(_recordingKeepaliveInterval);
+        _recordingKeepaliveInterval = null;
+    }
     // Commit current session and apply number conversion on final text
     if (currentSessionText.trim()) {
         allFinalText = (allFinalText + ' ' + currentSessionText).trim().replace(/\s+/g, ' ');
@@ -9134,6 +9258,10 @@ function saveItem() {
     }
 
     setDB(items);
+    // 🔧 v199: بیدار کردن SW — تسک تازه ممکن است نزدیک سررسید باشد؛
+    // فوراً بررسی + زمان‌بندی اعلان دقیق + ثبت sync برای جبران پس‌زمینه
+    requestSwDeadlineCheck();
+    registerDeadlineSync();
     // Clear the pending-group context (it has been consumed by the new task).
     pendingTaskGroupId = null;
     pendingPrefilledDeadline = null;
@@ -11267,12 +11395,42 @@ function getNotifSettings() {
 // ذخیره تنظیمات اعلان
 // 🔧 v183: هم در localStorage و هم در IndexedDB ذخیره می‌شود تا SW بتواند
 // در پس‌زمینه تنظیمات کاربر را بخواند و فقط همان زمان‌ها را اعلان بفرستد.
+// 🔧 v199: بعد از ذخیره، SW هم بیدار می‌شود (بررسی فوری + sync + زمان‌بندی تریگر)
 function saveNotifSettings(settings) {
     try { localStorage.setItem(NOTIF_SETTINGS_KEY, JSON.stringify(settings)); } catch(e) {}
     // 🔧 v183: mirror to IndexedDB for service worker
     idbPutNotifSettings(settings);
     // 🔧 v183: به‌روزرسانی NOTIF_THRESHOLDS سراسری
     NOTIF_THRESHOLDS = getNotifThresholds();
+    // 🔧 v199: بیدار کردن سرویس‌ورکر — تنظیمات عوض شده، SW باید فوراً بداند
+    requestSwDeadlineCheck();
+}
+
+// 🔧 v199: بیدار کردن SW برای بررسی سررسیدها + زمان‌بندی اعلان‌های دقیق
+// این تابع امن است — اگر SW یا پیام در دسترس نباشد، بی‌صدا رد می‌شود.
+function requestSwDeadlineCheck() {
+    try {
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+        navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+        navigator.serviceWorker.controller.postMessage({ type: 'SCHEDULE_TRIGGERS' });
+    } catch(e) {}
+}
+
+// 🔧 v199: ثبت Background Sync — وقتی اینترنت/اتصال دوباره برقرار شود،
+// مرورگر سرویس‌ورکر را بیدار می‌کند تا سررسیدهای از-قلم-افتاده بررسی شوند.
+// این مهم‌ترین مکانیزم بیدارباش SW بعد از بسته‌شدن صفحه در اندروید است.
+// ثبت تکراری با تگ یکسان خطا نمی‌دهد (جایگزین می‌شود) ولی try/catch گذاشتیم.
+async function registerDeadlineSync() {
+    try {
+        if (!('serviceWorker' in navigator)) return;
+        const reg = await navigator.serviceWorker.ready;
+        if (!reg || !('sync' in reg)) return;
+        await reg.sync.register('check-deadlines-on-reconnect');
+        console.log('[Page] Background sync registered (check-deadlines-on-reconnect)');
+    } catch(e) {
+        // بعضی مرورگرها (Safari/Firefox) Background Sync ندارند — نادیده بگیر
+        console.log('[Page] Background sync not available:', e.message);
+    }
 }
 
 // تولید NOTIF_THRESHOLDS از تنظیمات کاربر
@@ -11462,8 +11620,12 @@ function showBellSettings() {
     saveBtn.textContent = '✓ ذخیره';
     saveBtn.onclick = function() {
         // جمع‌آوری تنظیمات
+        // 🔧 v199: اگر مقدار سفارشی نامعتبر بود، کل ذخیره قطع شود
+        // (قبلاً فقط همان گزینه رد می‌شد و بقیه بی‌صدا ذخیره می‌شد!)
+        var customInvalid = false;
         var newTimes = [];
         timeSelects.forEach(function(sel, idx) {
+            if (customInvalid) return; // خطای قبلی — رد شو
             if (!sel.value) return; // بدون یادآور
             if (sel.value === 'custom') {
                 // 🔧 v183: گزینهٔ سفارشی — دقیقه را از input بخوان
@@ -11471,6 +11633,7 @@ function showBellSettings() {
                 var mins = parseInt(customInput.value, 10);
                 if (!mins || mins < 1 || mins > 43200) {
                     showToast('یادآور ' + toPersianNumber(idx + 1) + ': عدد دقیقه معتبر وارد کنید (۱ تا ۴۳۲۰۰)');
+                    customInvalid = true;
                     return;
                 }
                 newTimes.push({
@@ -11487,6 +11650,7 @@ function showBellSettings() {
                 });
             }
         });
+        if (customInvalid) return; // 🔧 v199: ذخیره نکن — کاربر باید مقدار را اصلاح کند
         if (newTimes.length === 0) {
             showToast('حداقل یک زمان یادآور انتخاب کنید');
             return;
@@ -11543,34 +11707,55 @@ function playShortBeeps() {
 // آستانه‌های اعلان — از تنظیمات کاربر خوانده می‌شود
 var NOTIF_THRESHOLDS = getNotifThresholds();
 
-function checkNotifications() {
+async function checkNotifications() {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const items = getDB();
     const now = Date.now();
 
-    items.forEach(item => {
-        if (item.done) return;
+    for (const item of items) {
+        if (item.done) continue;
         // 🔧 v140: تسک‌های لغوشده هم اعلان نمی‌گیرند
-        if (item.cancelled == true) return;
+        if (item.cancelled == true) continue;
         const deadlineMs = new Date(item.deadline).getTime();
-        if (isNaN(deadlineMs)) return;
+        if (isNaN(deadlineMs)) continue;
         const remaining = deadlineMs - now;
 
-        NOTIF_THRESHOLDS.forEach(t => {
+        for (const t of NOTIF_THRESHOLDS) {
             const triggerMs = t.minutes * 60 * 1000;
             const notifKey = `${item.id}_${t.key}`;
-            if (sentNotifications.has(notifKey)) return;
+            if (sentNotifications.has(notifKey)) continue;
 
-            // Send if remaining <= triggerMs AND not too far past (within 60 min window)
-            if (remaining <= triggerMs && remaining > triggerMs - 60 * 60 * 1000) {
+            // 🔧 v199: پنجرهٔ زمانی به ۲۴ ساعت widened شد — هماهنگ با SW.
+            // قبلاً ۶۰ دقیقه بود؛ اگر کاربر دیرتر باز می‌کرد، اعلان هیچ‌وقت
+            // نشان داده نمی‌شد («تنظیم میکنم عمل نمیکند»). حالا اگر آستانه در
+            // ۲۴ ساعت گذشته رد شده باشد، هنگام باز شدن اعلان جبرانی می‌آید.
+            if (remaining <= triggerMs && remaining > triggerMs - 24 * 60 * 60 * 1000) {
+                // 🔧 v199: اگر اعلانِ تریگرِ زمان‌بندی‌شدهٔ SW همین الان نمایش داده شده،
+                // دوبار نفرست — کلید را ثبت کن و رد شو.
+                var _dup = false;
+                try {
+                    if ('serviceWorker' in navigator) {
+                        var _reg = await navigator.serviceWorker.getRegistration();
+                        if (_reg) {
+                            var _shown = await _reg.getNotifications({ tag: 'trig-' + notifKey });
+                            if (_shown && _shown.length > 0) _dup = true;
+                        }
+                    }
+                } catch(e) {}
+                if (_dup) {
+                    sentNotifications.add(notifKey);
+                    saveSentNotifications();
+                    idbPutNotifLog(notifKey);
+                    continue;
+                }
                 sendNotification(item, t.label, remaining <= 0, item.id);
                 sentNotifications.add(notifKey);
                 saveSentNotifications();
                 // Also write to IndexedDB so SW doesn't duplicate in background
                 idbPutNotifLog(notifKey);
             }
-        });
-    });
+        }
+    }
 }
 
 // 🔧 v181: پارامتر shouldRepeat و کل بلوک تکرار حذف شد — فرایند تکرار
@@ -15542,16 +15727,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     // notifications. Fire-and-forget (not awaited) — doesn't block UI.
     try { idbBulkPutReminders(getDB()); } catch(e) {}
 
+    // 🔧 v199: آینهٔ تنظیمات اعلان به IndexedDB هنگام شروع — رفع باگ اصلی
+    // «نوتیف های زنگوله را که تنظیم میکنم عمل نمیکند». قبلاً تنظیمات فقط
+    // هنگام ذخیرهٔ مجدد در منوی زنگوله به IDB می‌رفت؛ تنظیمات کاربرانی که
+    // با نسخه‌های قدیمی‌تر (قبل از v183) ذخیره کرده بودند هرگز به SW
+    // نمی‌رسید و SW هیچ اعلان پس‌زمینه‌ای نمی‌فرستاد. اکنون در هر بارگذاری
+    // تنظیمات فعلی (localStorage — منبع حقیقت) به IDB آینه می‌شود.
+    try { idbPutNotifSettings(getNotifSettings()); } catch(e) {}
+
+    // 🔧 v199: ثبت Background Sync — وقتی اتصال دوباره وصل شود، SW بیدار
+    // می‌شود و سررسیدهای از-قلم-افتاده را بررسی می‌کند (حتی با صفحهٔ بسته)
+    registerDeadlineSync();
+
     // Initialize notifications (async, loads from IDB)
     loadSentNotifications().then(() => {
         updateNotifButton();
         cleanupOldNotifications();
         checkNotifications();
+        // 🔧 v199: بعد از اولین چک، زمان‌بندی اعلان‌های دقیق (TimestampTrigger)
+        // برای تسک‌های فعال — اگر مرورگر پشتیبانی کند
+        requestSwDeadlineCheck();
     });
     updateNotifButton();
 
     // Register service worker (must be after DOMContentLoaded)
     registerServiceWorker();
+
+    // 🔧 v199: آخرین بررسی هنگام ترک/انجماد صفحه — قبل از این‌که مرورگر
+    // تایمرها را منجمد کند، یک‌بار دیگر SW را بیدار می‌کنیم تا اگر سررسیدی
+    // نزدیک است، SW خودش مسئولیت اعلان را بگیرد. همچنین sync را دوباره
+    // ثبت می‌کنیم تا در صورت قطع/وصل اینترنت، جبران انجام شود.
+    window.addEventListener('pagehide', function() {
+        try {
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+            }
+        } catch(e) {}
+        registerDeadlineSync();
+    });
 
     // ─────────────────────────────────────────────────────────────────────
     // 🔧 v196: فقط fetch — navigator.onLine حذف شد کامل
@@ -15576,6 +15789,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
                 }
             }).catch(function() {});
+            // 🔧 v199: دوباره sync ثبت کن (بعد از هر بازگشت، ثبت تازه می‌ماند)
+            registerDeadlineSync();
             // 🔧 v147: به‌روزرسانی دکمه‌های شناور وقتی برگشتیم
             _refreshFloatingAddBtn();
             refreshFloatingContactBtn();
@@ -15699,6 +15914,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Close datetime picker on overlay click
+    // 🔧 v199: رفع ReferenceError — متغیر pickerOverlay تعریف نشده بود و
+    // اجرای ادامهٔ init را قطع می‌کرد (کلید Escape و بقیه ثبت نمی‌شدند)
+    const pickerOverlay = document.getElementById('datetimePickerOverlay');
     if (pickerOverlay) {
         pickerOverlay.addEventListener('click', (e) => {
             if (e.target.id === 'datetimePickerOverlay') closeDatetimePicker();
