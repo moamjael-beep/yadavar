@@ -1223,6 +1223,101 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
     transform: translateX(-50%) translateY(0);
 }
 
+/* 🔧 v201: بنر درون‌صفحه‌ای اعلان — remediation اصلی برای «حتی داخل برنامه، اعلان نمی‌آید» */
+.inpage-notif-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10900; /* بالاتر از toast (10800) و هدر (10700) */
+    background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+    color: #fff;
+    padding: 14px 16px 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    transform: translateY(-110%);
+    transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+    direction: rtl;
+    font-family: inherit;
+    border-bottom: 3px solid #ffd54f;
+    animation: inpageNotifPulse 1.2s ease-in-out 3;
+}
+.inpage-notif-banner.show {
+    transform: translateY(0);
+}
+.inpage-notif-banner.overdue {
+    background: linear-gradient(135deg, #7b1fa2 0%, #4a148c 100%);
+    border-bottom-color: #ff8a65;
+}
+@keyframes inpageNotifPulse {
+    0%, 100% { box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+    50% { box-shadow: 0 6px 24px rgba(255,213,79,0.85), 0 0 0 4px rgba(255,213,79,0.35); }
+}
+.inpage-notif-banner .inb-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+.inpage-notif-banner .inb-icon {
+    font-size: 26px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.inpage-notif-banner .inb-body {
+    flex: 1;
+    min-width: 0;
+}
+.inpage-notif-banner .inb-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 2px;
+    word-break: break-word;
+}
+.inpage-notif-banner .inb-text {
+    font-size: 13px;
+    opacity: 0.95;
+    line-height: 1.45;
+    word-break: break-word;
+}
+.inpage-notif-banner .inb-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.inpage-notif-banner .inb-btn {
+    background: rgba(255,255,255,0.22);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.45);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.inpage-notif-banner .inb-btn:hover, .inpage-notif-banner .inb-btn:active {
+    background: rgba(255,255,255,0.38);
+}
+.inpage-notif-banner .inb-btn.primary {
+    background: #ffd54f;
+    color: #b71c1c;
+    border-color: #ffd54f;
+}
+.inpage-notif-banner .inb-btn.primary:hover, .inpage-notif-banner .inb-btn.primary:active {
+    background: #ffca28;
+}
+@media (max-width: 480px) {
+    .inpage-notif-banner { padding: 12px 12px 10px; }
+    .inpage-notif-banner .inb-icon { font-size: 22px; }
+    .inpage-notif-banner .inb-title { font-size: 14px; }
+    .inpage-notif-banner .inb-text { font-size: 12px; }
+    .inpage-notif-banner .inb-btn { padding: 5px 8px; font-size: 11px; }
+}
+
 /* small screens (phones) */
 @media (max-width: 480px) {
     .header { padding: 11px 14px; }
@@ -4395,6 +4490,20 @@ body.locked .header-actions button {
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- 🔧 v201: بنر درون‌صفحه‌ای اعلان — همیشه در foreground کار می‌کند، حتی بدون permission -->
+<div class="inpage-notif-banner" id="inpageNotifBanner" role="alert" aria-live="assertive">
+    <div class="inb-row">
+        <div class="inb-icon" id="inbIcon">🔔</div>
+        <div class="inb-body">
+            <div class="inb-title" id="inbTitle">—</div>
+            <div class="inb-text" id="inbText">—</div>
+        </div>
+        <div class="inb-actions">
+            <button type="button" class="inb-btn primary" id="inbDoneBtn">انجام شد ✓</button>
+            <button type="button" class="inb-btn" id="inbCloseBtn">بستن</button>
+        </div>
+    </div>
+</div>
 
 <!-- Calendar Modal -->
 <div class="modal-overlay" id="calendarOverlay">
@@ -5248,7 +5357,35 @@ body.locked .header-actions button {
 //            هنگام ضبط kick-out نمی‌کنند — onend دوباره شروع می‌کند → «ادامهٔ
 //            ضبط پس از خروج» واقعاً کار می‌کند (kick-out فقط برای خطای مجوز)
 //         ۵) هر ۲ دقیقه CHECK_DEADLINES + SCHEDULE_TRIGGERS به SW (ماندگاری حافظه)
-const APP_VERSION = 'v200-2026-11-09-notif-sw-shownotification-fix';
+//
+//   v201 - FIX: NOTIFICATIONS STILL NOT RINGING EVEN INSIDE THE APP (foreground):
+//         کاربر دوباره گزارش داد: «هنوز نوتیف ها اعلام نمیشود و زنگ نمیزند حتی داخل برنامه که هستم»
+//         🔍 تحلیل جدید — حتی بعد از v200، در حالت foreground هم زنجیره قطع است:
+//         ۰) ⚠️ AudioContext معلق (suspended) — مرورگرهای جدید AudioContext را فقط پس از
+//            تعامل کاربر resume می‌کنند. نمونهٔ صدای منوی زنگوله در gesture کار می‌کرد، اما
+//            checkNotifications خودکار (interval 60s) خارج از gesture اجرا می‌شود → ctx.resume()
+//            بی‌صدا رد می‌شود → هیچ صدایی پخش نمی‌شد (ریشهٔ «زنگ نمی‌زند»).
+//         ۱) ⚠️ در Chrome اندروید، reg.showNotification از page context گاهی بی‌صدا fail
+//            می‌کند (SW تازه register شده و هنوز active نشده، یا صفحه controlled نیست).
+//            هیچ fallback بصری در صفحه وجود نداشت → کاربر هیچی نمی‌دید («اعلام نمیشود»).
+//         ۲) checkNotifications در صورت Notification.permission !== 'granted' زود برمی‌گشت
+//            و حتی بنر درون‌صفحه‌ای هم نمایش نمی‌داد.
+//         🔧 تغییرات v201:
+//         ۱) بنر درون‌صفحه‌ای اعلان (#inpageNotifBanner) — یک بنر قرمز بزرگ که از بالای
+//            صفحه slide می‌شود، شامل عنوان + متن + دکمهٔ «انجام شد» / «بستن». این بنر
+//            مستقل از Notification API/SW است و همیشه (حتی بدون permission) کار می‌کند.
+//            مهم‌ترین remediation: کاربر حداقل چیزی می‌بیند و می‌شنود.
+//         ۲) warmAudioContextOnUserGesture() — روی اولین touch/click/keydown صفحه،
+//            AudioContext را resume می‌کند. از آن به بعد، ctx در حالت running می‌ماند
+//            و interval-triggered sound کار می‌کند.
+//         ۳) دکمهٔ «🔔 تست اعلان الان» در منوی زنگوله — کاربر می‌تواند زنجیره را
+//            فوراً تست کند تا مطمئن شود صدا + بنر + notification همگی کار می‌کنند.
+//         ۴) sendNotification حالا هم system notif می‌فرستد و هم بنر درون‌صفحه‌ای.
+//         ۵) checkNotifications دیگر در صورت permission==='default' زود برنمی‌گردد —
+//            بنر درون‌صفحه‌ای هم بدون permission نمایش داده می‌شود.
+//         ۶) toggleNotifications بعد از grant، AudioContext را هم resume می‌کند.
+//         ۷) interval کوتاه‌تر (۱۰s) مخصوص بررسی درون‌صفحه‌ای، تا لاگ کمتر از ۶۰s نشود.
+const APP_VERSION = 'v201-2026-11-09-foreground-inpage-banner-and-audio-warm';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -7866,6 +8003,9 @@ document.addEventListener('visibilitychange', function() {
 // ─── MediaSession ───
 // اندروید برنامه‌های دارای MediaSession فعال را به‌عنوان media player
 // می‌شناسد و آن‌ها را از بین نمی‌برد. در نوار اعلان هم آیکون ضبط نشان می‌دهد.
+// 🔧 v201: playbackState فقط یکی از مقادیر 'none' | 'paused' | 'playing' را
+// می‌پذیرد — 'recording' معتبر نیست و مرورگر بی‌صدا رد می‌کرد. از 'playing'
+// استفاده می‌کنیم تا Android آن را به‌عنوان یک media player فعال ببیند.
 function setRecordingMediaSession() {
     if (!('mediaSession' in navigator)) return;
     try {
@@ -7874,8 +8014,8 @@ function setRecordingMediaSession() {
             artist: 'یادآور صوتی',
             album: 'ضبط صوت فعال'
         });
-        navigator.mediaSession.playbackState = 'recording';
-        console.log('[MediaSession] Recording state set');
+        navigator.mediaSession.playbackState = 'playing';
+        console.log('[MediaSession] Recording state set (playbackState=playing)');
     } catch(e) {
         console.warn('[MediaSession] Not available:', e.message);
     }
@@ -11569,14 +11709,17 @@ async function toggleNotifications() {
         try {
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
-                showToast('دسترسی به اعلان‌ها داده نشد');
-                return;
+                showToast('دسترسی به اعلان‌ها داده نشد. با این حال، بنر درون‌صفحه‌ای فعال است');
             }
+            // 🔧 v201: مهم — حتی اگر permission داده نشد، تنظیمات را فعال کن
+            // تا بنر درون‌صفحه‌ای کار کند. permission فقط برای system notif لازم است.
         } catch(e) {
-            showToast('خطا در درخواست اعلان: ' + e.message);
-            return;
+            showToast('خطا در درخواست اعلان: ' + e.message + ' — بنر درون‌صفحه‌ای همچنان فعال است');
         }
     }
+    // 🔧 v201: AudioContext را در همین gesture گرم کن — این مهم‌ترین نقطه‌است
+    // چون toggleNotifications از یک کلیک کاربر صدا زده می‌شود.
+    try { warmAudioContextOnUserGesture(); } catch(e) {}
     // فعال‌سازی + باز کردن منوی تنظیمات
     settings.enabled = true;
     saveNotifSettings(settings);
@@ -11711,6 +11854,26 @@ function showBellSettings() {
         timeCustomInputs.push(customInput);
     }
     modal.appendChild(timeSection);
+    // 🔧 v201: بخش ۳ — دکمهٔ تست اعلان
+    const testSection = document.createElement('div');
+    testSection.className = 'bell-settings-section';
+    testSection.style.cssText = 'border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 8px;';
+    const testBtn = document.createElement('button');
+    testBtn.type = 'button';
+    testBtn.className = 'btn btn-secondary';
+    testBtn.style.cssText = 'width:100%; padding:10px; font-size:14px; font-weight:600;';
+    testBtn.innerHTML = '🔔 تست اعلان الان';
+    testBtn.onclick = function() {
+        // هم AudioContext را گرم کن و هم تست بفرست
+        try { warmAudioContextOnUserGesture(); } catch(e) {}
+        sendTestNotification();
+    };
+    const testHint = document.createElement('div');
+    testHint.style.cssText = 'font-size:11px; color:#666; margin-top:6px; text-align:center;';
+    testHint.textContent = 'اگر این دکمه را بزنید و بنر قرمز + صدا را ببینید، زنجیرهٔ foreground کار می‌کند ✓';
+    testSection.appendChild(testBtn);
+    testSection.appendChild(testHint);
+    modal.appendChild(testSection);
     // دکمه‌ها
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px;margin-top:12px;';
@@ -11808,7 +11971,8 @@ function playShortBeeps() {
 var NOTIF_THRESHOLDS = getNotifThresholds();
 
 async function checkNotifications() {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    // 🔧 v201: دیگر زود برنمی‌گردیم اگر permission نبود — بنر درون‌صفحه‌ای
+    // هم بدون permission کار می‌کند. فقط system notification path skip می‌شود.
     const items = getDB();
     const now = Date.now();
 
@@ -11888,17 +12052,38 @@ async function sendNotification(item, label, isOverdue, itemId) {
     const body = isOverdue
         ? `زمان انجام این یادآور گذشته است`
         : `یادآور شما نزدیک سررسید است`;
-    // 🔧 v200: تگ هماهنگ با SW (reminder-<id>) — کلیک اعلان → SW آن را به صفحه
-    // می‌فرستد تا تسک باز شود؛ نمایش دوباره هم جایگزین می‌شود نه تکراری.
+    // 🔧 v201: بنر درون‌صفحه‌ای را همیشه در foreground نمایش بده — مستقل از
+    // موفقیت system notification. این remediation اصلی «حتی داخل برنامه،
+    // اعلان نمی‌آید» است: حتی اگر reg.showNotification بی‌صدا fail شود،
+    // کاربر بنر را می‌بیند و صدای زنگ را می‌شنود.
+    try {
+        showInpageNotifBanner({
+            title: title,
+            body: body,
+            isOverdue: !!isOverdue,
+            itemId: itemId || item.id,
+            itemText: item.text
+        });
+    } catch(e) { console.warn('[Notif] In-page banner failed:', e); }
+    // 🔧 v201: صدا را همیشه پخش کن (حتی اگر system notif ناموفق باشد).
+    // warmAudioContextOnUserGesture در init صدا را در حالت running نگه داشته.
+    try { _playNotifSoundBySetting(); } catch(e) {}
+    // 🔧 v201: اگر permission اصلاً grant نشده، فقط بنر کافی است — system notif نزن
+    // ⚠️ حواست باشد: typeof Notification === 'undefined' مهم است — فقط 'Notification' in window
+    // در صورتی که property با مقدار undefined وجود داشته باشد هم true برمی‌گرداند و بعد
+    // Notification.permission خطا می‌دهد.
+    var _notifOk = (typeof Notification !== 'undefined') && Notification && (Notification.permission === 'granted');
+    if (!_notifOk) {
+        console.log('[Notif] Permission not granted — only in-page banner shown');
+        return true; // بنر نمایش داده شد → کلید ثبت شود
+    }
     const nId = itemId || item.id;
     const nOpts = {
         body: body,
         tag: 'reminder-' + nId,
         dir: 'rtl',
         lang: 'fa-IR',
-        // 🔧 v140: requireInteraction برای همه (تا کلیک کاربر پنهان نشود)
         requireInteraction: true,
-        // 🔧 v140: الگوی لرزش طولانی‌تر و قوی‌تر
         vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300, 100, 300],
         silent: false,  // صدای پیش‌فرض اعلان مرورگر پخش شود
         icon: 'icon-192.png',
@@ -11912,10 +12097,6 @@ async function sendNotification(item, label, isOverdue, itemId) {
             if (reg) {
                 await reg.showNotification(title, nOpts);
                 console.log('[Notif] Shown via SW:', title);
-                // 🔧 v148: پخش صدا بر اساس تنظیمات کاربر (زنگ بلند یا ۵ بوق)
-                // چون این مسیر از صفحه است، SW پیام PLAY_NOTIFICATION_SOUND
-                // نمی‌فرستد — صدا را خود صفحه پخش می‌کند.
-                _playNotifSoundBySetting();
                 return true;
             }
         }
@@ -11924,7 +12105,6 @@ async function sendNotification(item, label, isOverdue, itemId) {
     }
     // مسیر ۲ — سازندهٔ Notification (فقط دسکتاپ؛ در اندروید پشتیبانی نمی‌شود)
     try {
-        if (!('Notification' in window) || Notification.permission !== 'granted') return false;
         const n = new Notification(title, nOpts);
         n.onclick = () => {
             window.focus();
@@ -11932,11 +12112,11 @@ async function sendNotification(item, label, isOverdue, itemId) {
             expandedId = nId;
             render();
         };
-        _playNotifSoundBySetting();
         return true;
     } catch(e) {
         console.error('[Notif] Page Notification failed:', e);
-        return false;
+        // بنر درون‌صفحه‌ای همیشه نمایش داده شده → true برگردان تا کلید ثبت شود
+        return true;
     }
 }
 
@@ -11947,6 +12127,160 @@ function _playNotifSoundBySetting() {
         if (_notifSettings.soundType === 'beeps') playShortBeeps();
         else playNotificationSound();
     } catch(e) { console.warn('[Notif] Sound failed:', e); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 🔧 v201: بنر درون‌صفحه‌ای اعلان + گرم کردن AudioContext + تست اعلان
+// ════════════════════════════════════════════════════════════════════
+// این بخش remediation اصلی «حتی داخل برنامه، اعلان نمی‌آید و زنگ نمی‌زند» است.
+// بنر مستقل از Notification API/SW است و همیشه کار می‌کند.
+
+let _inpageNotifBannerTimer = null;
+let _inpageNotifBannerCurrentItem = null;
+
+// نمایش بنر درون‌صفحه‌ای اعلان از بالای صفحه
+// opts: { title, body, isOverdue, itemId, itemText }
+function showInpageNotifBanner(opts) {
+    const banner = document.getElementById('inpageNotifBanner');
+    if (!banner) {
+        console.warn('[InpageNotif] banner element missing');
+        return;
+    }
+    const iconEl = document.getElementById('inbIcon');
+    const titleEl = document.getElementById('inbTitle');
+    const textEl = document.getElementById('inbText');
+    const doneBtn = document.getElementById('inbDoneBtn');
+    const closeBtn = document.getElementById('inbCloseBtn');
+    if (!titleEl || !textEl || !doneBtn || !closeBtn) return;
+    if (iconEl) iconEl.textContent = opts.isOverdue ? '⏰' : '🔔';
+    titleEl.textContent = opts.title || 'یادآور';
+    textEl.textContent = opts.body || '';
+    banner.classList.toggle('overdue', !!opts.isOverdue);
+    banner.classList.add('show');
+    _inpageNotifBannerCurrentItem = opts;
+    // دکمهٔ «انجام شد» → تسک را done کن و بنر را ببند
+    doneBtn.onclick = function() {
+        try {
+            if (opts.itemId) {
+                markItemDoneById(opts.itemId);
+            }
+        } catch(e) { console.warn('[InpageNotif] mark done failed', e); }
+        hideInpageNotifBanner();
+    };
+    closeBtn.onclick = function() { hideInpageNotifBanner(); };
+    // auto-hide بعد از ۳۰ ثانیه (اگر کاربر توجه نکرد)
+    if (_inpageNotifBannerTimer) clearTimeout(_inpageNotifBannerTimer);
+    _inpageNotifBannerTimer = setTimeout(function() { hideInpageNotifBanner(); }, 30000);
+    console.log('[InpageNotif] banner shown:', opts.title);
+}
+
+function hideInpageNotifBanner() {
+    const banner = document.getElementById('inpageNotifBanner');
+    if (banner) banner.classList.remove('show');
+    if (_inpageNotifBannerTimer) {
+        clearTimeout(_inpageNotifBannerTimer);
+        _inpageNotifBannerTimer = null;
+    }
+    _inpageNotifBannerCurrentItem = null;
+}
+
+// helper: علامت‌زدن تسک به‌عنوان done با itemId
+function markItemDoneById(itemId) {
+    try {
+        var db = getDB();
+        for (var i = 0; i < db.length; i++) {
+            if (db[i].id === itemId) {
+                db[i].done = true;
+                db[i].completedAt = new Date().toISOString();
+                setDB(db); // 🔧 v201: setDB نام درست است (saveDB وجود ندارد)
+                render();
+                showToast('✓ انجام شد');
+                return;
+            }
+        }
+    } catch(e) { console.warn('[InpageNotif] markItemDoneById failed', e); }
+}
+
+// 🔧 v201: گرم کردن AudioContext در اولین تعامل کاربر.
+// مرورگرهای جدید AudioContext را در حالت suspended می‌سازند تا از پخش
+// خودکار صدا بدون gesture کاربر جلوگیری کنند. ما در اولین touch/click/keydown
+// صفحه، ctx را resume می‌کنیم. از آن به بعد، ctx در حالت running می‌ماند
+// و interval-triggered sound (مثل checkNotifications) کار می‌کند.
+let _audioWarmed = false;
+function warmAudioContextOnUserGesture() {
+    if (_audioWarmed) return;
+    try {
+        var ctx = getNotifAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') {
+            var p = ctx.resume();
+            if (p && p.then) p.then(function() {
+                _audioWarmed = true;
+                console.log('[NotifSound] AudioContext warmed via user gesture — state:', ctx.state);
+            }).catch(function() {});
+        } else {
+            _audioWarmed = true;
+        }
+    } catch(e) { console.warn('[NotifSound] warmAudioContext failed', e); }
+}
+
+// 🔧 v201: تست دستی اعلان — کاربر می‌تواند زنجیرهٔ کامل را تست کند.
+// یک بنر درون‌صفحه‌ای + صدای زنگ + (در صورت permission) system notification می‌فرستد.
+async function sendTestNotification() {
+    console.log('[Notif] TEST notification triggered');
+    var settings = getNotifSettings();
+    // ۱) بنر درون‌صفحه‌ای + صدا (همیشه)
+    showInpageNotifBanner({
+        title: '🔔 تست اعلان',
+        body: 'این یک اعلان تستی است. اگر این را می‌بینید و صدا را می‌شنوید، زنجیرهٔ foreground کار می‌کند. (' + (settings.soundType === 'beeps' ? '۵ بوق' : 'زنگ بلند') + ')',
+        isOverdue: false,
+        itemId: null,
+        itemText: 'تست'
+    });
+    // ۲) صدا
+    try { _playNotifSoundBySetting(); } catch(e) {}
+    // ۳) system notification (در صورت permission)
+    try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            if ('serviceWorker' in navigator) {
+                var reg = await navigator.serviceWorker.getRegistration();
+                if (reg) {
+                    await reg.showNotification('🔔 تست اعلان — یادآور صوتی', {
+                        body: 'اگر این اعلان را دیدید، Notification API هم کار می‌کند ✓',
+                        icon: 'icon-192.png',
+                        badge: 'favicon-32.png',
+                        dir: 'rtl',
+                        lang: 'fa-IR',
+                        tag: 'test-' + Date.now(),
+                        requireInteraction: false,
+                        vibrate: [200, 100, 200],
+                        silent: false
+                    });
+                    console.log('[Notif] TEST shown via SW');
+                    showToast('اعلان تست ارسال شد ✓');
+                    return;
+                }
+            }
+            // fallback به سازندهٔ صفحه
+            try {
+                var n = new Notification('🔔 تست اعلان — یادآور صوتی', {
+                    body: 'اگر این اعلان را دیدید، Notification API هم کار می‌کند ✓',
+                    dir: 'rtl',
+                    lang: 'fa-IR',
+                    tag: 'test-' + Date.now()
+                });
+                console.log('[Notif] TEST shown via page constructor');
+                showToast('اعلان تست ارسال شد ✓');
+                return;
+            } catch(e2) {
+                console.warn('[Notif] TEST page constructor failed:', e2);
+            }
+        }
+        showToast('اعلان تست: بنر + صدا نمایش داده شد (system notif نیاز به permission دارد)');
+    } catch(e) {
+        console.warn('[Notif] TEST system notification failed:', e);
+        showToast('اعلان تست: بنر + صدا نمایش داده شد');
+    }
 }
 
 // Cleanup old sent notifications (older than 30 days)
@@ -15993,6 +16327,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Run initial notification check after 3 seconds (delayed to not block load)
     setTimeout(checkNotifications, 3000);
+
+    // 🔧 v201: چک سریع‌تر برای بنر درون‌صفحه‌ای — هر ۱۰ ثانیه. این فقط برای
+    // foreground است و بنر را سریع‌تر نشان می‌دهد. چون checkNotifications
+    // idempotent است (کلید در sentNotifications ثبت می‌شود)، تکرار فراخوانی
+    // بی‌ضرر است.
+    setInterval(checkNotifications, 10000);
+
+    // 🔧 v201: گرم کردن AudioContext در اولین تعامل کاربر — مهم‌ترین remediation
+    // برای «زنگ نمی‌زند». AudioContext در حالت suspended شروع می‌شود و فقط در
+    // یک user gesture (touch/click/keydown) می‌تواند resume شود. وقتی کاربر
+    // هر جای صفحه را لمس کند، ctx در حالت running می‌ماند و interval-triggered
+    // sound (از checkNotifications) کار می‌کند.
+    try {
+        var _warmOnce = function() {
+            warmAudioContextOnUserGesture();
+            // فقط یک‌بار نیاز است — اما listener را نگه می‌داریم تا در صورت
+            // suspend شدن مجدد (مثلاً بعد از بازگشت از background)، دوباره resume شود.
+        };
+        window.addEventListener('touchstart', _warmOnce, { passive: true });
+        window.addEventListener('click', _warmOnce, { passive: true });
+        window.addEventListener('keydown', _warmOnce, { passive: true });
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // صفحه دوباره visible شد — ctx را دوباره گرم کن (ممکن است suspended شده باشد)
+                _audioWarmed = false;
+                warmAudioContextOnUserGesture();
+            }
+        });
+    } catch(e) { console.warn('[NotifSound] warm listener setup failed', e); }
 
     // ─────────────────────────────────────────────────────────────────────
     // 🔧 v132 — SW KEEPALIVE: سرویس ورکر را در حافظه نگه می‌داریم
