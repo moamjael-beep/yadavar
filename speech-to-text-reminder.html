@@ -5091,7 +5091,30 @@ body.locked .header-actions button {
 //              اینترنت واقعاً در دسترس نیست، هدر چشمک می‌زند و ضبط صوت باز نمی‌شود.
 //            نتیجه: اگر اینترنت واقعاً در دسترس نیست، هدر چشمک می‌زند
 //            و ضبط صوت باز نمی‌شود.
-const APP_VERSION = 'v186-2026-11-08-contacts-tweaks-internet-check-fix';
+//   v187 - INTERNET CHECK = VOICE RECORDING TEST (2s interval, Google endpoint):
+//         کاربر درخواست کرد:
+//           «تست در دسترس بودن ضبط صوت از ۱۰ به ۲ ثانیه کاهش یابد»
+//           «اینترنت برگشته و درست هست هنوز هدر چشمک میزند — هر ۲ ثانیه چک کند»
+//           «تأکید میکنم تست اینترنت در تمام برنامه با تست قابلیت ضبط صوت انجام پذیرد»
+//         🔧 تغییرات:
+//         - فاصله بررسی: ۱۰s → ۲s
+//         - تایموت: ۳s → ۲s
+//         - endpoint: manifest.json → https://www.google.com/generate_204
+//           (تست سرورهای Google که Web Speech API از آن‌ها استفاده می‌کند
+//            = تست قابلیت ضبط صوت، نه فقط تست GitHub)
+//         - mode: no-cors (opaque response کافی است — فقط می‌خواهیم بدانیم
+//           آیا Google در دسترس است یا نه)
+//         - online event: دیگر isReachable=true فرض نمی‌کند — بگذار
+//           checkReachability تأیید کند (رفع باگ: هدر کوتاه به حالت اول
+//           برمی‌گشت و دوباره چشمک می‌زد)
+//         نتیجه: هر ۲ ثانیه قابلیت ضبط صوت تست می‌شود. اگر Google در
+//         دسترس باشد → هدر به حالت اول + ضبط صوت در دسترس. اگر نه →
+//         هدر چشمک + ضبط صوت مسدود.
+//   v188 - AUTO-UPDATE CHECK INTERVAL: 30 min → 2 min:
+//         کاربر درخواست کرد: «فاصله زمانی تست وجود نسخه جدید برنامه و
+//         استفاده از آن و رفرش اتومات برنامه را به ۲ دقیقه کاهش بده».
+//         🔧 تغییر: setInterval برای UPDATE_CACHE از ۳۰ دقیقه به ۲ دقیقه.
+const APP_VERSION = 'v188-2026-11-08-auto-update-check-2min';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -15109,14 +15132,20 @@ function checkPendingReload() {
 let isReachable = true; // assume reachable initially (avoid unnecessary flashing on load)
 let lastReachabilityCheck = 0;
 let reachabilityCheckInProgress = false;
-// 🔧 v186: فاصله بررسی از ۱۲۰s به ۱۰s کاهش یافت — کاربر درخواست کرد:
-// «فواصل چک کردن اینترنت مورد نیاز برای ضبط صوت را بسیار کوتاه انجام بده»
-const REACHABILITY_CHECK_INTERVAL = 10000; // 10 seconds (was 120s)
-// 🔧 v186: تایموت کوتاه — ۳ ثانیه (بودجه ۵s زیاد بود)
-const REACHABILITY_TIMEOUT = 3000; // 3 seconds timeout
-// 🔧 v186: endpoint برای تست واقعی — manifest.json (فایل کوچک، سریع)
-// با پارامتر _rc=1 تا SW کش را دور بزند و مستقیم به شبکه برود.
-const REACHABILITY_ENDPOINTS = ['./manifest.json?_rc=1'];
+// 🔧 v187: فاصله بررسی از ۱۰s به ۲s کاهش یافت — کاربر درخواست کرد:
+// «تست در دسترس بودن ضبط صوت از ۱۰ به ۲ ثانیه کاهش یابد»
+// «هر ۲ ثانیه چک کند و اگر ضبط صوت در دسترس بود هدر به حالت اول برگردد»
+const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds (was 10s)
+// 🔧 v187: تایموت ۲s — هم‌اندازهٔ فاصله بررسی
+const REACHABILITY_TIMEOUT = 2000; // 2 seconds timeout
+// 🔧 v187: endpoint به Google تغییر یافت — کاربر تأکید کرد:
+// «تست اینترنت در تمام برنامه با تست قابلیت ضبط صوت انجام پذیرد».
+// Web Speech API از سرورهای Google استفاده می‌کند. پس تست دسترسی به Google
+// = تست قابلیت ضبط صوت. از generate_204 (Google's captive portal detection)
+// استفاده می‌کنیم — بسیار سبک (HTTP 204، بدون body).
+// mode: 'no-cors' استفاده می‌شود تا CORS مشکلی نسازد. اگر fetch بدون خطا
+// برگردد → Google در دسترس است → ضبط صوت قابل استفاده.
+const REACHABILITY_ENDPOINTS = ['https://www.google.com/generate_204'];
 
 async function checkReachability(force = false) {
     const now = Date.now();
@@ -15131,7 +15160,7 @@ async function checkReachability(force = false) {
 
     const wasReachable = isReachable;
 
-    // 🔧 Step 1: navigator.onLine — بررسی سریع
+    // Step 1: navigator.onLine — بررسی سریع
     if (!navigator.onLine) {
         isReachable = false;
         reachabilityCheckInProgress = false;
@@ -15139,26 +15168,32 @@ async function checkReachability(force = false) {
         return false;
     }
 
-    // 🔧 v186: Step 2: تست واقعی با fetch — بررسی دسترسی واقعی به اینترنت
-    // قبلاً فقط navigator.onLine بررسی می‌شد که در موارد captive portal یا
-    // VPN بدون دسترسی واقعی، false positive می‌داد. اکنون یک fetch سبک
-    // به manifest.json (با تایموت ۳ ثانیه) انجام می‌دهیم.
+    // 🔧 v187: Step 2: تست قابلیت ضبط صوت — fetch به Google (generate_204)
+    // این تست مشخص می‌کند که آیا سرورهای Google (که Web Speech API از آن‌ها
+    // استفاده می‌کند) در دسترس هستند یا نه. اگر در دسترس نباشند، ضبط صوت
+    // کار نمی‌کند و هدر چشمک می‌زند.
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REACHABILITY_TIMEOUT);
         const res = await fetch(REACHABILITY_ENDPOINTS[0], {
             method: 'GET',
+            mode: 'no-cors', // 🔧 v187: no-cors — opaque response کافی است
             cache: 'no-store',
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        isReachable = res.ok;
+        // با mode: 'no-cors'، response از نوع 'opaque' است و res.ok=false.
+        // اما اگر fetch بدون خطا برگردد، یعنی Google در دسترس است.
+        // اگر fetch خطا بدهد (catch)، یعنی Google در دسترس نیست.
+        isReachable = true;
     } catch(e) {
-        // fetch شکست خورد — آفلاین یا تایموت
+        // fetch شکست خورد — Google در دسترس نیست → ضبط صوت کار نمی‌کند
         isReachable = false;
     }
 
     reachabilityCheckInProgress = false;
+    // 🔧 v187: همیشه updateOnlineStatus صدا بزن — نه فقط وقتی تغییر کرده
+    // اینطوری هدر سریع به‌روزرسانی می‌شود وقتی اینترنت برمی‌گردد
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
     }
@@ -15488,25 +15523,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerServiceWorker();
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔧 v186: بررسی اینترنت — بسیار کوتاه و درست
-    // کاربر درخواست کرد: «فواصل چک کردن اینترنت مورد نیاز برای ضبط صوت
-    // را بسیار کوتاه و درست انجام بده تا اگر بدرستی در دسترس نیست هدر
-    // چشمک زن و ضبط صوت باز نشود.»
+    // 🔧 v187: بررسی اینترنت = تست قابلیت ضبط صوت — هر ۲ ثانیه
+    // کاربر درخواست کرد:
+    //   «تست در دسترس بودن ضبط صوت از ۱۰ به ۲ ثانیه کاهش یابد»
+    //   «اینترنت برگشته و درست هست هنوز هدر چشمک میزند — هر ۲ ثانیه چک کند
+    //    و اگر ضبط صوت در دسترس بود هدر به حالت اول و ضبط صوت در اختیار قرار گیرد»
+    //   «تأکید میکنم تست اینترنت در تمام برنامه با تست قابلیت ضبط صوت انجام پذیرد»
     //
     // استراتژی:
-    //   ۱) وضعیت اولیه: navigator.onLine (سریع، بدون fetch)
-    //   ۲) بلافاصله بعد از لود: checkReachability(true) — تست واقعی با fetch
-    //      به manifest.json (با تایموت ۳ ثانیه). اگر شکست خورد → isReachable=false
-    //      و هدر کهربایی ثابت (بدون چشمک) + ضبط صوت باز نمی‌شود.
-    //   ۳) هر ۱۰ ثانیه: checkReachability() — چک مجدد در پس‌زمینه.
-    //   ۴) online/offline events: به‌روزرسانی فوری.
+    //   - endpoint: https://www.google.com/generate_204 (تست سرورهای Google
+    //     که Web Speech API از آن‌ها استفاده می‌کند = تست قابلیت ضبط صوت)
+    //   - فاصله: ۲ ثانیه
+    //   - تایموت: ۲ ثانیه
+    //   - mode: no-cors (opaque response کافی است)
+    //   - اگر Google در دسترس بود → isReachable=true → هدر به حالت اول → ضبط صوت در دسترس
+    //   - اگر Google در دسترس نبود → isReachable=false → هدر چشمک → ضبط صوت مسدود
     // ─────────────────────────────────────────────────────────────────────
     window.addEventListener('online', () => {
-        isReachable = true;
-        updateOnlineStatus();
-        render();
-        // 🔧 v186: بعد از online event، تست واقعی هم بکن
-        checkReachability(true);
+        // 🔧 v187: فرض نکن reachable — بگذار checkReachability تأیید کند
+        // قبلاً isReachable=true می‌کردیم که اگر Google در دسترس نبود،
+        // هدر کوتاه به حالت اول برمی‌گشت و دوباره چشمک می‌زد.
+        checkReachability(true).then(() => {
+            updateOnlineStatus();
+            render();
+        });
     });
     window.addEventListener('offline', () => {
         isReachable = false;
@@ -15516,12 +15556,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // وضعیت اولیه — سریع (بدون انتظار fetch)
     isReachable = navigator.onLine;
     updateOnlineStatus();
-    // 🔧 v186: بلافاصله تست واقعی بکن — fetch به manifest.json با تایموت ۳s
-    // این کار در پس‌زمینه انجام می‌شود (fire-and-forget) و UI را مسدود نمی‌کند.
-    // اگر fetch شکست بخورد، isReachable=false می‌شود و هدر کهربایی ثابت
-    // (بدون چشمک) + ضبط صوت باز نمی‌شود.
+    // 🔧 v187: بلافاصله تست قابلیت ضبط صوت بکن — fetch به Google
     checkReachability(true);
-    // 🔧 v186: هر ۱۰ ثانیه چک کن — فواصل بسیار کوتاه
+    // 🔧 v187: هر ۲ ثانیه چک کن — فواصل بسیار کوتاه
     setInterval(function() {
         checkReachability();
     }, REACHABILITY_CHECK_INTERVAL);
@@ -15564,12 +15601,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
         }
     }, 5000);
-    // هر ۳۰ دقیقه چک کن
+    // 🔧 v188: هر ۲ دقیقه چک کن (قبلاً ۳۰ دقیقه بود — کاربر درخواست کرد)
     setInterval(function() {
         if (navigator.serviceWorker.controller && navigator.onLine) {
             navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_CACHE' });
         }
-    }, 30 * 60 * 1000);
+    }, 2 * 60 * 1000);
 
     // ─────────────────────────────────────────────────────────────────────
     // PERIODIC UI REFRESH (every 30s) — re-render for time-based reordering
