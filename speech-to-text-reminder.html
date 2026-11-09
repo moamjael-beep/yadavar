@@ -5171,18 +5171,12 @@ body.locked .header-actions button {
 //         اگر کاربر ضبط صوت بزند و Google در دسترس نباشد:
 //         recognition.onerror خطای 'network' → toast «اتصال اینترنت قطع شد»
 //         — این UX بهتر از چشمک بی‌وقفه هدر است.
-//   v194 - HYBRID: navigator.onLine + fetch (fixes both directions):
-//         مشکل v193: navigator.onLine تنهایی کافی نیست — وقتی WiFi قطع می‌شود
-//         ولی آداپتر روشن است، navigator.onLine=true می‌ماند → هدر چشمک نمی‌زند.
-//         مشکل v187-v192: fetch با _rc=1 و SW مشکلات CORS/DNS/intercept داشت.
-//         🔧 راه‌حل: ترکیب هر دو:
-//         - فاز ۱: navigator.onLine → اگر false → قطعاً آفلاین
-//         - فاز ۲: fetch سبک (manifest.json, cache: no-store, تایموت ۴s)
-//           → اگر res.ok → آنلاین؛ اگر شکست → آفلاین
-//         - هر ۳ ثانیه چک می‌شود
-//         - online event → checkReachability فوری
-//         - offline event → isReachable=false فوری
-const APP_VERSION = 'v194-2026-11-08-hybrid-navigator-online-plus-fetch';
+//   v195 - FIX: _rc=1 on fetch (SW was serving from cache even when offline):
+//         مشکل v194: fetch بدون _rc → SW از کش می‌خواند → همیشه 200 → آنلاین!
+//         رفع: _rc=1 → SW کش را دور می‌زند → مستقیم شبکه → اگر شکست 503 → آفلاین
+//         🔧 همچنین: پاسخ به سؤال کاربر درباره تشخیص صوتی آفلاین — Web Speech API
+//         فقط آنلاین کار می‌کند (سرورهای Google). آفلاین جایگزینی در مرورگر نیست.
+const APP_VERSION = 'v195-2026-11-08-fix-rc1-fetch-bypass-sw-cache';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -15202,34 +15196,27 @@ function checkPendingReload() {
 //   - GitHub itself being down
 //   - Intermittent connectivity
 
-// 🔧 v194: ترکیب navigator.onLine + fetch سبک
-// navigator.onLine تنهایی کافی نیست — در موبایل وقتی WiFi قطع می‌شود ولی
-// آداپتر روشن است، navigator.onLine=true می‌ماند. پس یک fetch سبک هم نیاز است.
-// اما fetch قبلی با _rc=1 و SW مشکلات داشت. این بار مستقیم fetch می‌کنیم
-// بدون _rc — SW برای فایل‌های هم‌مبدا از کش می‌خواند (cache-first)، ولی
-// cache: 'no-store' استفاده می‌کنیم تا مرورگر از HTTP cache هم نخواند.
-// اگر SW فعال بود و کش داشت، از کش می‌خواند → res.ok=true حتی آفلاین.
-// برای رفع این: اگر SW controller داریم، پیام CHECK_REACHABILITY به SW
-// می‌فرستیم تا SW خودش fetch کند و نتیجه را برگرداند.
+// 🔧 v195: رفع نهایی — fetch با _rc=1 تا SW کش را دور بزند
+// مشکل v194: fetch بدون _rc → SW از کش می‌خواند → همیشه 200 → همیشه آنلاین!
+// رفع: _rc=1 اضافه شد → SW مستقیم به شبکه می‌رود → اگر شکست → 503 → آفلاین
 let isReachable = navigator.onLine;
 let _reachabilityFetching = false;
 
 async function checkReachability(force) {
-    // فاز ۱: navigator.onLine — سریع
     if (!navigator.onLine) {
-        var was1 = isReachable;
+        var was0 = isReachable;
         isReachable = false;
-        if (was1 !== isReachable) { updateOnlineStatus(); }
+        if (was0 !== isReachable) { updateOnlineStatus(); }
         return false;
     }
-    // فاز ۲: fetch سبک برای تأیید واقعی
     if (_reachabilityFetching) return isReachable;
     _reachabilityFetching = true;
-    var was2 = isReachable;
+    var was = isReachable;
     try {
         var controller = new AbortController();
         var tid = setTimeout(function() { controller.abort(); }, 4000);
-        var res = await fetch('./manifest.json', {
+        // 🔧 v195: _rc=1 الزامی است — بدون آن SW از کش می‌خواند!
+        var res = await fetch('./manifest.json?_rc=1', {
             method: 'GET',
             cache: 'no-store',
             signal: controller.signal
@@ -15240,7 +15227,7 @@ async function checkReachability(force) {
         isReachable = false;
     }
     _reachabilityFetching = false;
-    if (was2 !== isReachable) {
+    if (was !== isReachable) {
         updateOnlineStatus();
         if (isReachable) render();
     }

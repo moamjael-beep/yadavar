@@ -1,1 +1,1 @@
-v194-2026-11-08-hybrid-navigator-online-plus-fetch
+v195-2026-11-08-fix-rc1-fetch-bypass-sw-cache
