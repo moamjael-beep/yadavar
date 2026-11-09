@@ -30,8 +30,8 @@
 // نام «نسخهٔ حافظهٔ پنهان». هر بار که کد را تغییر دادید و در گیت‌هاب
 // گذاشتید، این عدد را یکی بالا ببرید (مثلاً v17 → v18) تا مرورگر
 // بداند باید فایل‌های جدید را دوباره دانلود کند.
-// 🔧 v190: هماهنگ با APP_VERSION (v190 fix header blink when internet returns).
-const CACHE_NAME = 'yadavar-cache-v190';
+// 🔧 v191: هماهنگ با APP_VERSION (v191 fix blink — Google + fallback).
+const CACHE_NAME = 'yadavar-cache-v191';
 
 // نام پایگاه دادهٔ IndexedDB. این پایگاه داده بین سرویس ورکر و صفحهٔ
 // HTML مشترک است و یادآورها + تاریخچهٔ اعلان‌ها را در خود نگه می‌دارد.

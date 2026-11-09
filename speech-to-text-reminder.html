@@ -5141,7 +5141,20 @@ body.locked .header-actions button {
 //           غیر opaque (503 از SW) = ناموفق.
 //         - تایموت: ۲s → ۵s (VPN ها ممکن است کند باشند — ۲s خیلی کوتاه بود).
 //         - اگر اینترنت برگشت: render() هم صدا زده می‌شود تا UI به‌روز شود.
-const APP_VERSION = 'v190-2026-11-08-fix-header-blink-when-internet-returns';
+//   v191 - FIX: HEADER BLINK WHEN INTERNET RETURNS (Google + fallback):
+//         کاربر گفت: «خراب هست همچنان چشمک میزند بعد از وصل مجدد اینترنت».
+//         علت: در ایران Google ممکن است مسدود باشد حتی وقتی اینترنت در دسترس
+//         است. قبلاً فقط Google چک می‌شد → اگر مسدود بود، هدر چشمک می‌زد
+//         حتی وقتی اینترنت بود.
+//         🔧 رفع: دو مرحله‌ای چک کن:
+//         ۱) Google (generate_204) — اگر موفق → isReachable=true (ضبط صوت هم کار می‌کند)
+//         ۲) اگر Google شکست خورد → fallback: version.txt از گیت‌هاب (هم‌مبدا)
+//            اگر موفق → isReachable=true (اینترنت هست، ضبط صوت ممکن است کار نکند
+//            ولی هدر چشمک نمی‌زند)
+//         ۳) اگر هر دو شکست خوردند → isReachable=false → هدر چشمک
+//         نتیجه: وقتی اینترنت برمی‌گردد (حتی اگر Google مسدود باشد)،
+//         هدر به حالت اول برمی‌گردد.
+const APP_VERSION = 'v191-2026-11-08-fix-blink-google-plus-fallback';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -15159,14 +15172,12 @@ function checkPendingReload() {
 let isReachable = true; // assume reachable initially (avoid unnecessary flashing on load)
 let lastReachabilityCheck = 0;
 let reachabilityCheckInProgress = false;
-// 🔧 v190: فاصله بررسی ۲ ثانیه (بدون تغییر از v187)
+// 🔧 v191: فاصله بررسی ۲ ثانیه
 const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds
-// 🔧 v190: تایموت افزایش یافت — ۲s → ۵s (VPN ها ممکن است کند باشند)
-const REACHABILITY_TIMEOUT = 5000; // 5 seconds timeout (was 2s — too short for VPN)
-// 🔧 v190: endpoint با _rc=1 — تا SW کش را دور بزند و مستقیم به شبکه برود.
-// بررسی res.type === 'opaque' — اگر opaque بود یعنی Google واقعاً در دسترس است.
-// اگر res.type !== 'opaque' (مثلاً 503 از SW) یعنی Google در دسترس نیست.
-const REACHABILITY_ENDPOINTS = ['https://www.google.com/generate_204?_rc=1'];
+// 🔧 v191: تایموت ۵ ثانیه برای Google (VPN کند)
+const REACHABILITY_TIMEOUT = 5000; // 5 seconds
+// 🔧 v191: تایموت کوتاه‌تر برای fallback هم‌مبدا (سریع)
+const REACHABILITY_FALLBACK_TIMEOUT = 3000; // 3 seconds
 
 async function checkReachability(force = false) {
     const now = Date.now();
@@ -15189,37 +15200,62 @@ async function checkReachability(force = false) {
         return false;
     }
 
-    // 🔧 v190: Step 2: تست قابلیت ضبط صوت — fetch به Google (generate_204)
-    // با _rc=1 تا SW کش را دور بزند. بررسی res.type:
-    //   - 'opaque' → Google در دسترس است (no-cors موفق) → isReachable = true
-    //   - غیر از 'opaque' (مثلاً 'basic' با status 503) → Google در دسترس نیست → false
-    //   - fetch خطا داد (catch) → Google در دسترس نیست → false
+    // 🔧 v191: Step 2 — تست قابلیت ضبط صوت (Google) + fallback هم‌مبدا
+    // اول Google را چک کن. اگر موفق بود → isReachable = true.
+    // اگر Google شکست خورد (مثلاً در ایران مسدود است ولی اینترنت هست)،
+    // یک fallback هم‌مبدا (version.txt از گیت‌هاب) را چک کن.
+    // اگر fallback موفق بود → اینترنت هست ولی ضبط صوت ممکن است کار نکند.
+    // در هر دو حالت، هدر چشمک نمی‌زند (اینترنت در دسترس است).
+    // فقط اگر هر دو شکست خوردند → واقعاً آفلاین → هدر چشمک.
+    var googleReachable = false;
+    var fallbackReachable = false;
+
+    // 2a: تست Google (قابلیت ضبط صوت)
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REACHABILITY_TIMEOUT);
-        const res = await fetch(REACHABILITY_ENDPOINTS[0], {
+        var controller1 = new AbortController();
+        var timeoutId1 = setTimeout(function() { controller1.abort(); }, REACHABILITY_TIMEOUT);
+        var res1 = await fetch('https://www.google.com/generate_204?_rc=1', {
             method: 'GET',
             mode: 'no-cors',
             cache: 'no-store',
-            signal: controller.signal
+            signal: controller1.signal
         });
-        clearTimeout(timeoutId);
-        // 🔧 v190: فقط opaque = موفق. غیر opaque (503/504 از SW) = ناموفق.
-        if (res.type === 'opaque') {
-            isReachable = true;
-        } else {
-            isReachable = false;
-        }
+        clearTimeout(timeoutId1);
+        if (res1.type === 'opaque') googleReachable = true;
     } catch(e) {
-        // fetch شکست خورد (تایموت یا خطای شبکه) — Google در دسترس نیست
-        isReachable = false;
+        googleReachable = false;
+    }
+
+    // اگر Google موفق بود → نیازی به fallback نیست
+    if (googleReachable) {
+        isReachable = true;
+    } else {
+        // 2b: Google شکست خورد — fallback هم‌مبدا (version.txt از گیت‌هاب)
+        // این چک می‌کند که آیا اینترنت اصلاً در دسترس است یا نه.
+        // اگر گیت‌هاب در دسترس باشد → اینترنت هست (ولی ضبط صوت ممکن است کار نکند).
+        try {
+            var controller2 = new AbortController();
+            var timeoutId2 = setTimeout(function() { controller2.abort(); }, REACHABILITY_FALLBACK_TIMEOUT);
+            var res2 = await fetch('./version.txt?_rc=1', {
+                method: 'GET',
+                cache: 'no-store',
+                signal: controller2.signal
+            });
+            clearTimeout(timeoutId2);
+            // اگر fetch بدون خطا برگردد و res.ok باشد → گیت‌هاب در دسترس است
+            if (res2 && res2.ok) fallbackReachable = true;
+        } catch(e) {
+            fallbackReachable = false;
+        }
+
+        // اگر Google نبود ولی گیت‌هاب بود → اینترنت هست
+        // (ضبط صوت ممکن است کار نکند، ولی هدر چشمک نمی‌زند)
+        isReachable = fallbackReachable;
     }
 
     reachabilityCheckInProgress = false;
-    // 🔧 v190: همیشه updateOnlineStatus صدا بزن اگر وضعیت تغییر کرده
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
-        // 🔧 v190: اگر اینترنت برگشته، render هم بکن تا UI به‌روز شود
         if (isReachable) {
             render();
         }
