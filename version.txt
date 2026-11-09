@@ -1,1 +1,1 @@
-v192-2026-11-08-simplify-reachability-same-origin-only
+v193-2026-11-08-simplify-navigator-online-version-footer

@@ -429,6 +429,14 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
     color: rgba(140, 140, 150, 0.55);
     font-weight: 300;
 }
+.credit-footer .credit-version {
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    color: rgba(160, 160, 170, 0.5);
+    letter-spacing: 0.04em;
+    direction: ltr;
+}
 
 .item {
     border-radius: 10px;
@@ -3725,6 +3733,7 @@ body.locked .header-actions button {
     <span class="credit-names">Reza Jalili</span>
     <span class="credit-sep">&amp;</span>
     <span class="credit-names">Emad Tavakoli</span>
+    <span class="credit-version" id="creditVersion"></span>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -5162,8 +5171,18 @@ body.locked .header-actions button {
 //         اگر کاربر ضبط صوت بزند و Google در دسترس نباشد:
 //         recognition.onerror خطای 'network' → toast «اتصال اینترنت قطع شد»
 //         — این UX بهتر از چشمک بی‌وقفه هدر است.
-const APP_VERSION = 'v192-2026-11-08-simplify-reachability-same-origin-only';
+//   v193 - SIMPLIFY REACHABILITY + VERSION IN FOOTER:
+//         ۱) checkReachability: تمام fetch‌ها حذف شدند — فقط navigator.onLine.
+//            مرورگر خودش مدیریت می‌کند — online/offline events فوری fire می‌شوند.
+//            وقتی اینترنت برمی‌گردد → online event → isReachable=true → هدر به حالت اول.
+//         ۲) نسخهٔ برنامه زیر نام تهیه‌کنندگان نمایش داده می‌شود.
+const APP_VERSION = 'v193-2026-11-08-simplify-navigator-online-version-footer';
 console.log('[Page] APP_VERSION =', APP_VERSION);
+// 🔧 v193: نمایش نسخه در credit footer
+(function() {
+    var el = document.getElementById('creditVersion');
+    if (el) el.textContent = APP_VERSION;
+})();
 
 // ════════════════════════════════════════════════════════════════════
 // 🚨 بخش ۴: تبدیل تاریخ شمسی (جلالی) — حساس، دست نزنید
@@ -15177,51 +15196,17 @@ function checkPendingReload() {
 //   - GitHub itself being down
 //   - Intermittent connectivity
 
-let isReachable = true;
-let lastReachabilityCheck = 0;
-let reachabilityCheckInProgress = false;
-// 🔧 v192: ساده‌سازی — فقط چک هم‌مبدا (version.txt از گیت‌هاب)
-// Google چک حذف شد چون باعث مشکلات CORS، DNS cache، و مسدودسازی منطقه‌ای
-// می‌شد. اگر کاربر ضبط صوت را بزند و Google در دسترس نباشد، recognition.onerror
-// با خطای 'network' یک toast نشان می‌دهد — این UX بهتر از چشمک بی‌وقفه هدر است.
-const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds
-const REACHABILITY_TIMEOUT = 4000; // 4 seconds
+// 🔧 v193: ساده‌سازی نهایی — فقط navigator.onLine، بدون fetch.
+// تمام چک‌های fetch (Google، version.txt، manifest.json) حذف شدند چون
+// باعث مشکلات CORS، DNS cache، SW intercept، timeout، و مسدودسازی منطقه‌ای
+// می‌شدند. navigator.onLine توسط مرورگر مدیریت می‌شود — قابل‌اعتماد و سریع.
+// اگر کاربر ضبط صوت بزند و Google در دسترس نباشد: recognition.onerror
+// خطای 'network' → toast نشان می‌دهد. این UX بهتر از چشمک بی‌وقفه هدر است.
+let isReachable = navigator.onLine;
 
-async function checkReachability(force) {
-    var now = Date.now();
-    if (!force && now - lastReachabilityCheck < REACHABILITY_CHECK_INTERVAL) {
-        return isReachable;
-    }
-    if (reachabilityCheckInProgress) {
-        return isReachable;
-    }
-    reachabilityCheckInProgress = true;
-    lastReachabilityCheck = now;
-
+function checkReachability() {
     var wasReachable = isReachable;
-
-    // Step 1: navigator.onLine
-    if (!navigator.onLine) {
-        isReachable = false;
-    } else {
-        // Step 2: fetch هم‌مبدا — version.txt (کوچک، سریع، بدون CORS)
-        // با _rc=1 تا SW کش را دور بزند
-        try {
-            var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, REACHABILITY_TIMEOUT);
-            var res = await fetch('./version.txt?_rc=1', {
-                method: 'GET',
-                cache: 'no-store',
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            isReachable = res && res.ok;
-        } catch(e) {
-            isReachable = false;
-        }
-    }
-
-    reachabilityCheckInProgress = false;
+    isReachable = navigator.onLine;
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
         if (isReachable) render();
@@ -15552,59 +15537,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerServiceWorker();
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔧 v187: بررسی اینترنت = تست قابلیت ضبط صوت — هر ۲ ثانیه
-    // کاربر درخواست کرد:
-    //   «تست در دسترس بودن ضبط صوت از ۱۰ به ۲ ثانیه کاهش یابد»
-    //   «اینترنت برگشته و درست هست هنوز هدر چشمک میزند — هر ۲ ثانیه چک کند
-    //    و اگر ضبط صوت در دسترس بود هدر به حالت اول و ضبط صوت در اختیار قرار گیرد»
-    //   «تأکید میکنم تست اینترنت در تمام برنامه با تست قابلیت ضبط صوت انجام پذیرد»
-    //
-    // استراتژی:
-    //   - endpoint: https://www.google.com/generate_204 (تست سرورهای Google
-    //     که Web Speech API از آن‌ها استفاده می‌کند = تست قابلیت ضبط صوت)
-    //   - فاصله: ۲ ثانیه
-    //   - تایموت: ۲ ثانیه
-    //   - mode: no-cors (opaque response کافی است)
-    //   - اگر Google در دسترس بود → isReachable=true → هدر به حالت اول → ضبط صوت در دسترس
-    //   - اگر Google در دسترس نبود → isReachable=false → هدر چشمک → ضبط صوت مسدود
+    // 🔧 v193: بررسی اینترنت = فقط navigator.onLine (بدون fetch)
+    // مرورگر خودش مدیریت می‌کند — online/offline events فوری fire می‌شوند.
     // ─────────────────────────────────────────────────────────────────────
     window.addEventListener('online', () => {
-        // 🔧 v187: فرض نکن reachable — بگذار checkReachability تأیید کند
-        // قبلاً isReachable=true می‌کردیم که اگر Google در دسترس نبود،
-        // هدر کوتاه به حالت اول برمی‌گشت و دوباره چشمک می‌زد.
-        checkReachability(true).then(() => {
-            updateOnlineStatus();
-            render();
-        });
+        isReachable = true;
+        updateOnlineStatus();
+        render();
     });
     window.addEventListener('offline', () => {
         isReachable = false;
         updateOnlineStatus();
         render();
     });
-    // وضعیت اولیه — سریع (بدون انتظار fetch)
     isReachable = navigator.onLine;
     updateOnlineStatus();
-    // 🔧 v187: بلافاصله تست قابلیت ضبط صوت بکن — fetch به Google
-    checkReachability(true);
-    // 🔧 v187: هر ۲ ثانیه چک کن — فواصل بسیار کوتاه
-    setInterval(function() {
-        checkReachability();
-    }, REACHABILITY_CHECK_INTERVAL);
 
     // Check when tab becomes visible (user came back from another tab/app)
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
-            try {
-                checkReachability(true).then(() => {
-                    updateOnlineStatus();
-                    render();
-                    checkNotifications();
-                    if (navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
-                    }
-                });
-            } catch(e) {}
+            // 🔧 v193: checkReachability دیگر async نیست — فقط navigator.onLine
+            checkReachability();
+            updateOnlineStatus();
+            render();
+            checkNotifications();
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_DEADLINES' });
+            }
             // 🔧 v147: به‌روزرسانی دکمه‌های شناور وقتی برگشتیم
             _refreshFloatingAddBtn();
             refreshFloatingContactBtn();
