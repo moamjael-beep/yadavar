@@ -5154,7 +5154,15 @@ body.locked .header-actions button {
 //         ۳) اگر هر دو شکست خوردند → isReachable=false → هدر چشمک
 //         نتیجه: وقتی اینترنت برمی‌گردد (حتی اگر Google مسدود باشد)،
 //         هدر به حالت اول برمی‌گردد.
-const APP_VERSION = 'v191-2026-11-08-fix-blink-google-plus-fallback';
+//   v192 - SIMPLIFY: REMOVE GOOGLE CHECK — same-origin only:
+//         کاربر گفت: «خراب هست هنوز» — چک Google باعث مشکلات متعدد می‌شد:
+//         CORS، DNS cache، SW intercept، مسدودسازی منطقه‌ای (ایران).
+//         🔧 تغییر: Google چک کامل حذف شد. فقط چک هم‌مبدا (version.txt)
+//         باقی ماند — ساده، سریع، قابل‌اعتماد.
+//         اگر کاربر ضبط صوت بزند و Google در دسترس نباشد:
+//         recognition.onerror خطای 'network' → toast «اتصال اینترنت قطع شد»
+//         — این UX بهتر از چشمک بی‌وقفه هدر است.
+const APP_VERSION = 'v192-2026-11-08-simplify-reachability-same-origin-only';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 
 // ════════════════════════════════════════════════════════════════════
@@ -15169,18 +15177,18 @@ function checkPendingReload() {
 //   - GitHub itself being down
 //   - Intermittent connectivity
 
-let isReachable = true; // assume reachable initially (avoid unnecessary flashing on load)
+let isReachable = true;
 let lastReachabilityCheck = 0;
 let reachabilityCheckInProgress = false;
-// 🔧 v191: فاصله بررسی ۲ ثانیه
+// 🔧 v192: ساده‌سازی — فقط چک هم‌مبدا (version.txt از گیت‌هاب)
+// Google چک حذف شد چون باعث مشکلات CORS، DNS cache، و مسدودسازی منطقه‌ای
+// می‌شد. اگر کاربر ضبط صوت را بزند و Google در دسترس نباشد، recognition.onerror
+// با خطای 'network' یک toast نشان می‌دهد — این UX بهتر از چشمک بی‌وقفه هدر است.
 const REACHABILITY_CHECK_INTERVAL = 2000; // 2 seconds
-// 🔧 v191: تایموت ۵ ثانیه برای Google (VPN کند)
-const REACHABILITY_TIMEOUT = 5000; // 5 seconds
-// 🔧 v191: تایموت کوتاه‌تر برای fallback هم‌مبدا (سریع)
-const REACHABILITY_FALLBACK_TIMEOUT = 3000; // 3 seconds
+const REACHABILITY_TIMEOUT = 4000; // 4 seconds
 
-async function checkReachability(force = false) {
-    const now = Date.now();
+async function checkReachability(force) {
+    var now = Date.now();
     if (!force && now - lastReachabilityCheck < REACHABILITY_CHECK_INTERVAL) {
         return isReachable;
     }
@@ -15190,75 +15198,33 @@ async function checkReachability(force = false) {
     reachabilityCheckInProgress = true;
     lastReachabilityCheck = now;
 
-    const wasReachable = isReachable;
+    var wasReachable = isReachable;
 
-    // Step 1: navigator.onLine — بررسی سریع
+    // Step 1: navigator.onLine
     if (!navigator.onLine) {
         isReachable = false;
-        reachabilityCheckInProgress = false;
-        if (wasReachable !== isReachable) updateOnlineStatus();
-        return false;
-    }
-
-    // 🔧 v191: Step 2 — تست قابلیت ضبط صوت (Google) + fallback هم‌مبدا
-    // اول Google را چک کن. اگر موفق بود → isReachable = true.
-    // اگر Google شکست خورد (مثلاً در ایران مسدود است ولی اینترنت هست)،
-    // یک fallback هم‌مبدا (version.txt از گیت‌هاب) را چک کن.
-    // اگر fallback موفق بود → اینترنت هست ولی ضبط صوت ممکن است کار نکند.
-    // در هر دو حالت، هدر چشمک نمی‌زند (اینترنت در دسترس است).
-    // فقط اگر هر دو شکست خوردند → واقعاً آفلاین → هدر چشمک.
-    var googleReachable = false;
-    var fallbackReachable = false;
-
-    // 2a: تست Google (قابلیت ضبط صوت)
-    try {
-        var controller1 = new AbortController();
-        var timeoutId1 = setTimeout(function() { controller1.abort(); }, REACHABILITY_TIMEOUT);
-        var res1 = await fetch('https://www.google.com/generate_204?_rc=1', {
-            method: 'GET',
-            mode: 'no-cors',
-            cache: 'no-store',
-            signal: controller1.signal
-        });
-        clearTimeout(timeoutId1);
-        if (res1.type === 'opaque') googleReachable = true;
-    } catch(e) {
-        googleReachable = false;
-    }
-
-    // اگر Google موفق بود → نیازی به fallback نیست
-    if (googleReachable) {
-        isReachable = true;
     } else {
-        // 2b: Google شکست خورد — fallback هم‌مبدا (version.txt از گیت‌هاب)
-        // این چک می‌کند که آیا اینترنت اصلاً در دسترس است یا نه.
-        // اگر گیت‌هاب در دسترس باشد → اینترنت هست (ولی ضبط صوت ممکن است کار نکند).
+        // Step 2: fetch هم‌مبدا — version.txt (کوچک، سریع، بدون CORS)
+        // با _rc=1 تا SW کش را دور بزند
         try {
-            var controller2 = new AbortController();
-            var timeoutId2 = setTimeout(function() { controller2.abort(); }, REACHABILITY_FALLBACK_TIMEOUT);
-            var res2 = await fetch('./version.txt?_rc=1', {
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function() { controller.abort(); }, REACHABILITY_TIMEOUT);
+            var res = await fetch('./version.txt?_rc=1', {
                 method: 'GET',
                 cache: 'no-store',
-                signal: controller2.signal
+                signal: controller.signal
             });
-            clearTimeout(timeoutId2);
-            // اگر fetch بدون خطا برگردد و res.ok باشد → گیت‌هاب در دسترس است
-            if (res2 && res2.ok) fallbackReachable = true;
+            clearTimeout(timeoutId);
+            isReachable = res && res.ok;
         } catch(e) {
-            fallbackReachable = false;
+            isReachable = false;
         }
-
-        // اگر Google نبود ولی گیت‌هاب بود → اینترنت هست
-        // (ضبط صوت ممکن است کار نکند، ولی هدر چشمک نمی‌زند)
-        isReachable = fallbackReachable;
     }
 
     reachabilityCheckInProgress = false;
     if (wasReachable !== isReachable) {
         updateOnlineStatus();
-        if (isReachable) {
-            render();
-        }
+        if (isReachable) render();
     }
     return isReachable;
 }
