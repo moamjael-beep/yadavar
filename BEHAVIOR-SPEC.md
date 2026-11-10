@@ -11,10 +11,10 @@
 #  به آن بیتفاوتی نشود — مانند سابقهٔ v199 تا v203 که اسپک عقب ماند.
 #  چنین اتفاقی نباید تکرار شود.
 #
-#  آخرین به‌روزرسانی: v205 — ۱۴۰۵ آبان ۱۸
-#  نسخهٔ فعلی کد:  APP_VERSION = v205-2026-11-09-fresh-audit-verified
-#                  CACHE_NAME  = yadavar-cache-v205
-#                  version.txt = v205-2026-11-09-fresh-audit-verified
+#  آخرین به‌روزرسانی: v207 — ۱۴۰۵ آبان ۱۹
+#  نسخهٔ فعلی کد:  APP_VERSION = v207-2026-11-10-stale-view-safety-net
+#                  CACHE_NAME  = yadavar-cache-v207
+#                  version.txt = v207-2026-11-10-stale-view-safety-net
 #
 # ══════════════════════════════════════════════════════════════════════
 
@@ -135,49 +135,47 @@
 #   نتیجه: HTML network-first → آنلاین = تازه‌ترین نسخه، آفلاین = کش.
 #
 # ── ۲.۵) نقشهٔ بخش‌های کد در speech-to-text-reminder.html ──────────
-#   (شمارهٔ خط واقعی در v205 — بعد از هر تغییر، این نقشه را به‌روز کن)
+#   (شمارهٔ خط واقعی در v207 — بعد از هر تغییر، این نقشه را به‌روز کن)
 #   ~1–4625    : کامنت سرآیند (نقشه + changelog کامل نسخه‌ها) + CSS + بدنه HTML
-#   ~4626      : 🧩 بخش ۳ — تنظیمات و متغیرهای عمومی JS (APP_VERSION ~5493)
-#   ~5502      : 🚨 بخش ۴ — تبدیل تاریخ شمسی (حساس)
-#   ~5655      : 🚨 بخش ۵ — تبدیل اعداد فارسی از صحبت (بسیار حساس)
-#   ~6179      : 💾 بخش ۶ — پایگاه داده (localStorage + IDB mirror؛
-#                 idbBulkPutReminders ~6231)
-#   ~6335      : سیستم مهاجرت هوشمند داده‌ها (migrateItem ~6352)
-#   ~6760      : بک‌آپ IDB + ذخیرهٔ خودکار فایل + OPFS (~6826)
-#   ~7201      : 📁 بخش ۹(الف) — مدیریت گروه‌ها (GROUPS_KEY ~7206)
-#   ~7390–7610 : 🍔 منوی همبرگری گروه + مودال تنظیمات گروه
-#   ~7911      : 🎤 بخش ۷ — تشخیص صوت و ضبط (onresult ~7946، onerror ~7969)
-#   ~8192–8430 : 🔧 v202/v203 — silent audio loop (~8196) + Worker restart loop
-#                 (~8245) + MediaRecorder background capture + visibility/pagehide
-#                 (handleRecordingVisibilityChange ~8387)
-#   ~8608      : 📅 بخش ۸ — انتخاب‌گر تاریخ و ساعت شمسی
-#   ~8800      : ➕ بخش ۹(ب) — فرآیند افزودن/ویرایش (startAdding ~9125،
-#                 editTask ~9242)
-#   ~9440      : 🔁 بخش ۱۰ — منطق تکرار (onRepeatTypeChange ~9440،
-#                 generateRepeatedTasks ~9496؛ types: hours/days/weeks/months)
-#   ~9925      : 🎨 بخش ۱۱ — رنگ‌بندی فوریتی + سیستم پین + drag-drop
-#                 (toggleSuspended ~11508)
-#   ~10419     : 🖥️ بخش ۱۲ — رندر + History/Back موبایل
-#                 (navPush ~10446، popstate handler ~10569)
-#   ~11634     : 💾 بخش ۱۳ — ذخیره و بازیابی بک‌آپ (saveBackupToLocal ~11655)
-#   ~11926     : 🔔 بخش ۱۴ — اعلان‌ها (NOTIF_SETTINGS_KEY ~12031،
-#                 NOTIF_TIME_OPTIONS ~12038، checkNotifications ~12397،
-#                 sendNotification ~12471)
-#   ~12484     : 🔔 v201 — بنر درون‌صفحه‌ای (showInpageNotifBanner ~12484،
-#                 markItemDoneById ~12612) + گرم کردن AudioContext
-#                 (warmAudioContextOnUserGesture ~12634) + تست اعلان
-#   ~12719     : 👥 بانک اشخاص CRM (openContacts ~13247،
-#                 showContactActionMenu ~13462، saveContact ~13923)
-#   ~12774–13303: انتخاب‌گر شخص در فرم + منوی لمسی شخص + فیلتر/sort جدول
-#   ~14371     : گزارش کارها (openTaskReport) + گزارش اشخاص
-#                 (showReportFormatModal ~14973، printContactReport ~15088)
-#   ~15093     : 📝 صفحه یادداشت (openNotes ~15093، closeNotes ~15127)
-#   ~15441     : 📞 منوی عملیات تلفن (openPhoneActionMenu)
-#   ~15741     : 📅 تقویم شمسی (openCalendar ~15741، closeCalendar ~15755)
-#   ~16036     : 🛡️ بخش ۱۵ — ثبت SW + تشخیص واقعی اینترنت
-#   ~16150     : صداهای اعلان با Web Audio API (getNotifAudioContext)
-#   ~16429     : 🛡️ بخش ۱۶ — init + قفل انقضا (LOCK_DEADLINE ~16445،
-#                 UNLOCK_KEY ~16448) + PWA install (installApp ~16933)
+#   ~4626      : 🧩 بخش ۳ — تنظیمات و متغیرهای عمومی JS (APP_VERSION ~5540)
+#   ~5549      : 🚨 بخش ۴ — تبدیل تاریخ شمسی (حساس)
+#   ~5702      : 🚨 بخش ۵ — تبدیل اعداد فارسی از صحبت (بسیار حساس)
+#   ~6226      : 💾 بخش ۶ — پایگاه داده (localStorage + IDB mirror؛
+#                 idbBulkPutReminders ~6278؛ setDB ~6763)
+#   ~6399      : سیستم مهاجرت هوشمند داده‌ها (migrateItem ~6399)
+#   ~6807      : بک‌آپ IDB + ذخیرهٔ خودکار فایل + OPFS
+#   ~7248      : 📁 بخش ۹(الف) — مدیریت گروه‌ها (GROUPS_KEY ~7184،
+#                 deleteGroup ~7363)
+#   ~7415–7630 : 🍔 منوی همبرگری گروه + مودال تنظیمات گروه
+#   ~7958      : 🎤 بخش ۷ — تشخیص صوت و ضبط (onresult، onerror ~7995)
+#   ~8243–8480 : 🔧 v202/v203 — silent audio loop (~8243) + Worker restart loop
+#                 + MediaRecorder background capture + visibility/pagehide
+#                 (handleRecordingVisibilityChange ~8434)
+#   ~8655      : 📅 بخش ۸ — انتخاب‌گر تاریخ و ساعت شمسی
+#   ~8864      : ➕ بخش ۹(ب) — فرآیند افزودن/ویرایش (openGroupPicker ~8864،
+#                 startAdding ~9172، editTask ~9289، saveItem ~9659)
+#   ~9483      : 🔁 بخش ۱۰ — منطق تکرار (generateRepeatedTasks ~9508؛
+#                 types: hours/days/weeks/months؛ MAX_CHILDREN=1000)
+#   ~9976      : 🎨 بخش ۱۱ — رنگ‌بندی فوریتی + سیستم پین + drag-drop
+#   ~10470     : 🖥️ بخش ۱۲ — رندر + History/Back موبایل
+#                 (validateCurrentViewAfterDataChange ~10548 — v207،
+#                 isStaleGroupId ~10565، closeModalByType ~10600،
+#                 popstate handler ~10649)
+#   ~11740     : 💾 بخش ۱۳ — ذخیره و بازیابی بک‌آپ (importDatabase ~11819)
+#   ~12040     : 🔔 بخش ۱۴ — اعلان‌ها (NOTIF_SETTINGS_KEY ~12145،
+#                 checkNotifications ~12511، sendNotification ~12585)
+#   ~12681     : 🔔 v201 — بنر درون‌صفحه‌ای (showInpageNotifBanner ~12681،
+#                 markItemDoneById ~12726) + گرم کردن AudioContext
+#                 + تست اعلان
+#   ~12900     : 👥 بانک اشخاص CRM (openContacts ~13361،
+#                 openPhoneActionMenu ~15555)
+#   ~14485     : گزارش کارها (openTaskReport) + گزارش اشخاص
+#   ~15207     : 📝 صفحه یادداشت (openNotes)
+#   ~15855     : 📅 تقویم شمسی (openCalendar)
+#   ~16154     : 🛡️ بخش ۱۵ — ثبت SW + تشخیص واقعی اینترنت
+#   ~16280     : صداهای اعلان با Web Audio API (getNotifAudioContext)
+#   ~16559     : 🛡️ بخش ۱۶ — init + قفل انقضا (LOCK_DEADLINE_JALALI ~16559)
+#                 + PWA install (installApp ~17047)
 #
 #   ⚠️ نکتهٔ شناخته‌شده (v205): refreshFloatingContactBtn تابع no-op است —
 #   دکمهٔ floatingContactBtn هرگز در DOM ساخته نمی‌شود (~۱۹ فراخوانندهٔ
@@ -426,6 +424,19 @@
 #   ۱۳) showToast فقط یک toast دارد — پیام‌های پشت‌سرهم روی هم می‌نویسند.
 #       اگر دو پیام مهم در یک رویداد داری، ترتیب را طوری بچین که مهم‌ترِ
 #       کاربر LAST باشد (v204: notice صدا باید بعد از toast restart بیاید).
+#   ۱۴) هر مسیری که مودال فرم تسک (taskForm) را می‌بندد باید unlockBodyScroll
+#       را اجرا کند — حالا داخل closeModalByType است + safety net در interval
+#       ۵۰۰ms (فرم بسته + body fixed → unlock خودکار) — v206/v207.
+#       اگر مسیر بستن جدیدی اضافه کردی که از closeModalByType نمی‌گذرد،
+#       حتماً unlock را صدا بزن (safety net تا ۵۰۰ms جبران می‌کند ولی
+#       به آن تکیه نکن).
+#   ۱۵) اگر عنصری را با سلکتور خاصی در syncHeaderHeight جستجو می‌کنی،
+#       کلاس دقیقش را هنگام ساخت در render هم بگذار (v206: group-all گم بود).
+#   ۱۶) بعد از هر تغییر ساختاری داده (حذف گروه، ورود بک‌آپ merge/replace)،
+#       validateCurrentViewAfterDataChange را صدا بزن — وگرنه Back موبایل
+#       کاربر را به نمای یتیم گروه حذف‌شده می‌برد (v207).
+#   ۱۷) در popstate handler هرگز به groupIdِ state اعتماد مستقیم نکن —
+#       قبل از استفاده با isStaleGroupId چک کن (v207: نمای یتیم).
 #
 # ══════════════════════════════════════════════════════════════════════
 
@@ -491,17 +502,26 @@
 #   ۵) test_fullactive_v203.mjs — ۱۰ تست: Worker restart loop، restart
 #      ظرف ۱.۵s، MediaRecorder capture حین hidden، notice + دکمهٔ پخش،
 #      پاک‌سازی کامل در stop، بیدارباش کامل pagehide، زنجیرهٔ کامل.
-#   ۶) test_audit_v205.mjs — ۱۰ تست (F1..F10): باتری پارسر اعداد (۵ عبارت 🚨)،
+#   ۶) test_fullactive_v203.mjs — ۱۰ تست: Worker restart loop، restart
+#      ظرف ۱.۵s، MediaRecorder capture حین hidden، notice + دکمهٔ پخش،
+#      پاک‌سازی کامل در stop، بیدارباش کامل pagehide، زنجیرهٔ کامل.
+#   ۷) test_audit_v205.mjs — ۱۰ تست (F1..F10): باتری پارسر اعداد (۵ عبارت 🚨)،
 #      ورود بک‌آپ v7 با مهاجرت + یادداشت، تعلیق تسک، تکرار با endDate محدود،
 #      ویرایش سررسید → پاک شدن notif_log (BA-043)، منوی تلفن + بستن
-#      idempotent، تغییر نام گروه، UPDATE_CACHE به SW + version.txt،
-#      بنر overdue بنفش، صفر pageerror. ← نواحی که سوئیت‌های ۱–۵ پوشش
-#      نمی‌دادند (ساخته‌شده در ممیزی تازهٔ v205)
-#   ۷) static_audit.py — ممیزی استاتیک (بخش ۶).
-#   ۸) check_html_js.py — سینتکس JS داخل HTML.
+#      idempotent، تغییر نام گروه، UPDATE_CACHE به SW + version.txt (آینده‌پذیر —
+#      مقایسه با APP_VERSION سمت صفحه)، بنر overdue بنفش، صفر pageerror.
+#   ۸) test_bodyscroll_v206.mjs — ۱۱ تست (L1..L11): رگرسیون باگ v206 —
+#      باز/بستن فرم با Back موبایل (body همیشه آزاد)، اسکرول، فاصلهٔ هدر
+#      گروه، syncHeaderHeight (group-all)، saveItem path، ۳× تکرار،
+#      صفر pageerror.
+#   ۹) test_staleview_v207.mjs — ۸ تست (S1..S8): رگرسیون باگ v207 —
+#      حذف گروه ۴ مرحله‌ای + Back → لیست گروه‌ها (نه نمای یتیم)،
+#      بک‌آپ REPLACE → اصلاح نمای یتیم، safety net قفل body، صفر pageerror.
+#  ۱۰) static_audit.py — ممیزی استاتیک (بخش ۶).
+#  ۱۱) check_html_js.py — سینتکس JS داخل HTML.
 #
 #   قاعده: بعد از هر تغییر، حداقل سوئیت E2E + سوئیت ناحیهٔ تغییریافته
-#   سبز باشند. قبل از تحویل نسخهٔ بزرگ: هر ۶ سوئیت (۶۳ تست تا v205).
+#   سبز باشند. قبل از تحویل نسخهٔ بزرگ: هر ۹ سوئیت (۸۲ تست تا v207).
 #
 # ══════════════════════════════════════════════════════════════════════
 
@@ -529,6 +549,35 @@
 #
 #   (نسخه‌های مفصل از v204 به بعد؛ قدیمی‌ها خلاصه. changelog کامل
 #    تفصیلی در سرآیند HTML خط ~۵۰۳۰–۵۴۶۵ موجود است.)
+#
+### v207 (۱۴۰۵ آبان ۱۹) — DEEP AUDIT: STALE GROUP VIEW + BODY-LOCK SAFETY NET
+#   کاربر: «یک بار دیگر با حداکثر کمال اشکالات را بررسی، پیدا و رفع کن که
+#   دیگر هیچ مشکلی پیدا نکنم».
+#   - باگ ۳ (ناوبری): بعد از حذف گروه / بک‌آپ REPLACE، Back موبایل کاربر را
+#     به نمای یتیم گروه حذف‌شده می‌برد (هدر fallback + لیست خالی).
+#     رفع: isStaleGroupId + validateCurrentViewAfterDataChange در popstate
+#     (هر دو مسیر) + بعد از merge/replace بک‌آپ + cancelGroupDelete.
+#   - باگ ۴ (دفاعی): safety net در interval ۵۰۰ms — «فرم بسته + body fixed»
+#     همیشه یعنی نشتی قفل → unlock خودکار (هیچ قفل دائمی دیگر ممکن نیست).
+#   - تست آینده‌پذیر: F8 سوئیت audit دیگر نسخه را هاردکد نمی‌کند
+#     (version.txt === APP_VERSION سمت صفحه).
+#   - سوئیت جدید: test_staleview_v207.mjs (۸ تست S1-S8) — ۸/۸ سبز.
+#   - نتیجه: هر ۸ سوئیت — ۸۲/۸۲ سبز، صفر pageerror، visual check ✓.
+#
+### v206 (۱۴۰۵ آبان ۱۹) — CRITICAL BUGFIX: WHITE SPACE ABOVE GROUP HEADER + APP FREEZE
+#   کاربر: «هدر گروهی که داخلش بودم به اندازهٔ فضای همه کارها و کارهای
+#   فوری بالایش فضای سفید است و برنامه گاها قفل است و رفرش درست می‌کند».
+#   - باگ ۱ (کرش/قفل): closeModalByType('taskForm') هرگز unlockBodyScroll
+#     را صدا نمی‌زد؛ مسیر Back موبایل (popstate) از آن می‌گذرد → body در
+#     position:fixed; overflow:hidden; top:-scrollY قفل می‌ماند → صفحه
+#     یخ می‌زند + فضای سفید بزرگ بالای هدر گروه. رفع: unlockBodyScroll
+#     داخل closeModalByType (ایزوله/ایده‌پوتنت).
+#   - باگ ۲ (چیدمان): allDiv کلاس group-all نداشت ولی syncHeaderHeight
+#     با '.group-item-fixed.group-all' دنبالش می‌گشت → بعد از resize،
+#     top نوار فوری اشتباه (h+6 به‌جای h+allHeight+6) → دو نوار روی هم.
+#     رفع: کلاس group-all اضافه شد.
+#   - سوئیت جدید: test_bodyscroll_v206.mjs (۱۱ تست L1-L11) — ۱۱/۱۱ سبز.
+#   - نتیجه: E2E ۱۴/۱۴ سبز، صفر pageerror.
 #
 ### v205 (۱۴۰۵ آبان ۱۸) — FRESH AUDIT: RE-RUN OF PREVIOUS REQUEST — BEST FIXES VERIFIED
 #   کاربر: «خواسته قبلی خودم رو دوباره انجام بده ببینم اصلاحاتی که انجام

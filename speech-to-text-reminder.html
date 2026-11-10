@@ -5490,7 +5490,54 @@ body.locked .header-actions button {
 //           نمی‌شود؛ null-guard دارد و بی‌خطر است — حذف آن بازنویسی گسترده
 //           است و طبق قانون «رفع کمینه» ممنوع).
 //         نتیجه: ۶۳/۶۳ تست سبز، صفر pageerror.
-const APP_VERSION = 'v205-2026-11-09-fresh-audit-verified';
+//   v206 - CRITICAL BUGFIX — WHITE SPACE ABOVE GROUP HEADER + APP FREEZE:
+//         کاربر: «در بعض مواقع وارد برنامه میشم ... هدر گروهی که داخلش بودم
+//         به اندازه فضای همه کارها و کارهای فوری بالایش فضای سفید است و
+//         برنامه گاها قفل است و وقتی رفرش میکنم دوباره درست میشود».
+//         ریشه‌یابی کامل (بازتولید با Playwright):
+//         باگ ۱ (کرش/قفل — اصلی): closeModalByType('taskForm') هیچ‌وقت
+//            unlockBodyScroll() را صدا نمی‌زد. startAdding فرم را با
+//            lockBodyScroll() باز می‌کند (body → position:fixed;
+//            overflow:hidden; top:-scrollY). مسیرهای انصراف/ذخیره صریحاً
+//            unlock می‌کنند، ولی مسیر دکمهٔ Back موبایل از popstate handler
+//            می‌گذرد که فقط closeModalByType را صدا می‌زند — نتیجه: body
+//            برای همیشه قفل می‌ماند (اسکرول نمی‌شود) و چون top:-scrollY
+//            است، محتوای بالای صفحه (تقریباً هم‌اندازهٔ نوارهای «همه
+//            کارها»+«کارهای فوری» که کاربر از آنجا آمده بود) به‌صورت فضای
+//            سفید بزرگ بالای هدر گروه دیده می‌شود. رفرش state در-حافظه را
+//            می‌شوید و «درست» می‌شود — دقیقاً همان گزارش کاربر.
+//            رفع: unlockBodyScroll() داخل closeModalByType برای type
+//            'taskForm' فراخوانی شد (ایزوله با guard داخلی — فراخوانی
+//            اضافی از cancelModal/saveItem بی‌اثر است).
+//         باگ ۲ (چیدمان): allDiv (نوار «همه کارها») کلاس group-all نداشت
+//            ولی syncHeaderHeight با سلکتور '.group-item-fixed.group-all'
+//            دنبالش می‌گشت → هیچ‌وقت پیدا نمی‌شد → بعد از resize/
+//            orientationchange، top نوار «کارهای فوری» اشتباه (h+6 به‌جای
+//            h+allHeight+6) محاسبه می‌شد و دو نوار روی هم می‌افتادند.
+//            رفع: کلاس group-all به allDiv اضافه شد.
+//         تست: سوئیت جدید test_bodyscroll_v206.mjs (۱۱ تست L1-L11 —
+//           بازتولید دقیق سناریوی کاربر: ورود به گروه، باز/بستن فرم با
+//           Back موبایل ×۳، اسکرول، فاصلهٔ هدر، syncHeaderHeight،
+//           صفر pageerror) — ۱۱/۱۱ سبز. رگرسیون E2E: ۱۴/۱۴ سبز.
+//   v207 - DEEP AUDIT — STALE GROUP VIEW FIX + BODY-LOCK SAFETY NET:
+//         کاربر: «یک بار دیگر به عنوان متخصص بی‌نظیر اشکالات موجود یا
+//         احتمالی را بررسی، پیدا و رفع کن که دیگر هیچ مشکلی پیدا نکنم».
+//         ممیزی حداکثری (بعد از تکمیل v206):
+//         باگ ۳ (ناوبری — stale view): بعد از حذف گروه (یا ورود بک‌آپ REPLACE
+//            که گروه فعلی را ندارد)، Back موبایل کاربر را به نمای تسک‌های
+//            گروهِ حذف‌شده می‌برد (popstate حالت قدیمی را بازیابی می‌کند) →
+//            هدر fallback «همه کارها» با لیست خالی/گیج‌کننده.
+//            رفع: تابع isStaleGroupId + validateCurrentViewAfterDataChange —
+//            در popstate handler (هر دو مسیر) و بعد از merge/replace بک‌آپ
+//            و بعد از cancelGroupDelete اعتبارسنجی و هدایت به لیست گروه‌ها.
+//         باگ ۴ (دفاعی — safety net): هر خطای پیش‌بینی‌نشده در میانهٔ saveItem
+//            می‌توانست body را قفل بگذارد (مثل باگ v206 اما از مسیر exception).
+//            رفع: safety net در interval ۵۰۰ms — «فرم بسته + body fixed» همیشه
+//            یعنی نشتی قفل → خودکار unlock (دیگر هیچ قفل دائمی ممکن نیست).
+//         تست: سوئیت جدید test_staleview_v207.mjs (۸ تست S1-S8 — حذف گروه +
+//           Back، بک‌آپ REPLACE، safety net، صفر pageerror) — ۸/۸ سبز.
+//         رگرسیون کامل: هر ۸ سوئیت — ۸۲/۸۲ سبز.
+const APP_VERSION = 'v207-2026-11-10-stale-view-safety-net';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -9083,6 +9130,10 @@ function cancelGroupDelete() {
     navBack();
     _groupDeleteTargetId = null;
     _groupDeleteStep = 0;
+    // 🔧 v207: اگر فلوی حذف از داخل خود گروه شروع شده باشد، بعد از انصراف
+    // گروه همچنان وجود دارد — نیازی به اعتبارسنجی نیست؛ ولی برای اطمینان
+    // (مثلاً اگر گروه از مسیر دیگری حذف شده باشد) چک می‌کنیم.
+    try { validateCurrentViewAfterDataChange(); } catch(e) {}
 }
 
 // Internal: cleanup after a successful deletion (resets state).
@@ -10487,6 +10538,35 @@ function navBack() {
     try { history.back(); } catch(e) {}
 }
 
+// 🔧 v207 (bugfix): اعتبارسنجی نمای فعلی بعد از تغییر ساختار داده‌ها.
+// سناریو: کاربر داخل تسک‌های گروه X است، گروه X را حذف می‌کند (یا بک‌آپ
+// REPLACE را وارد می‌کند که گروه X را ندارد). حالا اگر Back موبایل بزند،
+// popstate حالت قدیمی tasks-X را بازیابی می‌کند → renderTasksView با
+// groupId یتیم → هدر fallback «همه کارها» با لیست خالی/گیج‌کننده.
+// این تابع اگر گروه فعلی دیگر وجود ندارد، نمای اصلی (گروه‌ها) را بازیابی
+// می‌کند و history entry فعلی را هم درست می‌کند.
+function validateCurrentViewAfterDataChange() {
+    if (currentView !== 'tasks' || !currentGroupId) return false;
+    if (currentGroupId === 'all' || currentGroupId === 'urgent') return false;
+    const exists = getGroups().some(g => g.id === currentGroupId);
+    if (exists) return false;
+    // گروه یتیم است — به لیست گروه‌ها برگرد
+    currentView = 'groups';
+    currentGroupId = null;
+    expandedId = null;
+    navReplace({ view: 'groups' });
+    fullRender();
+    return true;
+}
+
+// 🔧 v207 (bugfix): آیا groupId به گروه حذف‌شده‌ای اشاره می‌کند؟
+// در popstate handler استفاده می‌شود تا Back موبایل بعد از حذف گروه،
+// کاربر را به نمای یتیم نبرد.
+function isStaleGroupId(groupId) {
+    if (!groupId || groupId === 'all' || groupId === 'urgent') return false;
+    return !getGroups().some(g => g.id === groupId);
+}
+
 // Helper: returns true if ANY modal overlay is currently open.
 // Used by the popstate handler so the mobile back button closes an open
 // modal BEFORE navigating the underlying view.
@@ -10560,6 +10640,16 @@ function closeModalByType(type) {
         // later + press from outside the calendar doesn't accidentally reuse it.
         pendingTaskGroupId = null;
         pendingPrefilledDeadline = null;
+        // 🔧 v206 (bugfix): قفل اسکرول body را باز کن.
+        // startAdding فرم را با lockBodyScroll باز می‌کند. cancelModal و saveItem
+        // صریحاً unlockBodyScroll را صدا می‌زنند، ولی مسیر دکمهٔ Back موبایل
+        // از popstate handler می‌گذرد و فقط همین تابع را صدا می‌زند — بدون
+        // این فراخوانی، body در حالت position:fixed; overflow:hidden می‌ماند
+        // و صفحهٔ زیر مودال کاملاً قفل می‌شود (کاربر می‌گفت: «برنامه گاها قفل
+        // است و وقتی رفرش میکنم دوباره درست میشود»). unlockBodyScroll خودش
+        // با guard (`body.style.position === 'fixed'`) ایزوله است، پس فراخوانی
+        // اضافی از cancelModal/saveItem بی‌اثر است.
+        try { unlockBodyScroll(); } catch(e) {}
     }
 }
 
@@ -10727,6 +10817,14 @@ window.addEventListener('popstate', (e) => {
             currentView = 'tasks';
             currentGroupId = state.groupId || null;
             expandedId = state.expandedId || null;
+            // 🔧 v207: اگر گروه حذف شده، به لیست گروه‌ها برگرد (رندر لازم است)
+            if (isStaleGroupId(currentGroupId)) {
+                currentView = 'groups';
+                currentGroupId = null;
+                expandedId = null;
+                navReplace({ view: 'groups' });
+                fullRender();
+            }
         }
         return;
     }
@@ -10738,6 +10836,14 @@ window.addEventListener('popstate', (e) => {
         currentView = 'tasks';
         currentGroupId = state.groupId || null;
         expandedId = state.expandedId || null;
+        // 🔧 v207: Back موبایل بعد از حذف گروه / ورود بک‌آپ REPLACE —
+        // گروه یتیم را به لیست گروه‌ها هدایت کن (نه نمای خالی fallback)
+        if (isStaleGroupId(currentGroupId)) {
+            currentView = 'groups';
+            currentGroupId = null;
+            expandedId = null;
+            navReplace({ view: 'groups' });
+        }
     }
     // 🔧 اسکرول به بالا فقط وقتی ویو اصلی تغییر کرده (groups ↔ tasks)
     const viewChanged = (prevView !== currentView);
@@ -10920,7 +11026,7 @@ function renderGroupsView() {
     const visibleGroupIdsForAll = new Set(groups.filter(g => g.showInAll !== false).map(g => g.id));
     const allVisibleItems = items.filter(i => visibleGroupIdsForAll.has(i.groupId || 'all'));
     const allDiv = document.createElement('div');
-    allDiv.className = 'group-item group-item-fixed';
+    allDiv.className = 'group-item group-item-fixed group-all';  // 🔧 v206: group-all برای syncHeaderHeight
     allDiv.dataset.groupId = 'all';
     allDiv.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
     allDiv.innerHTML = `<div class="group-item-row"><div class="group-list-icon"><span>📋</span></div><span class="group-name">همه کارها</span>${buildGroupBadges(allVisibleItems, {}, 'all')}</div>`;
@@ -11854,6 +11960,10 @@ function importDatabase() {
                         }
                     }
 
+                    // 🔧 v207: اگر کاربر داخل تسک‌های گروهی بود که در بک‌آپ نبود،
+                    // به لیست گروه‌ها برگرد (نمای یتیم نساز)
+                    try { validateCurrentViewAfterDataChange(); } catch(e) {}
+
                     fullRender();
                     const parts = [`${fixedItems.length} یادآور جدید`];
                     if (newGroupsToAdd.length > 0) parts.push(`${newGroupsToAdd.length} گروه جدید`);
@@ -11900,6 +12010,10 @@ function importDatabase() {
                                 try { Notification.requestPermission(); } catch(e) {}
                             }
                         }
+
+                        // 🔧 v207: بعد از جایگزینی کامل گروه‌ها، اگر کاربر داخل تسک‌های
+                        // گروهی بود که در بک‌آپ نیست، به لیست گروه‌ها برگرد
+                        try { validateCurrentViewAfterDataChange(); } catch(e) {}
 
                         fullRender();
                         const parts = ['دیتابیس جایگزین شد'];
@@ -16825,6 +16939,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             _refreshFloatingAddBtn();
             refreshFloatingContactBtn();
+            // 🔧 v207 (safety net): اگر فرم تسک بسته شده ولی body هنوز قفل است
+            // (position:fixed)، آزادش کن. فقط lockBodyScroll (مسیر فرم تسک)
+            // body را fixed می‌کند؛ پس «فرم بسته + body fixed» همیشه یعنی نشتی
+            // قفل — هر مسیر آینده‌ای که فراموش کند unlock بزند، این تا ۵۰۰ms
+            // بعد خودکار جبران می‌کند (دیگر هیچ «قفل شدن دائمی» ممکن نیست).
+            var _mo = document.getElementById('modalOverlay');
+            if (document.body.style.position === 'fixed' && (!_mo || !_mo.classList.contains('active'))) {
+                try { unlockBodyScroll(); } catch(e) {}
+            }
         } catch(e) {}
     }, 500);
     console.log('[Floating] Auto-refresh interval active (500ms)');
