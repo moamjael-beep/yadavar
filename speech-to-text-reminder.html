@@ -5537,7 +5537,31 @@ body.locked .header-actions button {
 //         تست: سوئیت جدید test_staleview_v207.mjs (۸ تست S1-S8 — حذف گروه +
 //           Back، بک‌آپ REPLACE، safety net، صفر pageerror) — ۸/۸ سبز.
 //         رگرسیون کامل: هر ۸ سوئیت — ۸۲/۸۲ سبز.
-const APP_VERSION = 'v207-2026-11-10-stale-view-safety-net';
+//   v208 - DATA INTEGRITY — BLOCK DELETING A CONTACT REFERENCED BY TASKS:
+//         کاربر: «اگر یک شخص برایش تسک تعریف شده و یک یا تعدادی تسک که
+//         نام شخص در جزییات آن هست الان اجازه پاک کردن آن شخص داده نشود».
+//         (پاسخ صادقانه: این مورد در ممیزی‌های v205-v207 پوشش داده نشده
+//         بود — حفرهٔ یکپارچگی داده بود.)
+//         مشکل: deleteContact هیچ گاردی نداشت — شخصِ دارای ارجاع در
+//         تسک‌ها آزادانه حذف می‌شد؛ contactId روی تسک‌ها یتیم می‌شد و در
+//         جزئیات تسک «بدون شخص» ظاهر می‌شد (از دست رفتن پیوند داده).
+//         رفع: getContactTaskReferences(id) — یافتن همهٔ ارجاع‌ها:
+//           (الف) مستقیم: task.contactId === id — در همهٔ حالت‌ها
+//                 (انجام‌شده/لغوشده/معلق/والد تکرار/فرزند تکرار)
+//           (ب) غیرمستقیم: نام شخص (نرمال‌شده: ي→ی، ك→ک، أإآ→ا، حذف
+//                 اعراب/نیم‌فاصله/نویسه‌های کنترلی، فاصله‌های یک‌شده،
+//                 لاتین کوچک) در متن تسک — نامِ < ۲ نویسه بررسی
+//                 نمی‌شود (جلوگیری از تطابق نویزی)
+//         اگر هر ارجاعی بود → حذف مسدود (بدون باز شدن confirm) + toast
+//         با تعداد دقیق هر نوع ارجاع و راه رفع: «ابتدا شخص را از
+//         تسک‌ها بردارید یا تسک‌ها را حذف کنید». فقط با صفر ارجاع،
+//         confirm حذف نمایش داده می‌شود. یکپارچگی پس از حذف حفظ است:
+//         با صفر ارجاع هیچ تسکی contactId یتیم پیدا نمی‌کند.
+//         تست: سوئیت جدید test_contact_guard_v208.mjs (۱۰ تست C1-C10) —
+//           حذف آزادِ بدون ارجاع، مسدودسازی contactId، مسدودسازی نام در
+//           متن، نرمال‌سازی ي/ک عربی، پیام ترکیبی، تسک انجام‌شده هم
+//           مانع است، رفع موانع → حذف آزاد، صفر pageerror.
+const APP_VERSION = 'v208-2026-11-10-contact-delete-guard';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -14084,7 +14108,80 @@ function editContact(id) {
     openContactForm(id);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// 🔧 v208: حفاظت از یکپارچگی داده‌ها — شخصِ دارای ارجاع در تسک‌ها
+// ════════════════════════════════════════════════════════════════════
+// اگر شخصی در تسک‌ها استفاده شده باشد (مستقیم با contactId یا
+// غیرمستقیم با ذکر نامش در متن تسک)، حذف او مجاز نیست؛ وگرنه پیوند
+// تسک→شخص بی‌صدا قطع می‌شد و در جزئیات تسک «بدون شخص» ظاهر می‌شد
+// (از دست رفتن اطلاعات). درخواست کاربر v208.
+
+// نرمال‌سازی متن فارسی برای مقایسهٔ نام‌ها:
+// ي/ك عربی → ی/ک فارسی، أ/إ/آ → ا، حذف اعراب و کشیده،
+// نیم‌فاصله/نویسه‌های کنترلی → فاصله، فاصله‌های تکراری → یکی،
+// حروف لاتین → کوچک (برای نام‌های لاتین)
+function normalizeContactRefText(s) {
+    return String(s || '')
+        .toLowerCase()
+        .replace(/\u064A/g, '\u06CC')                 // ي → ی
+        .replace(/\u0643/g, '\u06A9')                 // ك → ک
+        .replace(/[\u0623\u0625\u0622]/g, '\u0627')   // أ إ آ → ا
+        .replace(/[\u064B-\u0652\u0670\u0640]/g, '')  // اعراب + کشیده
+        .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, ' ') // نیم‌فاصله/کنترلی → فاصله
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// یافتن همهٔ ارجاع‌های یک شخص در تسک‌ها
+// خروجی: { byLink: تسک‌های متصل با contactId،
+//          byName: تسک‌هایی که فقط نام او در متن دارند }
+// هر دو گروه همهٔ حالت‌ها را پوشش می‌دهند: انجام‌شده، لغوشده، معلق،
+// والد تکرار و فرزندان تکرار — چون جزئیات همهٔ آن‌ها شخص را نمایش می‌دهد.
+function getContactTaskReferences(contactId) {
+    const byLink = [];
+    const byName = [];
+    const c = getContactById(contactId);
+    if (!c) return { byLink: byLink, byName: byName };
+    const nameNorm = normalizeContactRefText(c.name);
+    // نام‌های خیلی کوتاه (کمتر از ۲ نویسه) برای جلوگیری از تطابق نویزی
+    // در متن بررسی نمی‌شوند (حذف آن‌ها گارد مستقیم contactId را ندارد)
+    const checkName = nameNorm.length >= 2;
+    const items = getDB();
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it || !it.id) continue;
+        if (it.contactId === contactId) {
+            byLink.push(it);
+        } else if (checkName && normalizeContactRefText(it.text).indexOf(nameNorm) !== -1) {
+            byName.push(it);
+        }
+    }
+    return { byLink: byLink, byName: byName };
+}
+
 function deleteContact(id) {
+    const contact = getContactById(id);
+    if (!contact) {
+        showToast('شخص یافت نشد');
+        return;
+    }
+    // 🔧 v208: گارد یکپارچگی داده — حذف فقط بدون هیچ ارجاعی مجاز است.
+    // قبل از confirm بررسی می‌شود تا در صورت وجود ارجاع، اصلاً پنجرهٔ
+    // حذف باز نشود و کاربر با پیام دقیق (تعداد + راه رفع) مواجه شود.
+    const refs = getContactTaskReferences(id);
+    const refCount = refs.byLink.length + refs.byName.length;
+    if (refCount > 0) {
+        let msg;
+        if (refs.byLink.length && refs.byName.length) {
+            msg = 'حذف ممکن نیست — ' + toPersianDigits(refs.byLink.length) + ' تسک به «' + contact.name + '» متصل است و در ' + toPersianDigits(refs.byName.length) + ' تسک دیگر نام او آمده است. ';
+        } else if (refs.byLink.length) {
+            msg = 'حذف ممکن نیست — ' + toPersianDigits(refs.byLink.length) + ' تسک به «' + contact.name + '» متصل است. ';
+        } else {
+            msg = 'حذف ممکن نیست — نام «' + contact.name + '» در ' + toPersianDigits(refs.byName.length) + ' تسک آمده است. ';
+        }
+        showToast(msg + 'ابتدا شخص را از تسک‌ها بردارید یا تسک‌ها را حذف کنید.');
+        return;
+    }
     if (!confirm('این شخص حذف شود؟')) return;
     const contacts = getContacts().filter(c => c.id !== id);
     setContacts(contacts);

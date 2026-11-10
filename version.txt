@@ -1,1 +1,1 @@
-v207-2026-11-10-stale-view-safety-net
+v208-2026-11-10-contact-delete-guard
