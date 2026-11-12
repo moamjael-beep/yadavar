@@ -1955,6 +1955,11 @@ body { padding-bottom: 30px; padding-top: 62px; /* 🔧 v151: فضا برای ه
 }
 .group-notes-btn:hover { background: rgba(255,255,255,0.4); }
 .group-notes-btn:active { transform: scale(0.92); }
+/* 🔧 v209: همان دکمهٔ یادداشت (📝) در هدر داخلی گروه (نمای تسک‌های گروه).
+   طبق درخواست کاربر: یادداشتی که در هدر خارجی (کارت گروه در لیست
+   گروه‌ها) هست، در هدر داخلی هم نمایش داده شود. فقط margin اضافهٔ
+   حالت خارجی حذف شده چون ردیف هدر داخلی از gap استفاده می‌کند. */
+.group-tasks-header .group-notes-btn { margin-right: 0; }
 
 /* Visual hint that the group is being dragged */
 .group-item.sortable-ghost { opacity: 0.4; }
@@ -5561,7 +5566,33 @@ body.locked .header-actions button {
 //           حذف آزادِ بدون ارجاع، مسدودسازی contactId، مسدودسازی نام در
 //           متن، نرمال‌سازی ي/ک عربی، پیام ترکیبی، تسک انجام‌شده هم
 //           مانع است، رفع موانع → حذف آزاد، صفر pageerror.
-const APP_VERSION = 'v208-2026-11-10-contact-delete-guard';
+//   v209 - RECORDING NOT TIED TO HEADER FLASH + GROUP NOTES IN INNER HEADER:
+//         دو درخواست کاربر: «ضبط در قسمت تسک‌ها به درستی به چشمک زدن هدر
+//         شرطی نشده و با چشمک زدن هدر هم کار می‌کند — همین را می‌خواهم؛
+//         ضبط در قسمت‌های دیگر مثل یادداشت‌های هدر و تقویم و گروه‌ها را
+//         هم همینطور کن و به چشمک زدن هدر وابسته نباشند» + «یادداشت در
+//         هدر خارجی گروه‌ها را در هدر داخلی گروه‌ها هم نمایش بده».
+//         ۱) ضبط یادداشت‌ها — یادداشت هدر، یادداشت هر گروه و یادداشت
+//            هر روزِ تقویم (هر سه با یک میکروفون: toggleNotesRecording) —
+//            قبلاً با گیت isReachable بسته می‌شد («اینترنت در دسترس
+//            نیست. ضبط کار نمی‌کند») یعنی با چشمک هدر بلاک بود، برخلاف
+//            تسک‌ها که فقط navigator.onLine را چک می‌کنند.
+//            رفع: گیت isReachable حذف شد؛ گیت navigator.onLine با پیام
+//            «متن را تایپ کنید» جای آن نشست — حالا وقتی هدر چشمک می‌زند
+//            ولی مرورگر آنلاین است، ضبط شروع می‌شود؛ اگر شبکه واقعاً
+//            قطع باشد onerror 'network' پیام «خطای شبکه» می‌دهد (همان
+//            زنجیرهٔ خطای تسک‌ها). رفتار ضبط تسک‌ها دست نخورد.
+//         ۲) دکمهٔ 📝 یادداشت در هدر داخلی هر گروه (نمای تسک‌ها) اضافه
+//            شد — همان openNotes(gid) و همان کلید یادداشتِ هدر خارجی
+//            (yadavar_notes_v1[_groupId])؛ برای همهٔ گروه‌ها (همه کارها /
+//            کارهای فوری / سفارشی) نمایش داده می‌شود، مثل هدر خارجی.
+//         ۳) دفاعی: در Sortable نمای تسک‌ها، هدر داخلی گروه و دکمهٔ 📝
+//            به filter اضافه شدند تا long-press روی هدر، درگ را با id
+//            نامعتبر شروع نکند (کلیک‌ها با preventOnFilter:false سالم‌اند).
+//         تست: node --check روی کل JS استخراج‌شده + تست دود مرورگری
+//           (بوت بدون pageerror، باز شدن یادداشت/گروه/تقویم، شروع ضبط
+//           یادداشت با isReachable=false و navigator.onLine=true).
+const APP_VERSION = 'v209-2026-11-12-free-recording-group-notes';
 console.log('[Page] APP_VERSION =', APP_VERSION);
 // 🔧 v193: نمایش نسخه در credit footer
 (function() {
@@ -10118,7 +10149,10 @@ function initSortable() {
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         // Don't allow dragging the empty-state message or expanded details
-        filter: '.empty, .item-details, .item-actions, .action-btn, .deadline-box',
+        // 🔧 v209: هدر داخلی گروه و دکمهٔ 📝 آن هم نباید درگ شوند — درگ‌شدن
+        // هدر، saveNewOrder را با id نامعتبر صدا می‌زد. کلیک‌ها سالم می‌مانند
+        // (preventOnFilter: false).
+        filter: '.empty, .item-details, .item-actions, .action-btn, .deadline-box, .group-tasks-header, .group-notes-btn',
         preventOnFilter: false,   // allow clicks on filtered elements
         // Long-press on touch to start drag (so tap-to-expand still works)
         delay: 400,               // 400ms long-press (slightly faster)
@@ -11266,6 +11300,13 @@ function renderTasksView(groupId) {
         `;
     }
 
+    // 🔧 v209: دکمهٔ یادداشت (📝) در هدر داخلی گروه — همان یادداشتی که
+    // از هدر خارجی (کارت گروه در لیست گروه‌ها) با openNotes(gid) باز
+    // می‌شود. طبق درخواست کاربر: یادداشتِ هدر خارجی هر گروه در هدر
+    // داخلی هم نمایش داده شود. کلید یادداشت همان کلید هدر خارجی است
+    // (yadavar_notes_v1[_groupId]) پس دقیقاً همان محتوا باز می‌شود.
+    const notesBtnHtml = `<button class="group-notes-btn" onclick="event.stopPropagation(); openNotes('${group.id}')" title="یادداشت این گروه">📝</button>`;
+
     // 🔧 شمارش تسک‌ها — دایره (فعال) + عدد قرمز پین + عدد زرد فوری
     // 🔧 v141: فقط تسک‌های فعال (نه done، نه cancelled، نه suspended)
     // برای گروه «کارهای فوری»، badge فوری نشان داده نمی‌شود (زیرتکراری است).
@@ -11290,7 +11331,7 @@ function renderTasksView(groupId) {
     // والد DOM است و با جاوا اسکریپت تنظیم می‌شود.
     header.innerHTML = `<div style="display: flex; flex-direction: column; width: 100%; gap: 8px;">
         <div style="text-align: center; font-size: 16px; font-weight: 700; color: white; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(group.name)}</div>
-        <div style="display: flex; align-items: center; gap: 10px;">${backBtnHtml}${iconHtml}<div style="flex: 1;"></div>${menuHtml}${countHtml}</div>
+        <div style="display: flex; align-items: center; gap: 10px;">${backBtnHtml}${iconHtml}<div style="flex: 1;"></div>${menuHtml}${notesBtnHtml}${countHtml}</div>
     </div><div class="back-touch-area" onclick="event.stopPropagation(); goToGroups()"></div>${dropdownHtml}`;
     container.appendChild(header);
 
@@ -15531,9 +15572,14 @@ function toggleNotesRecording() {
         showToast('مرورگر از تشخیص صوت پشتیبانی نمی‌کند');
         return;
     }
-    // بررسی اتصال اینترنت
-    if (typeof isReachable !== 'undefined' && !isReachable) {
-        showToast('اینترنت در دسترس نیست. ضبط کار نمی‌کند.');
+    // 🔧 v209: ضبط یادداشت‌ها دیگر به چشمک زدن هدر (isReachable) وابسته نیست
+    // — دقیقاً مثل ضبط تسک‌ها (startRecording). چشمک هدر فقط یعنی «پینگ
+    // واقعی شکست خورده»؛ ممکن است سرویس تشخیص صوت گوگل همچنان در دسترس
+    // باشد، پس ضبط شروع می‌شود. اگر شبکه واقعاً قطع باشد، onerror
+    // 'network' پیام «خطای شبکه» می‌دهد و ضبط متوقف می‌شود (مثل تسک‌ها).
+    // تنها گیت باقی‌مانده navigator.onLine است — همان رفتار startRecording.
+    if (!navigator.onLine) {
+        showToast('اینترنت در دسترس نیست. متن را تایپ کنید.');
         return;
     }
     // 🔧 v180: فریز کردن موقعیت کرسر برای درج در پایان ضبط
